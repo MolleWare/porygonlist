@@ -45,6 +45,28 @@ The build pins `jvmToolchain(21)` and deliberately does not use Gradle's
 toolchain auto-provisioning, so a missing JDK 21 fails the build rather than
 silently downloading one. Install JDK 21 and point `JAVA_HOME` at it.
 
+## Measuring startup
+
+Cold start is a tracked number, not an afterthought. Two ways to measure it:
+
+```sh
+./scripts/benchmark.sh          # macrobenchmark: precise, needs Perfetto
+./scripts/startup.sh            # ActivityManager: coarser, works anywhere
+```
+
+`benchmark.sh` uses `androidx.benchmark` and reports timeToInitialDisplay, the
+real metric. It requires a populated `tracefs`, so it does **not** work on
+hardened distributions such as GrapheneOS, which remove that attack surface
+deliberately. The resulting `DEVICE-TRACING-MISCONFIGURED` error cannot be
+suppressed.
+
+`startup.sh` falls back to `am start -W`, which asks ActivityManager and needs
+no tracing. It is less precise and its absolute numbers are not comparable to
+macrobenchmark's, but it is consistent enough to compare one build against
+another on the same device.
+
+Measure the release build, never debug.
+
 ## Contributing
 
 The project is too young for its shape to be settled, so large unsolicited

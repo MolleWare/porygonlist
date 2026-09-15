@@ -33,3 +33,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "PorygonList"
 include(":app")
+include(":benchmark")

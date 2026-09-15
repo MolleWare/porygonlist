@@ -2,6 +2,7 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -82,6 +83,12 @@ dependencies {
   androidTestImplementation(libs.androidx.test.ext.junit)
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
+
+  // Baseline profile. profileinstaller applies the shipped profile on first
+  // run; the baselineProfile dependency pulls the generated profile from
+  // :benchmark into the release APK at build time.
+  implementation(libs.androidx.profileinstaller)
+  baselineProfile(project(":benchmark"))
 
   // Navigation
   implementation(libs.androidx.navigation3.ui)
