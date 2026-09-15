@@ -13,3 +13,19 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Machine-specific script configuration. See scripts/env.local.sh.example.
+/scripts/env.local.sh
+
+# Signing material. This repository is public: a leaked upload key cannot be
+# rotated for an app already published, so these must never be committed.
+*.jks
+*.keystore
+*.p12
+keystore.properties
+signing.properties
+
+# Benchmark and profiling output. Large, machine-specific, regenerated.
+/benchmark/build
+*.trace
+*.perfetto-trace
