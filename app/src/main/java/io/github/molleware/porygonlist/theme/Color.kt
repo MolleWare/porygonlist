@@ -1,4 +1,4 @@
-package com.example.porygonlist.theme
+package io.github.molleware.porygonlist.theme
 
 import androidx.compose.ui.graphics.Color
 

@@ -5,10 +5,10 @@ plugins {
 }
 
 android {
-    namespace = "com.example.porygonlist"
+    namespace = "io.github.molleware.porygonlist"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.porygonlist"
+        applicationId = "io.github.molleware.porygonlist"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -17,13 +17,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: shrink, optimize and obfuscate. Also the prerequisite for
+            // baseline profiles to have their full effect on startup.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures {
       compose = true
@@ -40,7 +43,10 @@ android {
 }
 
 kotlin {
-    jvmToolchain(17)
+    // Must match a JDK actually installed on the build machine. With 17 here,
+    // Gradle's toolchain resolver downloaded a whole JDK mid-build, which is
+    // both wasteful and unacceptable for F-Droid's reproducible builds.
+    jvmToolchain(21)
 }
 
 dependencies {

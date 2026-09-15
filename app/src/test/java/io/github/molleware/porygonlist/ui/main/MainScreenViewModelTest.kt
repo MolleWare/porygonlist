@@ -1,6 +1,6 @@
-package com.example.porygonlist.ui.main
+package io.github.molleware.porygonlist.ui.main
 
-import com.example.porygonlist.data.DataRepository
+import io.github.molleware.porygonlist.data.DataRepository
 import junit.framework.TestCase.assertEquals
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first

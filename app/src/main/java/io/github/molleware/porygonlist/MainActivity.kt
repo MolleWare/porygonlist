@@ -1,4 +1,4 @@
-package com.example.porygonlist
+package io.github.molleware.porygonlist
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.example.porygonlist.theme.PorygonListTheme
+import io.github.molleware.porygonlist.theme.PorygonListTheme
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {

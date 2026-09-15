@@ -1,9 +1,9 @@
-package com.example.porygonlist.ui.main
+package io.github.molleware.porygonlist.ui.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.porygonlist.data.DataRepository
-import com.example.porygonlist.ui.main.MainScreenUiState.Success
+import io.github.molleware.porygonlist.data.DataRepository
+import io.github.molleware.porygonlist.ui.main.MainScreenUiState.Success
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch

@@ -1,4 +1,4 @@
-package com.example.porygonlist.data
+package io.github.molleware.porygonlist.data
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow

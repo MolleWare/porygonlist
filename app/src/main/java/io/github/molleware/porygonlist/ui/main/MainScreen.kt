@@ -1,4 +1,4 @@
-package com.example.porygonlist.ui.main
+package io.github.molleware.porygonlist.ui.main
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
@@ -9,8 +9,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
-import com.example.porygonlist.data.DefaultDataRepository
-import com.example.porygonlist.theme.PorygonListTheme
+import io.github.molleware.porygonlist.data.DefaultDataRepository
+import io.github.molleware.porygonlist.theme.PorygonListTheme
 
 @Composable
 fun MainScreen(

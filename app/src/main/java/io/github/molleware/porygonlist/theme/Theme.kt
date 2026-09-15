@@ -1,4 +1,4 @@
-package com.example.porygonlist.theme
+package io.github.molleware.porygonlist.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
