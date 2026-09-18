@@ -6,11 +6,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
@@ -85,8 +95,25 @@ fun MainNavigation() {
     // Back closes an open sheet before it touches navigation.
     BackHandler(enabled = viewModel.sheet != null) { viewModel.closeSheet() }
 
-    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-      Box(Modifier.weight(1f).fillMaxWidth()) {
+    // Everything except the keyboard. The shell is inset for the status and navigation bars and for
+    // a cutout, but deliberately *not* for the IME: padding the whole app by the keyboard's height
+    // lifts the tab bar into the middle of the screen and leaves a band of ground under it. The bar
+    // belongs at the bottom of the window, with the keyboard simply covering it.
+    val shellInsets =
+      WindowInsets.safeDrawing
+        .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical)
+        .exclude(WindowInsets.ime)
+
+    // The keyboard covers the foot of the window, so the tab bar steps out of the layout while it
+    // is up rather than being pushed above it. Leaving it in and padding around it is what put a
+    // band of empty ground between the last row and the keys: the bar's height and the navigation
+    // bar were both being counted twice, once as layout and again as the keyboard's inset.
+    val keyboardUp = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
+    Column(Modifier.fillMaxSize().windowInsetsPadding(shellInsets).consumeWindowInsets(shellInsets)) {
+      // The scrolling area is what yields to the keyboard: a field at the foot of a screen ends up
+      // directly above the keys, with nothing between them.
+      Box(Modifier.weight(1f).fillMaxWidth().imePadding()) {
         NavDisplay(
           backStack = backStack,
           // Never pop the last entry: an empty back stack has nothing to display.
@@ -107,6 +134,10 @@ fun MainNavigation() {
                   draft = viewModel.listDraft,
                   onDraftChange = viewModel::onListDraftChange,
                   onCreateList = viewModel::createList,
+                  onShareList = { id ->
+                    viewModel.openList(id)
+                    backStack.goTo(Share)
+                  },
                   renamingList = viewModel.renamingList,
                   renameDraft = viewModel.renameDraft,
                   onStartRename = viewModel::startRename,
@@ -126,13 +157,15 @@ fun MainNavigation() {
                   draft = viewModel.draft,
                   onDraftChange = viewModel::onDraftChange,
                   onSubmitDraft = viewModel::submitDraft,
-                  onAddItem = { viewModel.addItem(it) },
+                  suggestions = viewModel.suggestions(appState),
+                  onAddItem = viewModel::takeSuggestion,
                   onToggleChecked = viewModel::toggleChecked,
                   onEditItem = { item ->
                     viewModel.openEditSheet(item, itemSubLabel(item, appState.activeList, appState.localDevice))
                   },
                   onMerge = viewModel::mergeConflict,
                   onKeepBoth = viewModel::keepBoth,
+                  onShare = { backStack.goTo(Share) },
                   onBack = { backStack.goTo(Lists) },
                   modifier = Modifier.fillMaxSize(),
                 )
@@ -221,11 +254,13 @@ fun MainNavigation() {
         )
       }
 
-      TabBar(
-        current = current.toTab(),
-        onSelect = { tab -> backStack.goTo(tab.toKey()) },
-        dark = shopping,
-      )
+      if (!keyboardUp) {
+        TabBar(
+          current = current.toTab(),
+          onSelect = { tab -> backStack.goTo(tab.toKey()) },
+          dark = shopping,
+        )
+      }
     }
 
     // The sheets sit above everything, bottom bar included, exactly as the overlay does in the design.

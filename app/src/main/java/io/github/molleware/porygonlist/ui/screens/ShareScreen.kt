@@ -63,6 +63,7 @@ import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
+import io.github.molleware.porygonlist.ui.others
 import io.github.molleware.porygonlist.ui.partnerName
 
 /**
@@ -106,14 +107,19 @@ fun ShareScreen(
     modifier.verticalScroll(rememberScrollState()).padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 88.dp)
   ) {
     BackLink("All lists", onBack, tint = Accent700)
+    // Names the list rather than saying "Sharing", because this screen acts on one list and which
+    // one is not guessable from a heading that does not say.
     Text(
-      "Sharing",
+      "Sharing ${list.name}",
       style = PorygonType.ScreenTitle,
       color = TextInk,
       modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
     )
     Text(
-      "Lists sync on their own whenever you and $partner are both on a network you have approved here.",
+      if (list.others(state.localDevice).isEmpty())
+        "Nobody else has this list yet. Add someone below, and it syncs on its own whenever you are both " +
+          "on a network you have approved here."
+      else "Lists sync on their own whenever you and $partner are both on a network you have approved here.",
       style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.55),
       color = Neutral700,
       modifier = Modifier.padding(bottom = 20.dp),

@@ -39,6 +39,7 @@ import io.github.molleware.porygonlist.theme.TextInk
 import io.github.molleware.porygonlist.ui.components.IconActionButton
 import io.github.molleware.porygonlist.ui.components.IconPaths
 import io.github.molleware.porygonlist.ui.components.PorygonTextField
+import io.github.molleware.porygonlist.ui.components.tabBarClearance
 
 /**
  * One tap drops a staple onto the list you are working on — no typing, no searching.
@@ -62,7 +63,7 @@ fun StaplesScreen(
   modifier: Modifier = Modifier,
 ) {
   Column(
-    modifier.verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 88.dp)
+    modifier.verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = tabBarClearance())
   ) {
     Text("Staples", style = PorygonType.ScreenTitle, color = TextInk, modifier = Modifier.padding(bottom = 5.dp))
     Text(

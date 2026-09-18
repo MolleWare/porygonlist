@@ -1,16 +1,22 @@
 package io.github.molleware.porygonlist.ui
 
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.Conflict
+import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.ListRepository
 import io.github.molleware.porygonlist.data.LocalNode
+import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Staple
 import io.github.molleware.porygonlist.data.crypto.InMemoryIdentityStore
 import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PairingCodec
 import io.github.molleware.porygonlist.data.net.NetworkMonitor
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
+import io.github.molleware.porygonlist.data.sync.Field
+import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.HybridClock
 import io.github.molleware.porygonlist.data.sync.IdFactory
+import io.github.molleware.porygonlist.data.sync.ItemId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -198,6 +204,162 @@ class PorygonViewModelTest {
 
     vm.removeStaple("Tofu")
     assertFalse(state().staples.any { it.name == "Tofu" })
+  }
+
+  // ── Suggestions ───────────────────────────────────────────────────────────
+
+  @Test
+  fun `nothing is offered until there is something to go on`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.onDraftChange("")
+    assertTrue(vm.suggestions(state()).isEmpty())
+
+    vm.onDraftChange("c")
+    assertTrue("one letter matches most of the vocabulary", vm.suggestions(state()).isEmpty())
+
+    vm.onDraftChange("co")
+    assertTrue(vm.suggestions(state()).isNotEmpty())
+  }
+
+  @Test
+  fun `typing a prefix offers what starts with it`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.onDraftChange("courg")
+
+    assertEquals(listOf("Courgette"), vm.suggestions(state()))
+  }
+
+  @Test
+  fun `what is already on the list is never offered`() = runTest(dispatcher) {
+    repo.load()
+    // The seeded list already holds Tomatoes, and a second one is the duplicate this prevents.
+    assertTrue(state().activeList.liveItems.any { it.name.value == "Tomatoes" })
+
+    vm.onDraftChange("tomato")
+
+    assertTrue(vm.suggestions(state()).none { it == "Tomatoes" })
+  }
+
+  @Test
+  fun `a name typed in full is not read back`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.onDraftChange("Courgette")
+
+    assertTrue("the add button already does that", vm.suggestions(state()).none { it == "Courgette" })
+  }
+
+  @Test
+  fun `taking a suggestion adds it and clears the field`() = runTest(dispatcher) {
+    repo.load()
+    vm.onDraftChange("courg")
+
+    vm.takeSuggestion("Courgette")
+
+    assertTrue(state().activeList.liveItems.any { it.name.value == "Courgette" })
+    assertEquals("", vm.draft)
+  }
+
+  @Test
+  fun `a name the owner has used is offered back, their spelling`() = runTest(dispatcher) {
+    repo.load()
+    vm.onStapleDraftChange("rocket")
+    vm.addStaple()
+
+    vm.onDraftChange("rock")
+
+    // Their lowercase, not the built-in list's "Rocket" — the app does not correct people.
+    assertEquals("rocket", vm.suggestions(state()).first())
+  }
+
+  @Test
+  fun `suggestions follow the list you are on`() = runTest(dispatcher) {
+    repo.load()
+    vm.onNameDraftChange("Hugo")
+    vm.saveName()
+    vm.onDraftChange("tomato")
+    val onWeeklyShop = vm.suggestions(state())
+
+    vm.onListDraftChange("Market")
+    vm.createList()
+    val onNewList = vm.suggestions(state())
+
+    // Tomatoes is on the seeded list and withheld there; the new list has nothing, so it returns.
+    assertTrue("Tomatoes" !in onWeeklyShop)
+    assertTrue("Tomatoes" in onNewList)
+  }
+
+  // ── Answering a duplicate ─────────────────────────────────────────────────
+
+  @Test
+  fun `merging a duplicate leaves one entry with both quantities`() = runTest(dispatcher) {
+    repo.load()
+    // The two competing items on the list, as they are after a real handover.
+    val (mine, theirs) = putBothOnList()
+
+    vm.mergeConflict()
+
+    val rice = state().activeList.liveItems.filter { it.name.value == "Rice" }
+    assertEquals("one entry, not three", 1, rice.size)
+    assertEquals(3, rice.single().qty.value)
+    assertEquals(Origin.MERGED, rice.single().origin)
+
+    // Tombstoned rather than dropped: the other phone still holds them and would hand them back.
+    val items = state().activeList.items
+    assertTrue(items.single { it.id == mine.id }.removed.value)
+    assertTrue(items.single { it.id == theirs.id }.removed.value)
+    assertNull(state().conflict)
+  }
+
+  @Test
+  fun `keeping both leaves exactly the two that were there`() = runTest(dispatcher) {
+    repo.load()
+    putBothOnList()
+
+    vm.keepBoth()
+
+    assertEquals(2, state().activeList.liveItems.count { it.name.value == "Rice" })
+    assertNull(state().conflict)
+  }
+
+  @Test
+  fun `answering a card that arrived before the items does not lose them`() = runTest(dispatcher) {
+    repo.load()
+    // The seeded fixture: the two sides are held on the conflict and are not on the list.
+    val conflict = state().conflict!!
+
+    vm.keepBoth()
+
+    val eggs = state().activeList.liveItems.filter { it.name.value == conflict.itemName }
+    assertEquals(2, eggs.size)
+  }
+
+  /** Puts a competing pair on the open list and surfaces it, the way a handover leaves things. */
+  private fun putBothOnList(): kotlin.Pair<GroceryItem, GroceryItem> {
+    val stamp = Hlc(1_700_000_000_000, 0, state().localDevice)
+    val theirDevice = state().activeList.people.first { it.device != state().localDevice }.device
+    val mine =
+      GroceryItem(
+        id = ItemId("${state().localDevice.value}:900"),
+        name = Field("Rice", stamp),
+        qty = Field(1, stamp),
+        checkedAt = stamp,
+        removed = Field(false, stamp),
+      )
+    val theirs =
+      mine.copy(
+        id = ItemId("${theirDevice.value}:900"),
+        qty = Field(2, Hlc(1_700_000_001_000, 0, theirDevice)),
+      )
+    repo.update { s, _ ->
+      s.copy(
+        conflict = Conflict(mine, theirs),
+        lists = s.lists.map { if (it.id == s.activeListId) it.copy(items = it.items + mine + theirs) else it },
+      )
+    }
+    return mine to theirs
   }
 
   // ── Pairing ───────────────────────────────────────────────────────────────

@@ -1,8 +1,10 @@
 package io.github.molleware.porygonlist.data.sync
 
+import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.Person
+import io.github.molleware.porygonlist.data.WordTrie
 
 /** A part of an item that two phones can disagree about. */
 enum class ItemField {
@@ -16,8 +18,13 @@ enum class ItemField {
 /** One item after merging, and whatever the two sides settled blind. */
 data class ItemMerge(val item: GroceryItem, val concurrent: Set<ItemField>)
 
-/** A list after merging, with the items that needed a coin toss. */
-data class ListMerge(val list: GroceryList, val clashes: List<ItemMerge>)
+/**
+ * A list after merging, with everything that needed a person.
+ *
+ * [clashes] are single items whose fields were settled blind. [duplicates] are two *different*
+ * items that turn out to be the same thing — both phones added rice while apart.
+ */
+data class ListMerge(val list: GroceryList, val clashes: List<ItemMerge>, val duplicates: List<Conflict>)
 
 /**
  * Merges two views of the same item, field by field.
@@ -68,10 +75,14 @@ fun merge(mine: GroceryItem, theirs: GroceryItem): ItemMerge {
 /**
  * Merges two views of the same list.
  *
- * Items are matched by id, which is safe because an id carries the phone that minted it — two
- * phones adding milk while apart produce two different ids and therefore two items, not one
- * mangled one. That is the case the conflict card exists for, and it is deliberately *not*
- * resolved here.
+ * Items are matched by id, which is what keeps an edit from being mistaken for an addition: an id
+ * carries the phone that minted it, so two phones editing the same item agree about which item they
+ * are editing, whatever either has renamed it to.
+ *
+ * Two phones *adding* the same thing while apart is the other case, and ids cannot see it — nobody
+ * types an id when they put rice on a list, so independently added rice is two ids and one
+ * groceries. [duplicatesBetween] catches that by name, and it is reported rather than resolved:
+ * whether two people wanting rice means one bag or two is not something this can know.
  *
  * An item present on only one side is taken as it stands. That is what makes a removal a tombstone
  * rather than an absence: if it simply vanished from the sender, the receiver would read its own
@@ -99,7 +110,44 @@ fun merge(mine: GroceryList, theirs: GroceryList): ListMerge {
   return ListMerge(
     list = mine.copy(items = merged.values.toList(), people = mergePeople(mine.people, theirs.people)),
     clashes = clashes,
+    duplicates = duplicatesBetween(mine, theirs),
   )
+}
+
+/**
+ * The same thing added twice, once on each phone, without either having seen the other.
+ *
+ * Matching is by folded name — case and accents removed, the same folding the add field's
+ * suggestions use, which is the point of having them: two phones that both write "Tomatoes" can be
+ * told they meant one thing, and "tomatos" against "Tomatoes" can only ever be two.
+ *
+ * "Without either having seen the other" is what the id check does, and it is what stops this
+ * nagging. If their rice is already on my list, my second rice is a deliberate second bag, not a
+ * clash. It also means a pair is reported on the one merge where the two first meet: afterwards
+ * each list holds both ids and the condition cannot hold again.
+ *
+ * Tombstones are skipped. A removal is not an addition, and pairing one with a live item would
+ * offer to merge something that is deliberately gone.
+ */
+internal fun duplicatesBetween(mine: GroceryList, theirs: GroceryList): List<Conflict> {
+  val myIds = mine.items.mapTo(HashSet(mine.items.size)) { it.id.value }
+  val theirIds = theirs.items.mapTo(HashSet(theirs.items.size)) { it.id.value }
+
+  val unseenByThem = mine.liveItems.filterNot { it.id.value in theirIds }
+  if (unseenByThem.isEmpty()) return emptyList()
+
+  val unseenByMe = theirs.liveItems.filterNot { it.id.value in myIds }
+  if (unseenByMe.isEmpty()) return emptyList()
+
+  val byName = unseenByMe.groupBy { WordTrie.fold(it.name.value) }
+  // One pairing per name, so three phones adding rice do not produce a combinatorial pile of cards.
+  val paired = HashSet<String>()
+
+  return unseenByThem.mapNotNull { ours ->
+    val key = WordTrie.fold(ours.name.value)
+    if (!paired.add(key)) return@mapNotNull null
+    byName[key]?.firstOrNull()?.let { Conflict(yours = ours, theirs = it) }
+  }
 }
 
 /**

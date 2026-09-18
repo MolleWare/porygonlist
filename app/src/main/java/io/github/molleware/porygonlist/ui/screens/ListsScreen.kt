@@ -52,6 +52,7 @@ import io.github.molleware.porygonlist.ui.components.Dot
 import io.github.molleware.porygonlist.ui.components.IconActionButton
 import io.github.molleware.porygonlist.ui.components.IconPaths
 import io.github.molleware.porygonlist.ui.components.PorygonTextField
+import io.github.molleware.porygonlist.ui.components.tabBarClearance
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
@@ -71,6 +72,8 @@ fun ListsScreen(
   draft: String,
   onDraftChange: (String) -> Unit,
   onCreateList: () -> Unit,
+  /** Opens sharing for one list, without having to open the list first. */
+  onShareList: (Long) -> Unit,
   renamingList: Long?,
   renameDraft: String,
   onStartRename: (GroceryList) -> Unit,
@@ -84,7 +87,7 @@ fun ListsScreen(
   modifier: Modifier = Modifier,
 ) {
   Column(
-    modifier.verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 88.dp)
+    modifier.verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = tabBarClearance())
   ) {
     Row(
       Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -118,6 +121,7 @@ fun ListsScreen(
             canDelete = state.lists.size > 1,
             confirmingDelete = confirmingDelete == list.id,
             sharedWith = list.people.count { it.device != state.localDevice },
+            onShare = { onShareList(list.id) },
             onAskDelete = { onAskDelete(list.id) },
             onCancelDelete = onCancelDelete,
             onDelete = { onDelete(list.id) },
@@ -170,6 +174,7 @@ private fun ListEditCard(
   canDelete: Boolean,
   confirmingDelete: Boolean,
   sharedWith: Int,
+  onShare: () -> Unit,
   onAskDelete: () -> Unit,
   onCancelDelete: () -> Unit,
   onDelete: () -> Unit,
@@ -193,6 +198,14 @@ private fun ListEditCard(
     Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
       PrimaryButton("Save", onSave, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
       SecondaryButton("Cancel", onCancel, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
+      if (!confirmingDelete) {
+        SecondaryButton(
+          if (sharedWith > 0) "Sharing" else "Share",
+          onShare,
+          style = PorygonType.Meta,
+          contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
+        )
+      }
       if (canDelete && !confirmingDelete) {
         SecondaryButton(
           "Delete",

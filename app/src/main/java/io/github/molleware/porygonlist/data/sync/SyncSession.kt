@@ -1,6 +1,7 @@
 package io.github.molleware.porygonlist.data.sync
 
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.Conflict
 
 /** Why a payload was not applied. */
 enum class RejectReason {
@@ -20,9 +21,15 @@ sealed interface SyncResult {
    *
    * [receipt] is the sender's own stamp, echoed back untouched — their proof that everything they
    * knew at that moment is now here too. [clashes] are the items where both phones changed the same
-   * field without either having seen the other.
+   * field without either having seen the other. [duplicates] are the pairs that turned out to be the
+   * same thing added twice; the first of them is put on [state] as the card to answer.
    */
-  data class Merged(val state: AppState, val clashes: List<ItemMerge>, val receipt: Hlc) : SyncResult
+  data class Merged(
+    val state: AppState,
+    val clashes: List<ItemMerge>,
+    val duplicates: List<Conflict>,
+    val receipt: Hlc,
+  ) : SyncResult
 
   data class Rejected(val reason: RejectReason) : SyncResult
 }
@@ -65,21 +72,28 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock): SyncResult {
   if (applicable.isEmpty()) return SyncResult.Rejected(RejectReason.NOTHING_SHARED)
 
   val clashes = mutableListOf<ItemMerge>()
+  val duplicates = mutableListOf<Conflict>()
   val mergedLists =
     lists.map { mine ->
       val theirs = applicable.firstOrNull { it.id == mine.id } ?: return@map mine
       if (theirs.people.none { it.wasEver(payload.from) }) return@map mine
       val result = merge(mine, theirs)
       clashes += result.clashes
+      duplicates += result.duplicates
       result.list
     }
 
   clock.observe(payload.at)
   mergedLists.mapNotNull { it.newestStamp() }.maxOrNull()?.let { clock.observe(it) }
 
+  // One card at a time, and an unanswered one is not thrown away for a newer one: the items behind
+  // it are both on the list, so the question keeps until it is asked again on the next handover.
+  val surfaced = conflict ?: duplicates.firstOrNull()
+
   return SyncResult.Merged(
-    state = copy(lists = mergedLists, clockHead = clock.head()).pruneDeliveredTombstones(),
+    state = copy(lists = mergedLists, clockHead = clock.head(), conflict = surfaced).pruneDeliveredTombstones(),
     clashes = clashes,
+    duplicates = duplicates,
     receipt = payload.at,
   )
 }

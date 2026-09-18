@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,6 +40,7 @@ import io.github.molleware.porygonlist.theme.Accent2800
 import io.github.molleware.porygonlist.theme.Accent300
 import io.github.molleware.porygonlist.theme.Accent700
 import io.github.molleware.porygonlist.theme.Accent800
+import io.github.molleware.porygonlist.theme.Accent900
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.theme.Neutral100
 import io.github.molleware.porygonlist.theme.Neutral600
@@ -55,6 +57,7 @@ import io.github.molleware.porygonlist.ui.components.Dot
 import io.github.molleware.porygonlist.ui.components.IconActionButton
 import io.github.molleware.porygonlist.ui.components.IconPaths
 import io.github.molleware.porygonlist.ui.components.PorygonTextField
+import io.github.molleware.porygonlist.ui.components.tabBarClearance
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
@@ -62,7 +65,12 @@ import io.github.molleware.porygonlist.ui.conflictSide
 import io.github.molleware.porygonlist.ui.itemSubLabel
 import io.github.molleware.porygonlist.ui.others
 
-/** Things worth offering before you have typed anything. */
+/**
+ * Things worth offering before you have typed anything.
+ *
+ * A fixed three, from the design. Once there is a prefix to go on these give way to real matches —
+ * see [ListDetailScreen]'s `suggestions`.
+ */
 private val SUGGESTIONS = listOf("Parmesan", "Spinach", "Lemons")
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -72,16 +80,20 @@ fun ListDetailScreen(
   draft: String,
   onDraftChange: (String) -> Unit,
   onSubmitDraft: () -> Unit,
+  /** Names matching what is being typed. Empty when there is nothing to go on. */
+  suggestions: List<String>,
   onAddItem: (String) -> Unit,
   onToggleChecked: (ItemId) -> Unit,
   onEditItem: (GroceryItem) -> Unit,
   onMerge: () -> Unit,
   onKeepBoth: () -> Unit,
+  /** Opens sharing for this list — who has it, and who else could. */
+  onShare: () -> Unit,
   onBack: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val list = state.activeList
-  Column(modifier.verticalScroll(rememberScrollState()).padding(top = 18.dp, bottom = 88.dp)) {
+  Column(modifier.verticalScroll(rememberScrollState()).padding(top = 18.dp, bottom = tabBarClearance())) {
     Column(Modifier.padding(horizontal = 20.dp)) {
       BackLink("All lists", onBack, tint = Accent700)
       Text(
@@ -90,14 +102,26 @@ fun ListDetailScreen(
         color = TextInk,
         modifier = Modifier.padding(top = 9.dp, bottom = 5.dp),
       )
+      // Who has this list is also the way to change who has it: the status line is the question,
+      // so it is also the door.
       Row(
-        Modifier.padding(bottom = 16.dp),
+        Modifier.clip(Shapes.Pill)
+          .clickable(onClick = onShare)
+          .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
+          .then(Modifier),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
       ) {
         Dot(if (state.online) Accent2 else Accent)
         Text(listStatus(list, state.online, state.localDevice), style = PorygonType.Meta, color = Neutral700)
+        Text(
+          if (list.others(state.localDevice).isEmpty()) "Share it" else "Change",
+          style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
+          color = Accent900,
+          modifier = Modifier.clip(Shapes.Pill).background(Accent300).padding(horizontal = 10.dp, vertical = 4.dp),
+        )
       }
+      Spacer(Modifier.padding(bottom = 16.dp))
       Text(
         "Hold an item, or tap its pencil, to change the name or the count.",
         style = PorygonType.Fine,
@@ -135,14 +159,18 @@ fun ListDetailScreen(
         horizontalArrangement = Arrangement.spacedBy(7.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),
       ) {
-        SUGGESTIONS.forEach { name ->
+        // Matches on what is being typed, or the design's standing three when nothing is. The two
+        // behave identically on tap, so the row does not change meaning under the finger.
+        val matching = suggestions.isNotEmpty()
+        val offered = if (matching) suggestions else if (draft.isBlank()) SUGGESTIONS else emptyList()
+        offered.forEach { name ->
           Text(
             name,
             style = PorygonType.Meta,
             color = Accent800,
             modifier =
               Modifier.clip(Shapes.Pill)
-                .background(Accent100)
+                .background(if (matching) Accent300 else Accent100)
                 .clickable { onAddItem(name) }
                 .padding(horizontal = 14.dp, vertical = 7.dp),
           )

@@ -21,6 +21,9 @@ import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.ShareCodec
 import io.github.molleware.porygonlist.data.Staple
+import io.github.molleware.porygonlist.data.WordTrie
+import io.github.molleware.porygonlist.data.alreadyOn
+import io.github.molleware.porygonlist.data.suggestionVocabulary
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.NetworkFingerprint
@@ -36,6 +39,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/**
+ * How much has to be typed before anything is offered.
+ *
+ * One letter matches most of the vocabulary, which is a wall of words rather than a suggestion.
+ */
+private const val MIN_SUGGEST_PREFIX = 2
 
 /** Which bottom sheet is up, if any. */
 enum class Sheet {
@@ -466,6 +476,46 @@ class PorygonViewModel(
     draft = ""
   }
 
+  // The index is rebuilt only when the words available change, not on every keystroke: the whole
+  // reason for a trie here is that typing costs nothing, and rebuilding per character would hand
+  // that back.
+  private var vocabulary: List<String> = emptyList()
+  private var trie: WordTrie = WordTrie.of(emptyList())
+
+  /**
+   * What to offer under the add field.
+   *
+   * Consistent spelling is the point rather than saving keystrokes. Two phones that both call it
+   * "Tomatoes" can one day be told they added the same thing; "tomatos" and "Tomatoes" can only
+   * ever be two items. Nothing here corrects what someone typed — a suggestion is taken only by
+   * being tapped.
+   */
+  fun suggestions(state: AppState, limit: Int = 4): List<String> {
+    val typed = draft.trim()
+    if (typed.length < MIN_SUGGEST_PREFIX) return emptyList()
+
+    val words = state.suggestionVocabulary()
+    if (words !== vocabulary) {
+      vocabulary = words
+      trie = WordTrie.of(words)
+    }
+
+    val here = alreadyOn(state.activeList)
+    val folded = WordTrie.fold(typed)
+    return trie
+      .matching(typed, limit = limit + here.size + 1)
+      .filterNot { WordTrie.fold(it) in here }
+      // Already typed in full: the add button does that, and repeating it back is noise.
+      .filterNot { WordTrie.fold(it) == folded }
+      .take(limit)
+  }
+
+  /** Puts a suggestion on the list, as one tap — the same bargain the staples grid makes. */
+  fun takeSuggestion(name: String) {
+    addItem(name)
+    draft = ""
+  }
+
   fun addItem(name: String, origin: Origin = Origin.LOCAL) {
     if (name.isBlank()) return
     repo.update { s, node ->
@@ -627,25 +677,42 @@ class PorygonViewModel(
 
   // ── Conflict ──────────────────────────────────────────────────────────────
 
-  /** One entry, the two quantities added together, authored here as a fresh merged item. */
+  /**
+   * One entry, the two quantities added together, authored here as a fresh merged item.
+   *
+   * The two originals are tombstoned rather than dropped. After a real handover they are on both
+   * phones, so simply forgetting them here would leave the other phone holding them and hand them
+   * straight back — and the person would have merged nothing.
+   */
   fun mergeConflict() = repo.update { s, node ->
     val c = s.conflict ?: return@update s
+    val stamp = node.clock.tick()
     val merged = node.newItem(s, c.itemName, qty = c.yours.qty.value + c.theirs.qty.value, origin = Origin.MERGED)
-    s.copy(conflict = null).withActiveList { it.copy(items = it.items + merged) }
+    val replaced = setOf(c.yours.id, c.theirs.id)
+
+    s.copy(conflict = null).withActiveList { list ->
+      list.copy(
+        items = list.items.map { if (it.id in replaced) it.copy(removed = it.removed.set(true, stamp)) else it } + merged
+      )
+    }
   }
 
   /**
    * Both entries kept, exactly as each device made them.
    *
-   * Nothing is minted here: each side already carries its own creator and clock, so they can go
-   * onto the list untouched — which is the whole point of items knowing who made them.
+   * Nothing is minted: each side already carries its own creator and clock, which is the whole point
+   * of items knowing who made them. Either may already be on the list — after a handover both are —
+   * so only what is missing is added, and answering twice cannot produce a third copy.
    */
   fun keepBoth() = repo.update { s, node ->
     val c = s.conflict ?: return@update s
     // Both sides are already stamped by the phones that made them; folding them into this clock
     // keeps it ahead of anything it has now seen.
     node.clock.observe(c.theirs.touchedAt)
-    s.copy(conflict = null).withActiveList { it.copy(items = it.items + c.yours + c.theirs) }
+    s.copy(conflict = null).withActiveList { list ->
+      val here = list.items.map { it.id }.toSet()
+      list.copy(items = list.items + listOf(c.yours, c.theirs).filterNot { it.id in here })
+    }
   }
 
   // ── Networks ──────────────────────────────────────────────────────────────

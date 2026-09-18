@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
@@ -54,6 +57,16 @@ import io.github.molleware.porygonlist.theme.Shapes
 import io.github.molleware.porygonlist.theme.ShopBoxBorder
 import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
+
+/**
+ * How much room a scrolling screen leaves at its foot for the tab bar.
+ *
+ * The bar sits at the bottom of the window and the keyboard covers it rather than pushing it up, so
+ * while the keyboard is open that clearance is not room for anything — it is a band of empty ground
+ * between the last row and the keys. It collapses to a normal gap for as long as the keyboard is up.
+ */
+@Composable
+fun tabBarClearance(): Dp = if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) 16.dp else 88.dp
 
 /** A person's initial in a filled circle. Overlapping avatars tuck under each other by 7dp. */
 @Composable

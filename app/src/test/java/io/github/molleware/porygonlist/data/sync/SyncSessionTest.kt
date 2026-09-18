@@ -346,3 +346,77 @@ class SyncSessionTest {
     assertFalse("the retired handset must stop being waited on", HUGO in ava.list.peersOf(AVA))
   }
 }
+
+/**
+ * The clash a person actually hits: both of them put rice on the list while apart.
+ *
+ * Until this existed the app could not produce that card at all — the one on screen was a fixture in
+ * the seed, and a real handover quietly left two entries called Rice.
+ */
+class DuplicateOverSyncTest {
+
+  private fun phones(): kotlin.Pair<Phone, Phone> =
+    Phone(AVA, 1_000, emptyList(), pair) to Phone(HUGO, 2_000, emptyList(), pair)
+
+  private fun Phone.add(seq: Int, name: String, qty: Int = 1) {
+    val stamp = clock.tick()
+    state = state.copy(lists = state.lists.map { it.copy(items = it.items + item("${device.value}:$seq", name, stamp, qty)) })
+  }
+
+  @Test
+  fun `a handover turns two rices into a question`() {
+    val (ava, hugo) = phones()
+    ava.add(1, "Rice")
+    hugo.add(1, "rice", qty = 2)
+
+    val result = ava.syncTo(hugo) as SyncResult.Merged
+
+    assertEquals(1, result.duplicates.size)
+    val card = hugo.state.conflict!!
+    assertEquals("Rice", card.itemName.replaceFirstChar { it.uppercase() })
+    assertEquals("both entries stay until someone answers", 2, hugo.list.liveItems.size)
+  }
+
+  @Test
+  fun `the question is asked once, not on every handover`() {
+    val (ava, hugo) = phones()
+    ava.add(1, "Rice")
+    hugo.add(1, "Rice")
+
+    ava.syncTo(hugo)
+    hugo.state = hugo.state.copy(conflict = null) // answered, however they answered it
+    hugo.syncTo(ava)
+    val again = ava.syncTo(hugo) as SyncResult.Merged
+
+    assertTrue(again.duplicates.isEmpty())
+    assertNull(hugo.state.conflict)
+  }
+
+  @Test
+  fun `an unanswered question is not replaced by a newer one`() {
+    val (ava, hugo) = phones()
+    ava.add(1, "Rice")
+    hugo.add(1, "Rice")
+    ava.syncTo(hugo)
+    val first = hugo.state.conflict!!
+
+    ava.add(2, "Beans")
+    hugo.add(2, "Beans")
+    ava.syncTo(hugo)
+
+    assertEquals("the person is answering the first one", first, hugo.state.conflict)
+  }
+
+  @Test
+  fun `ordinary syncing still reports nothing`() {
+    val (ava, hugo) = phones()
+    ava.add(1, "Rice")
+    ava.add(2, "Butter")
+
+    val result = ava.syncTo(hugo) as SyncResult.Merged
+
+    assertTrue(result.duplicates.isEmpty())
+    assertNull(hugo.state.conflict)
+    assertEquals(2, hugo.list.liveItems.size)
+  }
+}
