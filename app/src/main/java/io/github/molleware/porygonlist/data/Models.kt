@@ -268,16 +268,12 @@ data class Staple(val name: String, val uses: Int = 0) {
  * simply two edits, but two edits neither of which was made in knowledge of the other. The merge is
  * automatic everywhere it can be; this is the residue that needs a person.
  *
- * It holds the two competing items themselves. Each already carries its own creator and stamps, so
- * "keep both" can put them on the list exactly as they are.
+ * It holds the two competing items themselves and nothing else. Each already carries its own creator
+ * and stamps, so "keep both" can put them on the list exactly as they are — and the sentence
+ * explaining the clash is worked out from them when it is shown, never stored. A stored sentence
+ * goes stale: it would still read "just now" under something added last week.
  */
-data class Conflict(
-  val yours: GroceryItem,
-  val theirs: GroceryItem,
-  /** How each side is explained to the person resolving it — "you added it at 9:02". */
-  val yourStory: String,
-  val theirStory: String,
-) {
+data class Conflict(val yours: GroceryItem, val theirs: GroceryItem) {
   val itemName: String
     get() = yours.name.value
 }
@@ -492,8 +488,6 @@ data class AppState(
               checkedAt = Hlc(clashAt + 60_000, 0, partner),
               removed = Field(false, Hlc(clashAt + 60_000, 0, partner)),
             ),
-          yourStory = "you added it at 9:02",
-          theirStory = "Hugo added it at 9:03",
         )
 
       return AppState(

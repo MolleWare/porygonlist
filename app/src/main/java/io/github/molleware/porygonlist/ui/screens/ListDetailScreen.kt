@@ -58,6 +58,7 @@ import io.github.molleware.porygonlist.ui.components.PorygonTextField
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
+import io.github.molleware.porygonlist.ui.conflictSide
 import io.github.molleware.porygonlist.ui.itemSubLabel
 import io.github.molleware.porygonlist.ui.others
 
@@ -108,6 +109,8 @@ fun ListDetailScreen(
     state.conflict?.let { conflict ->
       ConflictCard(
         conflict = conflict,
+        yourSide = conflictSide(conflict.yours, list, state.localDevice),
+        theirSide = conflictSide(conflict.theirs, list, state.localDevice),
         onMerge = onMerge,
         onKeepBoth = onKeepBoth,
         modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
@@ -173,7 +176,14 @@ private fun listStatus(list: GroceryList, online: Boolean, localDevice: DeviceId
  * so it is shown rather than resolved quietly.
  */
 @Composable
-private fun ConflictCard(conflict: Conflict, onMerge: () -> Unit, onKeepBoth: () -> Unit, modifier: Modifier = Modifier) {
+private fun ConflictCard(
+  conflict: Conflict,
+  yourSide: String,
+  theirSide: String,
+  onMerge: () -> Unit,
+  onKeepBoth: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
   Column(
     modifier
       .fillMaxWidth()
@@ -193,7 +203,7 @@ private fun ConflictCard(conflict: Conflict, onMerge: () -> Unit, onKeepBoth: ()
       Text("You both added ${conflict.itemName}", style = PorygonType.InlineHeading, color = TextInk)
     }
     Text(
-      "${conflict.yours}, ${conflict.theirs}. Nobody was looking at the other phone.",
+      "$yourSide, $theirSide — neither of you could see the other's copy at the time.",
       style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
       color = Accent800,
       modifier = Modifier.padding(bottom = 11.dp),

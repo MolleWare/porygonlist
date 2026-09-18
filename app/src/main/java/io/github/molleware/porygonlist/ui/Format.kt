@@ -26,6 +26,39 @@ fun relativeTime(epochMillis: Long, now: Long = System.currentTimeMillis(), zone
   }
 }
 
+/**
+ * A time with the preposition that makes it read as part of a sentence.
+ *
+ * [relativeTime] returns the bare label because most of the interface sets it beside a name in a
+ * sub-label, where "you, 9:12" is right. In running prose it needs "at 9:12" — and "at just now" or
+ * "at yesterday" do not exist, which is the whole reason this is a separate function.
+ */
+private fun whenPhrase(epochMillis: Long, now: Long, zone: ZoneId): String {
+  val label = relativeTime(epochMillis, now, zone)
+  if (label == "just now" || label == "yesterday") return label
+  val sameDay =
+    Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate() == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+  return if (sameDay) "at $label" else "on $label"
+}
+
+/**
+ * One side of a clash, in words: "you added it at 9:02".
+ *
+ * Worked out from the item every time it is shown rather than written down when the clash was
+ * found. A stored sentence is frozen — it would still say "just now" under something added last
+ * week — and this is the one card where the two times are the entire argument for reading it.
+ *
+ * It names the *creator*, not the last writer: a clash is about who independently added the same
+ * thing, and nothing has been written since or there would be no clash to show.
+ */
+fun conflictSide(
+  item: GroceryItem,
+  list: GroceryList,
+  localDevice: DeviceId,
+  now: Long = System.currentTimeMillis(),
+  zone: ZoneId = ZoneId.systemDefault(),
+): String = "${list.nameFor(item.createdBy, localDevice)} added it ${whenPhrase(item.at, now, zone)}"
+
 /** How someone is referred to in running text: "you" on this device, their name anywhere else. */
 fun GroceryList.nameFor(peer: DeviceId, localDevice: DeviceId): String =
   if (peer == localDevice) "you" else personFor(peer)?.name ?: "someone"

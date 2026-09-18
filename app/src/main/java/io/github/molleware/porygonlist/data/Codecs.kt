@@ -87,20 +87,21 @@ object ShareCodec {
  * Version 7 adds the owner's name to the `meta` record. Version 6 is still read; see [READABLE].
  */
 object StateCodec {
-  private const val VERSION = "PLSTATE8"
+  private const val VERSION = "PLSTATE9"
 
   /**
    * Formats this build can read.
    *
-   * Versions 6 and 7 are accepted rather than rejected because what they lack — the owner's name,
-   * the staples grid — is not the same kind of hole as a missing identity. Nothing has to be
-   * invented: the name comes back blank and first run asks once, the staples come back as the
-   * default set. Everything they do carry — authorship, stamps, tombstones — is read as before.
+   * Versions 6 to 8 are accepted rather than rejected because what separates them from this one —
+   * the owner's name, the staples grid, two sentences about a clash — is not the same kind of hole
+   * as a missing identity. Nothing has to be invented: the name comes back blank and first run asks
+   * once, the staples come back as the default set, and the clash sentences are written afresh from
+   * the items. Everything they carry — authorship, stamps, tombstones — is read as before.
    */
-  private val READABLE = setOf("PLSTATE6", "PLSTATE7", VERSION)
+  private val READABLE = setOf("PLSTATE6", "PLSTATE7", "PLSTATE8", VERSION)
 
-  /** The first version that writes a staples record, so an older file can be given the defaults. */
-  private const val FIRST_WITH_STAPLES = "PLSTATE8"
+  /** Versions that write a staples record, so an older file can be given the defaults instead. */
+  private val WITH_STAPLES = setOf("PLSTATE8", VERSION)
 
   fun encode(state: AppState): String = buildString {
     appendLine(VERSION)
@@ -117,7 +118,9 @@ object StateCodec {
     )
 
     state.conflict?.let { c ->
-      appendLine(record("conflict", c.yourStory, c.theirStory))
+      // A marker only. The two sides follow on their own lines, and what the card says about them
+      // is written at display time rather than stored.
+      appendLine(record("conflict"))
       appendLine(record(*(listOf("conflictitem", "yours") + itemFields(c.yours)).toTypedArray()))
       appendLine(record(*(listOf("conflictitem", "theirs") + itemFields(c.theirs)).toTypedArray()))
     }
@@ -179,7 +182,7 @@ object StateCodec {
     var activeListId = 1L
     var online = true
     var displayName = ""
-    var conflictStories: Pair<String, String>? = null
+    var sawConflict = false
     var conflictYours: GroceryItem? = null
     var conflictTheirs: GroceryItem? = null
     val networks = mutableListOf<ApprovedNetwork>()
@@ -207,7 +210,9 @@ object StateCodec {
               // Absent in a version 6 file, which simply means this phone has yet to be told.
               displayName = f.getOrNull(6).orEmpty()
             }
-            "conflict" -> conflictStories = f[1] to f[2]
+            // Versions up to 8 wrote two ready-made sentences here. They are ignored rather than
+            // read: the card works them out from the items now, and a stored one was already stale.
+            "conflict" -> sawConflict = true
             "conflictitem" -> {
               val item = parseItem(f, from = 2) ?: return@runCatching
               if (f[1] == "yours") conflictYours = item else conflictTheirs = item
@@ -263,13 +268,10 @@ object StateCodec {
         )
       }
 
-    // Both sides and both stories must be present, or there is no conflict to show.
+    // Both sides must be present, or there is no clash to show.
     val conflict =
-      conflictStories?.let { (yourStory, theirStory) ->
-        val yours = conflictYours
-        val theirs = conflictTheirs
-        if (yours != null && theirs != null) Conflict(yours, theirs, yourStory, theirStory) else null
-      }
+      if (sawConflict && conflictYours != null && conflictTheirs != null) Conflict(conflictYours, conflictTheirs)
+      else null
 
     val everyItem = lists.flatMap { it.items } + listOfNotNull(conflict?.yours, conflict?.theirs)
 
@@ -294,7 +296,7 @@ object StateCodec {
       peers = peers.filter { DeviceIdentity.matches(it.deviceId, it.publicKey) },
       // An empty grid is a real state someone can reach by removing every tile, so it is only
       // refilled for a file written before staples were storable at all.
-      staples = if (version == FIRST_WITH_STAPLES) staples else Staple.defaults,
+      staples = if (version in WITH_STAPLES) staples else Staple.defaults,
       conflict = conflict,
     )
   }

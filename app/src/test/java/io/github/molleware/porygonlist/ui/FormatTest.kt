@@ -160,4 +160,41 @@ class FormatTest {
     assertEquals("1 item", itemCountLabel(list.copy(items = listOf(item("Butter")))))
     assertEquals("0 items", itemCountLabel(list))
   }
+
+  // ── The clash card ────────────────────────────────────────────────────────
+
+  @Test
+  fun `each side of a clash reads as a sentence`() {
+    val mine = item("Eggs", creator = me, at = hoursAgo(5))
+    val theirs = item("Eggs", creator = hugo, at = hoursAgo(5) + 60_000)
+
+    assertEquals("you added it at 9:30", conflictSide(mine, list, me, now, utc))
+    assertEquals("Hugo added it at 9:31", conflictSide(theirs, list, me, now, utc))
+  }
+
+  @Test
+  fun `a clash is explained with words, never an item dumped to text`() {
+    val side = conflictSide(item("Eggs", at = hoursAgo(5)), list, me, now, utc)
+
+    // What this replaced put `GroceryItem.toString()` on the screen, ids, stamps and all.
+    assertEquals(false, side.contains("GroceryItem"))
+    assertEquals(false, side.contains("Hlc"))
+    assertEquals(false, side.contains(me.value))
+  }
+
+  @Test
+  fun `the time reads naturally however long ago it was`() {
+    assertEquals("you added it just now", conflictSide(item("Eggs", at = now - 30_000), list, me, now, utc))
+    assertEquals("you added it yesterday", conflictSide(item("Eggs", at = hoursAgo(20)), list, me, now, utc))
+    assertEquals("you added it on 3 Sep", conflictSide(item("Eggs", at = hoursAgo(24 * 14)), list, me, now, utc))
+  }
+
+  @Test
+  fun `a clash names whoever added it, not whoever wrote last`() {
+    val hugosItem = item("Eggs", creator = hugo, writer = me, at = hoursAgo(2))
+
+    assertEquals("Hugo added it at 12:30", conflictSide(hugosItem, list, me, now, utc))
+  }
+
+  private fun hoursAgo(hours: Int) = now - hours * 3_600_000L
 }

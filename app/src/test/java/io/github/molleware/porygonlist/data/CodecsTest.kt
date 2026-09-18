@@ -179,13 +179,13 @@ class StateCodecTest {
   fun `a conflict keeps both real items`() {
     val mine = item(1, "Eggs", creator = ME)
     val theirs = item(1, "Eggs", creator = THEM)
-    val state = single().copy(conflict = Conflict(mine, theirs, "you added it at 9:02", "Hugo added it at 9:03"))
+    val state = single().copy(conflict = Conflict(mine, theirs))
 
     val restored = StateCodec.decode(StateCodec.encode(state))!!.conflict!!
 
+    // The items are the whole record: what the card says about them is written when it is shown.
     assertEquals(mine, restored.yours)
     assertEquals(theirs, restored.theirs)
-    assertEquals("you added it at 9:02", restored.yourStory)
   }
 
   @Test
