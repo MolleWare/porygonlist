@@ -24,7 +24,7 @@ Committed on the `app-flow` branch.
 | **Transport** | **Not started.** No discovery, no socket, no TLS. |
 | Fonts | **Not fetched.** `./scripts/fetch-fonts.sh` needs a machine with network. |
 
-192 unit tests, all passing. Debug and release both assemble; lint is clean of
+196 unit tests, all passing. Debug and release both assemble; lint is clean of
 anything this work introduced.
 
 The app declares exactly one permission: `ACCESS_NETWORK_STATE`. No location, no
@@ -244,7 +244,7 @@ Removing a person from a list clears their tombstones as a side effect, and safe
 
 | Format | Marker | Carries |
 | --- | --- | --- |
-| State file | `PLSTATE8` | Everything: the owner's name, staples, peers, networks, receipts |
+| State file | `PLSTATE9` | Everything: the owner's name, staples, peers, networks, receipts |
 | Sync payload | `PLSYNC1` | Lists and people only |
 | Share message | `PL1` | Human-readable item run, no identity |
 
@@ -258,12 +258,13 @@ cost near zero; at this data volume a parser this small is the right size of too
 The state file is read lazily after the first frame, written atomically via
 rename, and writes are coalesced so a burst of taps becomes one save.
 
-`PLSTATE6` and `PLSTATE7` are still read. What they lack — the owner's name, the
-staples grid — is not the kind of hole that forces a rejection: nothing has to be
-invented, the name comes back blank so first run asks once, and the staples come
-back as the default set. An emptied grid in a current file stays empty, because
-that is a state someone can actually reach. Versions before 6 lacked identity and
-are still refused.
+`PLSTATE6` to `PLSTATE8` are still read. What separates them from the current
+format — the owner's name, the staples grid, two stored sentences about a clash —
+is not the kind of hole that forces a rejection: nothing has to be invented, the
+name comes back blank so first run asks once, the staples come back as the default
+set, and the clash sentences are written afresh from the items. An emptied grid in
+a current file stays empty, because that is a state someone can actually reach.
+Versions before 6 lacked identity and are still refused.
 
 ---
 
