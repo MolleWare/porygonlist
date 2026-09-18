@@ -28,9 +28,25 @@ object Graph {
 
   @Volatile private var identity: LocalIdentity? = null
 
+  private val identityStore = AndroidKeystoreIdentityStore()
+
   /** This phone's key-derived identity, created in the keystore on first use. */
   fun identity(): LocalIdentity =
-    identity ?: synchronized(this) { identity ?: AndroidKeystoreIdentityStore().identity().also { identity = it } }
+    identity ?: synchronized(this) { identity ?: identityStore.identity().also { identity = it } }
+
+  /**
+   * Destroys this phone's identity, so the next [identity] call is a different device.
+   *
+   * Only the key is dealt with here. The state that was authored under it is the repository's to
+   * throw away, and it has to happen in this order: a state file left behind would be read back as
+   * somebody else's and discarded anyway, but not before a save in flight had rewritten it.
+   */
+  fun deleteIdentity() {
+    synchronized(this) {
+      identityStore.forget()
+      identity = null
+    }
+  }
 
   fun networkMonitor(context: Context): NetworkMonitor =
     monitor ?: synchronized(this) { monitor ?: AndroidNetworkMonitor(context).also { monitor = it } }
@@ -42,7 +58,7 @@ object Graph {
           ?: FileListRepository(
               file = File(context.applicationContext.filesDir, STATE_FILE),
               scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-              identity = identity(),
+              identity = ::identity,
             )
             .also { repository = it }
       }

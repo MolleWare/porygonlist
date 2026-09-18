@@ -37,6 +37,15 @@ interface ListRepository {
 
   /** Applies [transform] in memory straight away and persists it in the background. */
   fun update(transform: (AppState, LocalNode) -> AppState)
+
+  /**
+   * Throws everything away and starts again as whoever the identity now says this phone is.
+   *
+   * Called after the key has been destroyed, so the state that comes back is authored by a device
+   * that has never existed before. Nothing is kept: the old lists were authored by an id this phone
+   * can no longer sign for, and keeping them would mean showing items nobody can account for.
+   */
+  suspend fun reset()
 }
 
 /**
@@ -51,8 +60,11 @@ class FileListRepository(
   private val scope: CoroutineScope,
   private val io: CoroutineDispatcher = Dispatchers.IO,
   private val writeDelayMs: Long = 300,
-  /** This phone's key-derived identity. Not a value the repository is free to invent. */
-  private val identity: LocalIdentity,
+  /**
+   * This phone's key-derived identity. Not a value the repository is free to invent, and read
+   * through a function rather than held, because deleting the identity replaces it underneath.
+   */
+  private val identity: () -> LocalIdentity,
 ) : ListRepository {
 
   private val _state = MutableStateFlow<AppState?>(null)
@@ -65,14 +77,15 @@ class FileListRepository(
 
   override suspend fun load() {
     if (_state.value != null) return
+    val me = identity().deviceId
     val restored =
       withContext(io) { runCatching { if (file.exists()) StateCodec.decode(file.readText()) else null }.getOrNull() }
 
     // A file authored under a different identity is not this phone's state. That happens if the
     // keystore entry was cleared — the old items are unattributable, so start clean rather than
     // claim authorship of them.
-    if (restored != null && restored.localDevice != identity.deviceId) {
-      val fresh = AppState.seed(localDevice = identity.deviceId)
+    if (restored != null && restored.localDevice != me) {
+      val fresh = AppState.seed(localDevice = me)
       node = fresh.toNode()
       _state.value = fresh
       schedulePersist(fresh)
@@ -91,10 +104,22 @@ class FileListRepository(
     // A missing or unreadable file is a first run, not an error worth surfacing. The identity is
     // not minted here any more: it comes from the keystore, which is what keeps it stable across
     // reinstalls of this file and makes it something a peer can verify rather than merely believe.
-    val seeded = AppState.seed(localDevice = identity.deviceId)
+    val seeded = AppState.seed(localDevice = me)
     node = seeded.toNode()
     _state.value = seeded
     schedulePersist(seeded)
+  }
+
+  override suspend fun reset() {
+    // Any save still in flight belongs to the phone that has just ceased to exist; letting it land
+    // would put the old state back on disk moments after it was deleted.
+    pendingWrite?.cancel()
+    withContext(io) { writeLock.withLock { runCatching { file.delete() } } }
+
+    val fresh = AppState.seed(localDevice = identity().deviceId)
+    node = fresh.toNode()
+    _state.value = fresh
+    schedulePersist(fresh)
   }
 
   override fun update(transform: (AppState, LocalNode) -> AppState) {

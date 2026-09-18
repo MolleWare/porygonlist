@@ -24,10 +24,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.ApprovedNetwork
+import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.NetworkFingerprint
@@ -56,6 +58,7 @@ import io.github.molleware.porygonlist.ui.components.BackLink
 import io.github.molleware.porygonlist.ui.components.Dot
 import io.github.molleware.porygonlist.ui.components.IconPaths
 import io.github.molleware.porygonlist.ui.components.NetworkSwitch
+import io.github.molleware.porygonlist.ui.components.PorygonTextField
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
@@ -78,6 +81,15 @@ fun ShareScreen(
   onToggleNetwork: (NetworkFingerprint) -> Unit,
   onExport: () -> Unit,
   onImport: () -> Unit,
+  namingNetwork: NetworkFingerprint?,
+  networkNameDraft: String,
+  onNetworkNameDraftChange: (String) -> Unit,
+  onStartNamingNetwork: (ApprovedNetwork) -> Unit,
+  onSaveNetworkName: () -> Unit,
+  onCancelNamingNetwork: () -> Unit,
+  pairablePeers: List<TrustedPeer>,
+  onAddPerson: (DeviceId) -> Unit,
+  onGoPair: () -> Unit,
   confirmingRemovalOf: DeviceId?,
   onAskRemovePerson: (DeviceId) -> Unit,
   onCancelRemovePerson: () -> Unit,
@@ -117,12 +129,22 @@ fun ShareScreen(
     SectionLabel("Approved networks", Modifier.padding(top = 22.dp, bottom = 10.dp))
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
       state.networks.forEach { entry ->
-        NetworkRow(entry, isCurrent = entry.fingerprint == network.fingerprint) { onToggleNetwork(entry.fingerprint) }
+        NetworkRow(
+          network = entry,
+          isCurrent = entry.fingerprint == network.fingerprint,
+          naming = namingNetwork == entry.fingerprint,
+          nameDraft = networkNameDraft,
+          onNameDraftChange = onNetworkNameDraftChange,
+          onStartNaming = { onStartNamingNetwork(entry) },
+          onSaveName = onSaveNetworkName,
+          onCancelNaming = onCancelNamingNetwork,
+          onToggle = { onToggleNetwork(entry.fingerprint) },
+        )
       }
     }
     Text(
-      "Off a listed network nothing leaves the phone. Your edits wait, then hand over the next time you meet " +
-        "on one of these.",
+      "Tap a network's name to call it something you will recognise. Off a listed network nothing leaves the " +
+        "phone — your edits wait, then hand over the next time you meet on one of these.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.55),
       color = Neutral700,
       modifier = Modifier.padding(top = 14.dp, bottom = 26.dp),
@@ -169,6 +191,51 @@ fun ShareScreen(
         )
       }
     }
+
+    // Pairing and sharing are two decisions. A paired phone is one this one will talk to; putting
+    // that person on a list is a separate act, which is what makes a list you keep to yourself
+    // possible at all.
+    if (pairablePeers.isNotEmpty()) {
+      SectionLabel("Add to ${list.name}", Modifier.padding(top = 26.dp, bottom = 10.dp))
+      Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        pairablePeers.forEach { peer ->
+          Row(
+            Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+          ) {
+            Avatar(
+              initial = peer.name.take(1).uppercase(),
+              background = Accent2,
+              contentColor = Neutral100,
+              size = 34.dp,
+              fontSize = PorygonType.BodyLarge.fontSize,
+            )
+            Column(Modifier.weight(1f)) {
+              Text(peer.name, style = PorygonType.RowName, color = TextInk)
+              Text("Paired, not on this list", style = PorygonType.Fine, color = Neutral700)
+            }
+            PrimaryButton(
+              "Add",
+              onClick = { onAddPerson(peer.deviceId) },
+              style = PorygonType.Meta,
+              contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            )
+          }
+        }
+      }
+    }
+
+    SectionLabel("Another phone", Modifier.padding(top = 26.dp, bottom = 10.dp))
+    Text(
+      if (state.peers.isEmpty())
+        "No phone is paired with this one yet. Until one is, nothing syncs however many networks you approve."
+      else "Pair another phone to share lists with somebody else.",
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(bottom = 12.dp),
+    )
+    SecondaryButton("Pair a phone", onGoPair, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
   }
 }
 
@@ -289,7 +356,17 @@ private fun CurrentNetworkPill(
 }
 
 @Composable
-private fun NetworkRow(network: ApprovedNetwork, isCurrent: Boolean, onToggle: () -> Unit) {
+private fun NetworkRow(
+  network: ApprovedNetwork,
+  isCurrent: Boolean,
+  naming: Boolean,
+  nameDraft: String,
+  onNameDraftChange: (String) -> Unit,
+  onStartNaming: () -> Unit,
+  onSaveName: () -> Unit,
+  onCancelNaming: () -> Unit,
+  onToggle: () -> Unit,
+) {
   Row(
     Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 13.dp),
     verticalAlignment = Alignment.CenterVertically,
@@ -310,11 +387,37 @@ private fun NetworkRow(network: ApprovedNetwork, isCurrent: Boolean, onToggle: (
         tint = if (network.approved && isCurrent) Color.White else Accent2800,
       )
     }
-    Column(Modifier.weight(1f)) {
-      Text(network.label, style = PorygonType.RowName, color = TextInk)
-      Text(network.detail, style = PorygonType.Fine, color = Neutral700, modifier = Modifier.padding(top = 1.dp))
+    if (naming) {
+      PorygonTextField(
+        value = nameDraft,
+        onValueChange = onNameDraftChange,
+        placeholder = "Call it something",
+        modifier = Modifier.weight(1f),
+        minHeight = 40.dp,
+        textStyle = PorygonType.RowName,
+        imeAction = ImeAction.Done,
+        onSubmit = onSaveName,
+      )
+      Text(
+        "Save",
+        style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
+        color = Accent900,
+        modifier =
+          Modifier.clip(Shapes.Pill).background(Accent).clickable(onClick = onSaveName).padding(horizontal = 12.dp, vertical = 7.dp),
+      )
+      Text(
+        "Cancel",
+        style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
+        color = Neutral700,
+        modifier = Modifier.clip(Shapes.Pill).clickable(onClick = onCancelNaming).padding(horizontal = 8.dp, vertical = 7.dp),
+      )
+    } else {
+      Column(Modifier.weight(1f).clip(Shapes.Row).clickable(onClick = onStartNaming)) {
+        Text(network.label, style = PorygonType.RowName, color = TextInk)
+        Text(network.detail, style = PorygonType.Fine, color = Neutral700, modifier = Modifier.padding(top = 1.dp))
+      }
+      NetworkSwitch(network.approved, onToggle, contentDescription = "Approve ${network.label}")
     }
-    NetworkSwitch(network.approved, onToggle, contentDescription = "Approve ${network.name}")
   }
 }
 

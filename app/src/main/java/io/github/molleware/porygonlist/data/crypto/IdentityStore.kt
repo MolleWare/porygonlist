@@ -26,6 +26,16 @@ interface LocalIdentity {
 interface IdentityStore {
   /** Loads the identity, creating it on first run. */
   fun identity(): LocalIdentity
+
+  /**
+   * Destroys the key, so the next [identity] call mints a different phone.
+   *
+   * There is no rotation here and this is not it: the device id is derived from the key, so a new
+   * key is a new device with no claim on anything the old one authored. Every peer still pins the
+   * old public key and will not recognise what comes back, which is why this belongs behind a
+   * deliberate choice and nothing automatic may call it.
+   */
+  fun forget()
 }
 
 /**
@@ -62,6 +72,10 @@ class AndroidKeystoreIdentityStore(private val alias: String = DEFAULT_ALIAS) : 
     }
   }
 
+  override fun forget() {
+    KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(alias)
+  }
+
   private fun generate(): java.security.PublicKey {
     val spec =
       KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY)
@@ -93,22 +107,29 @@ class AndroidKeystoreIdentityStore(private val alias: String = DEFAULT_ALIAS) : 
  */
 class InMemoryIdentityStore(seedKeyPair: java.security.KeyPair? = null) : IdentityStore {
 
-  private val keyPair =
+  private var keyPair =
     seedKeyPair
       ?: KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
 
-  private val cached =
-    object : LocalIdentity {
-      override val deviceId = DeviceIdentity.deviceIdFor(keyPair.public.encoded)
-      override val publicKey: ByteArray = keyPair.public.encoded
+  private var cached: LocalIdentity? = null
 
-      override fun sign(data: ByteArray): ByteArray =
-        Signature.getInstance(AndroidKeystoreIdentityStore.SIGNATURE_ALGORITHM).run {
-          initSign(keyPair.private)
-          update(data)
-          sign()
+  override fun identity(): LocalIdentity =
+    cached
+      ?: object : LocalIdentity {
+          override val deviceId = DeviceIdentity.deviceIdFor(keyPair.public.encoded)
+          override val publicKey: ByteArray = keyPair.public.encoded
+
+          override fun sign(data: ByteArray): ByteArray =
+            Signature.getInstance(AndroidKeystoreIdentityStore.SIGNATURE_ALGORITHM).run {
+              initSign(keyPair.private)
+              update(data)
+              sign()
+            }
         }
-    }
+        .also { cached = it }
 
-  override fun identity(): LocalIdentity = cached
+  override fun forget() {
+    keyPair = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+    cached = null
+  }
 }

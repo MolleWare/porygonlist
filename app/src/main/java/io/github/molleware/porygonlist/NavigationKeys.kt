@@ -17,3 +17,9 @@ import kotlinx.serialization.Serializable
 
 /** Sharing: networks, export and import, people. */
 @Serializable data object Share : NavKey
+
+/** This phone rather than a list: your name, your id, paired phones, starting over. */
+@Serializable data object Settings : NavKey
+
+/** Showing your pairing code and taking someone else's. */
+@Serializable data object PairPhone : NavKey

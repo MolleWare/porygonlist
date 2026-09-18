@@ -31,6 +31,8 @@ import io.github.molleware.porygonlist.ui.partnerName
 import io.github.molleware.porygonlist.ui.screens.ListDetailScreen
 import io.github.molleware.porygonlist.ui.screens.ListsScreen
 import io.github.molleware.porygonlist.ui.screens.NameScreen
+import io.github.molleware.porygonlist.ui.screens.PairScreen
+import io.github.molleware.porygonlist.ui.screens.SettingsScreen
 import io.github.molleware.porygonlist.ui.screens.ShareScreen
 import io.github.molleware.porygonlist.ui.screens.ShopScreen
 import io.github.molleware.porygonlist.ui.screens.StaplesScreen
@@ -38,7 +40,15 @@ import io.github.molleware.porygonlist.ui.screens.StaplesScreen
 @Composable
 fun MainNavigation() {
   val context = LocalContext.current
-  val viewModel: PorygonViewModel = viewModel { PorygonViewModel(Graph.listRepository(context), Graph.networkMonitor(context), Graph.identity()) }
+  val viewModel: PorygonViewModel =
+    viewModel {
+      PorygonViewModel(
+        repo = Graph.listRepository(context),
+        networkMonitor = Graph.networkMonitor(context),
+        identity = Graph::identity,
+        deleteIdentity = Graph::deleteIdentity,
+      )
+    }
   val state by viewModel.state.collectAsStateWithLifecycle()
   val networkSnapshot by viewModel.network.collectAsStateWithLifecycle()
   val discovery by viewModel.discovery.collectAsStateWithLifecycle()
@@ -93,6 +103,20 @@ fun MainNavigation() {
                   },
                   onToggleOnline = viewModel::toggleOnline,
                   onGoShare = { backStack.goTo(Share) },
+                  onOpenSettings = { backStack.add(Settings) },
+                  draft = viewModel.listDraft,
+                  onDraftChange = viewModel::onListDraftChange,
+                  onCreateList = viewModel::createList,
+                  renamingList = viewModel.renamingList,
+                  renameDraft = viewModel.renameDraft,
+                  onStartRename = viewModel::startRename,
+                  onRenameDraftChange = viewModel::onRenameDraftChange,
+                  onSaveRename = viewModel::saveRename,
+                  onCancelRename = viewModel::cancelRename,
+                  confirmingDelete = viewModel.confirmingListDelete,
+                  onAskDelete = viewModel::askDeleteList,
+                  onCancelDelete = viewModel::cancelDeleteList,
+                  onDelete = viewModel::deleteList,
                   modifier = Modifier.fillMaxSize(),
                 )
               }
@@ -123,8 +147,47 @@ fun MainNavigation() {
               }
               entry<Staples> {
                 StaplesScreen(
+                  staples = appState.staples,
                   activeListName = appState.activeList.name,
-                  onAdd = { viewModel.addItem(it) },
+                  draft = viewModel.stapleDraft,
+                  onDraftChange = viewModel::onStapleDraftChange,
+                  onAddStaple = viewModel::addStaple,
+                  onUse = viewModel::useStaple,
+                  confirmingRemoval = viewModel.confirmingStaple,
+                  onAskRemove = viewModel::askRemoveStaple,
+                  onCancelRemove = viewModel::cancelRemoveStaple,
+                  onRemove = viewModel::removeStaple,
+                  modifier = Modifier.fillMaxSize(),
+                )
+              }
+              entry<Settings> {
+                SettingsScreen(
+                  state = appState,
+                  deviceId = viewModel.deviceId,
+                  nameDraft = viewModel.nameDraft,
+                  onNameDraftChange = viewModel::onNameDraftChange,
+                  onSaveName = viewModel::saveName,
+                  onPair = { backStack.add(PairPhone) },
+                  onUnpair = viewModel::unpair,
+                  confirmingDelete = viewModel.confirmingIdentityDelete,
+                  onAskDelete = viewModel::askDeleteIdentity,
+                  onCancelDelete = viewModel::cancelDeleteIdentity,
+                  onConfirmDelete = viewModel::confirmDeleteIdentity,
+                  onBack = { backStack.goTo(Lists) },
+                  modifier = Modifier.fillMaxSize(),
+                )
+              }
+              entry<PairPhone> {
+                PairScreen(
+                  invite = viewModel.invite(),
+                  code = viewModel.pairCode,
+                  onCodeChange = viewModel::onPairCodeChange,
+                  note = viewModel.pairNote,
+                  pendingName = viewModel.pendingInvite?.displayName,
+                  replaceCandidates = viewModel.replaceCandidates(appState),
+                  onPairAsNew = viewModel::pairAsNew,
+                  onReplace = viewModel::pairAsReplacementFor,
+                  onBack = { if (backStack.size > 1) backStack.removeLastOrNull() else backStack.goTo(Settings) },
                   modifier = Modifier.fillMaxSize(),
                 )
               }
@@ -137,6 +200,15 @@ fun MainNavigation() {
                   onToggleNetwork = viewModel::toggleNetwork,
                   onExport = viewModel::openExport,
                   onImport = viewModel::openImport,
+                  namingNetwork = viewModel.namingNetwork,
+                  networkNameDraft = viewModel.networkNameDraft,
+                  onNetworkNameDraftChange = viewModel::onNetworkNameDraftChange,
+                  onStartNamingNetwork = viewModel::startNamingNetwork,
+                  onSaveNetworkName = viewModel::saveNetworkName,
+                  onCancelNamingNetwork = viewModel::cancelNamingNetwork,
+                  pairablePeers = viewModel.peersNotOnActiveList(appState),
+                  onAddPerson = viewModel::addPersonToActiveList,
+                  onGoPair = { backStack.add(PairPhone) },
                   confirmingRemovalOf = viewModel.confirmingRemovalOf,
                   onAskRemovePerson = viewModel::askRemovePerson,
                   onCancelRemovePerson = viewModel::cancelRemovePerson,

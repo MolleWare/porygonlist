@@ -10,6 +10,21 @@ import org.junit.Test
 private val ME = DeviceId("avaphone01")
 private val THEM = DeviceId("hugophone2")
 
+/** Rewrites the version marker, leaving the body alone. */
+private fun relabel(text: String, version: String): String =
+  text.lineSequence().mapIndexed { index, line -> if (index == 0) version else line }.joinToString("\n")
+
+/**
+ * The current format turned back into a version 6 file: no name on the `meta` record, and no
+ * staples, which is what a file written before either of them existed actually looks like.
+ */
+private fun asVersion6(text: String): String =
+  relabel(text, "PLSTATE6")
+    .lineSequence()
+    .filterNot { it.startsWith("staple|") }
+    .map { if (it.startsWith("meta|")) it.substringBeforeLast('|') else it }
+    .joinToString("\n")
+
 /**
  * First run: the app has an identity before it has a name, and has to ask for exactly one of them.
  */
@@ -89,20 +104,7 @@ class FirstRunTest {
 
   @Test
   fun `a state file written before names existed still loads, and asks`() {
-    // A version 6 file is version 7 without the trailing name on the meta record.
-    val v7 = StateCodec.encode(seeded().withDisplayName("Ava"))
-    val v6 =
-      v7.lineSequence()
-        .map {
-          when {
-            it.trim() == "PLSTATE7" -> "PLSTATE6"
-            it.startsWith("meta|") -> it.substringBeforeLast('|')
-            else -> it
-          }
-        }
-        .joinToString("\n")
-
-    val restored = StateCodec.decode(v6)
+    val restored = StateCodec.decode(asVersion6(StateCodec.encode(seeded().withDisplayName("Ava"))))
 
     assertNotNull("an older file is readable, not discarded", restored)
     assertFalse("the owner is asked their name once, rather than losing their lists", restored!!.named)
@@ -111,8 +113,6 @@ class FirstRunTest {
 
   @Test
   fun `a file from a format this build does not know is still refused`() {
-    val text = StateCodec.encode(seeded()).replaceFirst("PLSTATE7", "PLSTATE5")
-
-    assertEquals(null, StateCodec.decode(text))
+    assertEquals(null, StateCodec.decode(relabel(StateCodec.encode(seeded()), "PLSTATE5")))
   }
 }

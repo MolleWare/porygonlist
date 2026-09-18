@@ -1,0 +1,317 @@
+package io.github.molleware.porygonlist.ui
+
+import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.ListRepository
+import io.github.molleware.porygonlist.data.LocalNode
+import io.github.molleware.porygonlist.data.Staple
+import io.github.molleware.porygonlist.data.crypto.InMemoryIdentityStore
+import io.github.molleware.porygonlist.data.crypto.LocalIdentity
+import io.github.molleware.porygonlist.data.crypto.PairingCodec
+import io.github.molleware.porygonlist.data.net.NetworkMonitor
+import io.github.molleware.porygonlist.data.net.NetworkSnapshot
+import io.github.molleware.porygonlist.data.sync.HybridClock
+import io.github.molleware.porygonlist.data.sync.IdFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+/** An in-memory stand-in for the file-backed repository, applying updates exactly as it does. */
+private class FakeRepository(private val identity: () -> LocalIdentity) : ListRepository {
+
+  private val _state = MutableStateFlow<AppState?>(null)
+  override val state: StateFlow<AppState?> = _state.asStateFlow()
+
+  private var node: LocalNode? = null
+
+  override suspend fun load() {
+    if (_state.value == null) seed()
+  }
+
+  override fun update(transform: (AppState, LocalNode) -> AppState) {
+    val current = _state.value ?: return
+    val localNode = node ?: return
+    _state.value = transform(current, localNode).copy(idCounter = localNode.ids.peek(), clockHead = localNode.clock.head())
+  }
+
+  override suspend fun reset() = seed()
+
+  private fun seed() {
+    val fresh = AppState.seed(localDevice = identity().deviceId)
+    node =
+      LocalNode(
+        device = fresh.localDevice,
+        ids = IdFactory(fresh.localDevice, start = fresh.idCounter),
+        clock = HybridClock(fresh.localDevice, start = fresh.clockHead),
+      )
+    _state.value = fresh
+  }
+}
+
+private object OfflineMonitor : NetworkMonitor {
+  override val snapshots = flowOf(NetworkSnapshot.Offline)
+}
+
+class PorygonViewModelTest {
+
+  private val dispatcher = StandardTestDispatcher()
+  private val store = InMemoryIdentityStore()
+  private lateinit var repo: FakeRepository
+  private lateinit var vm: PorygonViewModel
+
+  @Before
+  fun setUp() {
+    Dispatchers.setMain(dispatcher)
+    repo = FakeRepository(store::identity)
+    vm = PorygonViewModel(repo, OfflineMonitor, store::identity, store::forget)
+  }
+
+  @After
+  fun tearDown() = Dispatchers.resetMain()
+
+  private fun state() = repo.state.value!!
+
+  // ── First run ─────────────────────────────────────────────────────────────
+
+  @Test
+  fun `naming the owner ends first run`() = runTest(dispatcher) {
+    repo.load()
+    assertFalse(state().named)
+
+    vm.onNameDraftChange("Hugo")
+    vm.saveName()
+
+    assertTrue(state().named)
+    assertEquals("Hugo", state().displayName)
+    assertEquals("", vm.nameDraft)
+  }
+
+  // ── Lists ─────────────────────────────────────────────────────────────────
+
+  @Test
+  fun `a new list holds only you, and opens`() = runTest(dispatcher) {
+    repo.load()
+    vm.onNameDraftChange("Hugo")
+    vm.saveName()
+
+    vm.onListDraftChange("Hardware shop")
+    vm.createList()
+
+    val made = state().activeList
+    assertEquals("Hardware shop", made.name)
+    assertEquals(listOf(state().localDevice), made.people.map { it.device })
+    assertTrue("a new list starts empty", made.items.isEmpty())
+  }
+
+  @Test
+  fun `a blank name makes no list`() = runTest(dispatcher) {
+    repo.load()
+    val before = state().lists.size
+
+    vm.onListDraftChange("   ")
+    vm.createList()
+
+    assertEquals(before, state().lists.size)
+  }
+
+  @Test
+  fun `deleting the open list moves you to another`() = runTest(dispatcher) {
+    repo.load()
+    val victim = state().activeListId
+
+    vm.deleteList(victim)
+
+    assertTrue(state().lists.none { it.id == victim })
+    assertTrue("the app is never left with no open list", state().lists.any { it.id == state().activeListId })
+  }
+
+  @Test
+  fun `the last list is never deleted`() = runTest(dispatcher) {
+    repo.load()
+    while (state().lists.size > 1) vm.deleteList(state().lists.first().id)
+
+    vm.deleteList(state().lists.single().id)
+
+    assertEquals("there is no state that shows no list at all", 1, state().lists.size)
+  }
+
+  @Test
+  fun `renaming a list keeps its contents`() = runTest(dispatcher) {
+    repo.load()
+    val list = state().activeList
+    val itemCount = list.items.size
+
+    vm.startRename(list)
+    vm.onRenameDraftChange("  Big shop  ")
+    vm.saveRename()
+
+    assertEquals("Big shop", state().activeList.name)
+    assertEquals(itemCount, state().activeList.items.size)
+    assertNull("the form closes after saving", vm.renamingList)
+  }
+
+  // ── Staples ───────────────────────────────────────────────────────────────
+
+  @Test
+  fun `using a staple adds it to the open list and counts the use`() = runTest(dispatcher) {
+    repo.load()
+    val before = state().activeList.liveItems.size
+
+    vm.useStaple("Eggs")
+
+    assertEquals(before + 1, state().activeList.liveItems.size)
+    assertTrue(state().activeList.liveItems.any { it.name.value == "Eggs" })
+    assertEquals(1, state().staples.single { it.name == "Eggs" }.uses)
+  }
+
+  @Test
+  fun `adding a staple that is already there changes nothing`() = runTest(dispatcher) {
+    repo.load()
+    val before = state().staples
+
+    vm.onStapleDraftChange("eggs")
+    vm.addStaple()
+
+    assertEquals(before, state().staples)
+  }
+
+  @Test
+  fun `a staple can be added and taken off again`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.onStapleDraftChange("Tofu")
+    vm.addStaple()
+    assertTrue(state().staples.contains(Staple("Tofu")))
+
+    vm.removeStaple("Tofu")
+    assertFalse(state().staples.any { it.name == "Tofu" })
+  }
+
+  // ── Pairing ───────────────────────────────────────────────────────────────
+
+  private fun otherPhone(name: String): String =
+    PairingCodec.encode(InMemoryIdentityStore().identity(), name)
+
+  @Test
+  fun `a pasted code is read before anything is committed`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.onPairCodeChange(otherPhone("Ava"))
+
+    assertEquals("Ava", vm.pendingInvite?.displayName)
+    assertEquals("", vm.pairNote)
+    assertTrue("nothing is trusted until it is acted on", state().peers.isEmpty())
+  }
+
+  @Test
+  fun `nonsense is reported rather than silently ignored`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.onPairCodeChange("have you got milk")
+
+    assertNull(vm.pendingInvite)
+    assertTrue(vm.pairNote.isNotEmpty())
+  }
+
+  @Test
+  fun `this phone cannot pair with itself`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.onPairCodeChange(vm.invite("Me"))
+
+    assertNull("pairing with yourself would wait on your own receipts", vm.pendingInvite)
+    assertTrue(vm.pairNote.isNotEmpty())
+  }
+
+  @Test
+  fun `pairing trusts the key and clears the field`() = runTest(dispatcher) {
+    repo.load()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    val invited = vm.pendingInvite!!
+
+    vm.pairAsNew()
+
+    assertEquals(listOf(invited.deviceId), state().peers.map { it.deviceId })
+    assertTrue(state().peers.single().publicKey.contentEquals(invited.publicKey))
+    assertEquals("", vm.pairCode)
+    assertNull(vm.pendingInvite)
+  }
+
+  @Test
+  fun `a paired phone is not on a list until it is added`() = runTest(dispatcher) {
+    repo.load()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+    val peer = state().peers.single().deviceId
+
+    assertTrue("pairing alone shares nothing", state().activeList.people.none { it.device == peer })
+    assertEquals(listOf(peer), vm.peersNotOnActiveList(state()).map { it.deviceId })
+
+    vm.addPersonToActiveList(peer)
+
+    assertTrue(state().activeList.people.any { it.device == peer })
+    assertTrue("and then they are no longer offered", vm.peersNotOnActiveList(state()).isEmpty())
+  }
+
+  @Test
+  fun `a replaced phone keeps the person and retires the old id`() = runTest(dispatcher) {
+    repo.load()
+    val old = state().activeList.people.first { it.device != state().localDevice }
+
+    vm.onPairCodeChange(otherPhone(old.name))
+    val newDevice = vm.pendingInvite!!.deviceId
+    vm.pairAsReplacementFor(old.device)
+
+    val person = state().activeList.people.single { it.wasEver(old.device) }
+    assertEquals("the same person, a different phone", old.name, person.name)
+    assertEquals(newDevice, person.device)
+    assertTrue("the dead id is kept only to attribute what it wrote", old.device in person.formerDevices)
+    assertFalse("and is no longer waited on", state().activeList.peersOf(state().localDevice).contains(old.device))
+  }
+
+  // ── Identity ──────────────────────────────────────────────────────────────
+
+  @Test
+  fun `deleting the identity comes back as a different phone, at first run`() = runTest(dispatcher) {
+    repo.load()
+    vm.onNameDraftChange("Hugo")
+    vm.saveName()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+    val was = state().localDevice
+
+    vm.confirmDeleteIdentity()
+    testScheduler.advanceUntilIdle()
+
+    assertNotEquals("a new key is a new device", was, state().localDevice)
+    assertFalse("and it has never been told a name", state().named)
+    assertTrue("nothing it was trusted by carries over", state().peers.isEmpty())
+  }
+
+  @Test
+  fun `deleting is asked about before it happens`() = runTest(dispatcher) {
+    repo.load()
+    val was = state().localDevice
+
+    vm.askDeleteIdentity()
+    assertTrue(vm.confirmingIdentityDelete)
+    vm.cancelDeleteIdentity()
+    testScheduler.advanceUntilIdle()
+
+    assertFalse(vm.confirmingIdentityDelete)
+    assertEquals("backing out changes nothing", was, state().localDevice)
+  }
+}

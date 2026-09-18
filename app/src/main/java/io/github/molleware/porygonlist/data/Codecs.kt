@@ -87,17 +87,20 @@ object ShareCodec {
  * Version 7 adds the owner's name to the `meta` record. Version 6 is still read; see [READABLE].
  */
 object StateCodec {
-  private const val VERSION = "PLSTATE7"
+  private const val VERSION = "PLSTATE8"
 
   /**
    * Formats this build can read.
    *
-   * Version 6 is accepted rather than rejected because the only thing it lacks is the owner's name,
-   * and a missing name is not the same kind of hole as a missing identity: nothing has to be
-   * invented, the field comes back blank, and first run asks once. Everything it does carry —
-   * authorship, stamps, tombstones — is read exactly as before.
+   * Versions 6 and 7 are accepted rather than rejected because what they lack — the owner's name,
+   * the staples grid — is not the same kind of hole as a missing identity. Nothing has to be
+   * invented: the name comes back blank and first run asks once, the staples come back as the
+   * default set. Everything they do carry — authorship, stamps, tombstones — is read as before.
    */
-  private val READABLE = setOf("PLSTATE6", VERSION)
+  private val READABLE = setOf("PLSTATE6", "PLSTATE7", VERSION)
+
+  /** The first version that writes a staples record, so an older file can be given the defaults. */
+  private const val FIRST_WITH_STAPLES = "PLSTATE8"
 
   fun encode(state: AppState): String = buildString {
     appendLine(VERSION)
@@ -138,6 +141,10 @@ object StateCodec {
       appendLine(record("net", it.fingerprint.value, it.name, it.detail, it.approved.bool()))
     }
 
+    // Written even when empty is impossible to express here, so an absent record is read as "this
+    // file predates staples" and the version is what tells the two apart — see FIRST_WITH_STAPLES.
+    state.staples.forEach { appendLine(record("staple", it.name, it.uses.toString())) }
+
     state.lists.forEach { list ->
       appendLine(record("list", list.id.toString(), list.name, list.accent.name))
       list.people.forEach {
@@ -163,7 +170,8 @@ object StateCodec {
   /** Returns null when the text is absent, truncated or from a format this build does not know. */
   fun decode(text: String): AppState? {
     val lines = text.lineSequence().filter { it.isNotBlank() }.toList()
-    if (lines.firstOrNull()?.trim() !in READABLE) return null
+    val version = lines.firstOrNull()?.trim()
+    if (version !in READABLE) return null
 
     var localDevice: DeviceId? = null
     var idCounter = 0L
@@ -176,6 +184,7 @@ object StateCodec {
     var conflictTheirs: GroceryItem? = null
     val networks = mutableListOf<ApprovedNetwork>()
     val peers = mutableListOf<TrustedPeer>()
+    val staples = mutableListOf<Staple>()
     val receipts = mutableMapOf<DeviceId, Hlc>()
 
     // Lists are rebuilt in file order; their people and items arrive on following lines.
@@ -213,6 +222,7 @@ object StateCodec {
                   pairedAt = f[4].toLong(),
                 )
             "net" -> networks += ApprovedNetwork(NetworkFingerprint(f[1]), f[2], f[3], f[4] == "1")
+            "staple" -> staples += Staple(f[1], f[2].toIntOrNull() ?: 0)
             "list" -> {
               val id = f[1].toLong()
               listOrder += id
@@ -282,6 +292,9 @@ object StateCodec {
       networks = networks,
       // A peer whose key does not hash to its id is not that peer; drop it rather than trust it.
       peers = peers.filter { DeviceIdentity.matches(it.deviceId, it.publicKey) },
+      // An empty grid is a real state someone can reach by removing every tile, so it is only
+      // refilled for a file written before staples were storable at all.
+      staples = if (version == FIRST_WITH_STAPLES) staples else Staple.defaults,
       conflict = conflict,
     )
   }

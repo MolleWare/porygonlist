@@ -3,8 +3,7 @@
 Written 2026-09-17. This is the state of the project after the design import and
 the sync foundations, and what remains before two phones can actually talk.
 
-Nothing is committed yet: everything described here is in the working tree on
-`main`.
+Committed on the `app-flow` branch.
 
 ---
 
@@ -13,17 +12,19 @@ Nothing is committed yet: everything described here is in the working tree on
 | Area | State |
 | --- | --- |
 | Interface | **Done.** All five screens from the Claude Design handoff. |
-| First run | **Done.** One screen, one field: the owner's name. No settings page yet. |
+| First run | **Done.** One screen, one field: the owner's name. |
+| Lists | **Done.** Make, rename, delete; staples are editable and count real use. |
+| Settings | **Done.** Your name and id, paired phones, and deleting the identity. |
 | Local persistence | **Done.** Hand-rolled text codec, no dependencies. |
 | Device identity | **Done.** EC P-256 in the Android Keystore, id derived from the key. |
-| Pairing payload | **Done.** Encode/decode tested. No QR, no camera. |
+| Pairing | **Done.** Show your code, paste theirs, replace a lost phone. No QR yet. |
 | Network gating | **Done.** Permission-free fingerprint decides whether to discover. |
 | Merge | **Done.** Per-field, tested for symmetry and idempotence. |
 | Sync protocol | **Done.** Payload, receive, receipt, tombstone collection. |
 | **Transport** | **Not started.** No discovery, no socket, no TLS. |
 | Fonts | **Not fetched.** `./scripts/fetch-fonts.sh` needs a machine with network. |
 
-179 unit tests, all passing. Debug and release both assemble; lint is clean of
+192 unit tests, all passing. Debug and release both assemble; lint is clean of
 anything this work introduced.
 
 The app declares exactly one permission: `ACCESS_NETWORK_STATE`. No location, no
@@ -243,7 +244,7 @@ Removing a person from a list clears their tombstones as a side effect, and safe
 
 | Format | Marker | Carries |
 | --- | --- | --- |
-| State file | `PLSTATE7` | Everything, including the owner's name, peers, networks, receipts |
+| State file | `PLSTATE8` | Everything: the owner's name, staples, peers, networks, receipts |
 | Sync payload | `PLSYNC1` | Lists and people only |
 | Share message | `PL1` | Human-readable item run, no identity |
 
@@ -257,47 +258,52 @@ cost near zero; at this data volume a parser this small is the right size of too
 The state file is read lazily after the first frame, written atomically via
 rename, and writes are coalesced so a burst of taps becomes one save.
 
-`PLSTATE6` is still read. It is `PLSTATE7` without the owner's name on the `meta`
-record, which is not the kind of hole that forces a rejection: nothing has to be
-invented, the name comes back blank, and first run asks once. Versions before 6
-lacked identity and are still refused.
+`PLSTATE6` and `PLSTATE7` are still read. What they lack — the owner's name, the
+staples grid — is not the kind of hole that forces a rejection: nothing has to be
+invented, the name comes back blank so first run asks once, and the staples come
+back as the default set. An emptied grid in a current file stays empty, because
+that is a state someone can actually reach. Versions before 6 lacked identity and
+are still refused.
 
 ---
 
 ## 7. What is left
 
-In dependency order.
+Everything a person can do in the app is now reachable. What is left is the
+transport, in dependency order.
 
-1. **Pairing UI.** A "paste an invite" path needs no new dependencies and would
-   exercise the whole flow today. QR scanning needs `com.google.zxing:core` (Apache
-   2.0, F-Droid-safe) plus CameraX and the camera permission. **Avoid ML Kit** — it
-   needs Play Services.
-2. **Discovery.** `NsdManager`, framework-provided, advertising `_porygonlist._tcp`,
+1. **Discovery.** `NsdManager`, framework-provided, advertising `_porygonlist._tcp`,
    started and stopped by the existing `discoveryDecision` gate.
-3. **Authenticated channel.** TLS pinned to `TrustedPeer.publicKey`. The blocker
+2. **Authenticated channel.** TLS pinned to `TrustedPeer.publicKey`. The blocker
    here is already solved: **the Android Keystore generates a self-signed X.509
    certificate alongside the key**, returned by `keyStore.getCertificate(alias)`, so
    no certificate-building library is needed. Pin in a custom `X509TrustManager`.
-4. **Wire it up.** `payloadFor` / `receive` / `confirmDelivery` are the seams and
+3. **Wire it up.** `payloadFor` / `receive` / `confirmDelivery` are the seams and
    are already tested; the transport only has to move bytes between them.
+4. **QR scanning.** Pairing works by pasting a code. A camera path needs
+   `com.google.zxing:core` (Apache 2.0, F-Droid-safe) plus CameraX and the camera
+   permission. **Avoid ML Kit** — it needs Play Services. Nothing about the trust
+   changes when it lands: what makes pairing sound is the channel, not the format.
 5. **Fonts.** Run `./scripts/fetch-fonts.sh`, commit the TTFs, swap the two
    families in `theme/Type.kt`.
 
 ### Smaller loose ends
 
-- **No settings page.** The name is asked for on first run and cannot be changed
-  afterwards. Planned: reached from the owner's own initial in the Lists header,
-  and the home for deleting the identity — the only way to change one, since keys
-  are never rotated.
-- **Network naming.** Approving a network gives "Network a3f91c" until there is a
-  name-on-approve prompt. The SSID is not read, by design.
-- **Seeded networks are fake fingerprints** (`seed01`–`seed03`) so the design's
-  screen has content. They can never match a real link. Remove when pairing lands.
+- **The seed still ships a fake partner and fake networks.** `hugodemo01` and
+  `seed01`–`seed03` exist so the design's screens have content; neither can ever
+  match a real phone or a real link. With pairing real they now actively mislead —
+  the demo partner appears in People having never been paired with. **This is the
+  next thing to decide:** what a first run should actually open onto.
 - **Clashes are reported but nothing renders them.** `ListMerge.clashes` comes back
   populated; the design has one conflict card, for a different case. What to do with
   a concurrent rename is an open question — probably "take the later one silently".
 - **A list's own name is not a `Field`**, so concurrent renames of "Weekly shop" are
-  not symmetric.
+  not symmetric. Lists can now be renamed from the interface, which makes this
+  reachable rather than theoretical.
+- **Deleting a list is local.** It goes from this phone; the people it was shared
+  with keep their copies. Propagating it would need a tombstone for the list itself,
+  and letting one phone wipe a shared list off everyone else's is not obviously
+  right.
 - **Phone replacement needs a deliberate re-pair.** A replaced handset has a new
   `DeviceId` and is rejected as an unknown peer until scanned again. Correct, but
   worth knowing.

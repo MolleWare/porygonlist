@@ -9,14 +9,18 @@ import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.ApprovedNetwork
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
+import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.ListRepository
+import io.github.molleware.porygonlist.data.initialOf
 import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PairingCodec
 import io.github.molleware.porygonlist.data.crypto.PairingInvite
 import io.github.molleware.porygonlist.data.LocalNode
 import io.github.molleware.porygonlist.data.Origin
+import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.ShareCodec
+import io.github.molleware.porygonlist.data.Staple
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.NetworkFingerprint
@@ -46,7 +50,10 @@ data class EditDraft(val itemId: ItemId, val name: String, val qty: Int, val add
 class PorygonViewModel(
   private val repo: ListRepository,
   networkMonitor: NetworkMonitor,
-  private val identity: LocalIdentity,
+  /** Read through a function: deleting the identity replaces the one behind it. */
+  private val identity: () -> LocalIdentity,
+  /** Destroys the key. Paired with [ListRepository.reset], never called on its own. */
+  private val deleteIdentity: () -> Unit,
 ) : ViewModel() {
 
   val state: StateFlow<AppState?> = repo.state
@@ -123,6 +130,39 @@ class PorygonViewModel(
     nameDraft = ""
   }
 
+  /** The id other phones know this one by. Shown so two people can check they paired with each other. */
+  val deviceId: DeviceId
+    get() = identity().deviceId
+
+  /** Settings is asking whether the identity really should go. */
+  var confirmingIdentityDelete by mutableStateOf(false)
+    private set
+
+  fun askDeleteIdentity() {
+    confirmingIdentityDelete = true
+  }
+
+  fun cancelDeleteIdentity() {
+    confirmingIdentityDelete = false
+  }
+
+  /**
+   * Destroys this phone's identity and everything authored under it.
+   *
+   * The order matters. The key goes first, so that if anything fails afterwards the phone is not
+   * left holding lists it can no longer sign for; the repository then reseeds under whatever the
+   * new key says this device is. The app lands back on first run because the fresh state has no
+   * name in it, which is the same path a new install takes — there is no separate "reset" screen
+   * to keep working.
+   */
+  fun confirmDeleteIdentity() {
+    confirmingIdentityDelete = false
+    viewModelScope.launch {
+      deleteIdentity()
+      repo.reset()
+    }
+  }
+
   // ── Sync ──────────────────────────────────────────────────────────────────
 
   /**
@@ -170,7 +210,7 @@ class PorygonViewModel(
    * pairing trustworthy is the channel, not confidentiality.
    */
   fun invite(displayName: String = state.value?.displayName.orEmpty()): String =
-    PairingCodec.encode(identity, displayName)
+    PairingCodec.encode(identity(), displayName)
 
   /**
    * Accepts an invite read from a QR code or pasted in.
@@ -183,13 +223,79 @@ class PorygonViewModel(
   fun pair(code: String): PairingInvite? {
     val invite = PairingCodec.decode(code) ?: return null
     // Pairing with yourself would make this phone its own peer and wait for its own receipts.
-    if (invite.deviceId == identity.deviceId) return null
+    if (invite.deviceId == identity().deviceId) return null
 
     repo.update { s, _ ->
       val peer = TrustedPeer(invite.deviceId, invite.publicKey, invite.displayName, System.currentTimeMillis())
       s.copy(peers = s.peers.filterNot { it.deviceId == invite.deviceId } + peer)
     }
     return invite
+  }
+
+  // The pairing screen's own state: what has been pasted, and what it turned out to be.
+
+  var pairCode by mutableStateOf("")
+    private set
+
+  var pairNote by mutableStateOf("")
+    private set
+
+  /** The invite currently pasted in, once it has parsed. Null while there is nothing usable. */
+  var pendingInvite by mutableStateOf<PairingInvite?>(null)
+    private set
+
+  /**
+   * Reads what has been pasted as it arrives.
+   *
+   * Decoding on every keystroke is cheap — it is base64 and a hash — and it means the screen can
+   * say what the code is before anything is committed, rather than reporting a failure after.
+   */
+  fun onPairCodeChange(value: String) {
+    pairCode = value
+    val trimmed = value.trim()
+    val invite = PairingCodec.decode(trimmed)
+    pendingInvite = invite?.takeIf { it.deviceId != identity().deviceId }
+    pairNote =
+      when {
+        trimmed.isEmpty() -> ""
+        invite == null -> "That does not look like a pairing code."
+        invite.deviceId == identity().deviceId -> "That is this phone's own code."
+        else -> ""
+      }
+  }
+
+  /**
+   * People who might be holding the phone in the pasted code.
+   *
+   * Anyone already on a list, other than this phone and the code's own device. Offering them is
+   * what makes a replaced handset expressible at all: without it, a new phone can only ever be a
+   * new person, and the old id goes on being waited on for receipts it will never send.
+   */
+  fun replaceCandidates(state: AppState): List<Person> =
+    state.lists
+      .flatMap { it.people }
+      .distinctBy { it.device }
+      .filterNot { it.device == state.localDevice || it.device == pendingInvite?.deviceId }
+
+  /** Trusts the pasted code as a phone this one has not seen before. */
+  fun pairAsNew() {
+    val invite = pendingInvite ?: return
+    pair(pairCode.trim())
+    pairNote = "Paired with ${invite.displayName}."
+    clearPairDraft()
+  }
+
+  /** Records that [oldDevice]'s owner is now holding the phone in the pasted code. */
+  fun pairAsReplacementFor(oldDevice: DeviceId) {
+    val invite = pendingInvite ?: return
+    replaceDevice(oldDevice, invite)
+    pairNote = "${invite.displayName}'s new phone took over."
+    clearPairDraft()
+  }
+
+  private fun clearPairDraft() {
+    pairCode = ""
+    pendingInvite = null
   }
 
   /**
@@ -234,6 +340,119 @@ class PorygonViewModel(
     val peer = TrustedPeer(invite.deviceId, invite.publicKey, invite.displayName, System.currentTimeMillis())
     s.copy(peers = s.peers.filterNot { it.deviceId == oldDevice || it.deviceId == invite.deviceId } + peer)
       .replaceDevice(oldDevice, invite.deviceId, invite.displayName)
+  }
+
+  /**
+   * Paired phones that are not on the list being looked at.
+   *
+   * Pairing and sharing are separate on purpose: trusting a phone is about the phone, and it does
+   * not follow that everything on this one is theirs to see. A list is shared by a second, explicit
+   * act — which is what makes a private list possible at all.
+   */
+  fun peersNotOnActiveList(state: AppState): List<TrustedPeer> {
+    val already = state.activeList.people.map { it.device }.toSet()
+    return state.peers.filterNot { it.deviceId in already }
+  }
+
+  /** Starts sharing the open list with a phone already paired with this one. */
+  fun addPersonToActiveList(device: DeviceId) = repo.update { s, _ ->
+    val peer = s.peerFor(device) ?: return@update s
+    s.withActiveList { list ->
+      if (list.people.any { it.device == device }) list
+      else list.copy(people = list.people + Person(device, peer.name, initialOf(peer.name)))
+    }
+  }
+
+  // ── Lists ─────────────────────────────────────────────────────────────────
+
+  var listDraft by mutableStateOf("")
+    private set
+
+  fun onListDraftChange(value: String) {
+    listDraft = value
+  }
+
+  /**
+   * Makes a new list, holding nobody but you.
+   *
+   * Sharing it is a later, separate choice — see [addPersonToActiveList]. The new list opens
+   * straight away, because nobody makes a list in order to go on looking at the old one.
+   */
+  fun createList() {
+    val name = listDraft.trim()
+    if (name.isEmpty()) return
+    repo.update { s, _ ->
+      val id = (s.lists.maxOfOrNull { it.id } ?: 0L) + 1
+      val accent = ListAccent.entries[s.lists.size % ListAccent.entries.size]
+      val you = Person(s.localDevice, s.displayName, initialOf(s.displayName))
+      s.copy(lists = s.lists + GroceryList(id, name, accent, items = emptyList(), people = listOf(you)), activeListId = id)
+    }
+    listDraft = ""
+  }
+
+  var renamingList by mutableStateOf<Long?>(null)
+    private set
+
+  var renameDraft by mutableStateOf("")
+    private set
+
+  fun startRename(list: GroceryList) {
+    renamingList = list.id
+    renameDraft = list.name
+  }
+
+  fun onRenameDraftChange(value: String) {
+    renameDraft = value
+  }
+
+  fun cancelRename() {
+    renamingList = null
+    renameDraft = ""
+  }
+
+  /**
+   * Renames a list here.
+   *
+   * Note the asymmetry, which is real and known: a list's name is a plain value rather than a
+   * stamped [Field], so two people renaming the same list at once resolve by whoever syncs last
+   * rather than by the clock. Items do better than this; the name has not needed it yet.
+   */
+  fun saveRename() {
+    val id = renamingList ?: return
+    val name = renameDraft.trim()
+    if (name.isNotEmpty()) {
+      repo.update { s, _ -> s.copy(lists = s.lists.map { if (it.id == id) it.copy(name = name) else it }) }
+    }
+    cancelRename()
+  }
+
+  var confirmingListDelete by mutableStateOf<Long?>(null)
+    private set
+
+  fun askDeleteList(id: Long) {
+    confirmingListDelete = id
+  }
+
+  fun cancelDeleteList() {
+    confirmingListDelete = null
+  }
+
+  /**
+   * Deletes a list from this phone.
+   *
+   * Local only, and the wording on the screen says so: the people you shared it with keep their
+   * copies. Propagating a whole-list deletion would need a tombstone for the list itself, and
+   * handing one phone the power to wipe a shared list off everyone else's is not obviously right.
+   *
+   * The last list is never deleted — the app has no state that shows no list at all.
+   */
+  fun deleteList(id: Long) {
+    repo.update { s, _ ->
+      if (s.lists.size <= 1) return@update s
+      val remaining = s.lists.filterNot { it.id == id }
+      s.copy(lists = remaining, activeListId = if (s.activeListId == id) remaining.first().id else s.activeListId)
+    }
+    confirmingListDelete = null
   }
 
   // ── Items ─────────────────────────────────────────────────────────────────
@@ -356,6 +575,56 @@ class PorygonViewModel(
     confirmingRemoval = false
   }
 
+  // ── Staples ───────────────────────────────────────────────────────────────
+
+  /** The "Add a staple" field on the staples screen. */
+  var stapleDraft by mutableStateOf("")
+    private set
+
+  fun onStapleDraftChange(value: String) {
+    stapleDraft = value
+  }
+
+  /**
+   * Drops a staple onto the list being worked on, and counts it.
+   *
+   * The count is the tile's whole sub-label, so it has to move in the same update as the item —
+   * otherwise a tap adds the thing and the tile goes on claiming it has never been used.
+   */
+  fun useStaple(name: String) = repo.update { s, node ->
+    s.withActiveList { it.copy(items = it.items + node.newItem(s, name.trim())) }
+      .copy(staples = s.staples.map { if (it.name == name) it.copy(uses = it.uses + 1) else it })
+  }
+
+  /** Adds to the grid. An existing staple is left as it is rather than duplicated. */
+  fun addStaple() {
+    val name = stapleDraft.trim()
+    if (name.isEmpty()) return
+    repo.update { s, _ ->
+      if (s.staples.any { it.name.equals(name, ignoreCase = true) }) s
+      else s.copy(staples = s.staples + Staple(name))
+    }
+    stapleDraft = ""
+  }
+
+  /** Which tile is asking to be removed. Null when none is. */
+  var confirmingStaple by mutableStateOf<String?>(null)
+    private set
+
+  fun askRemoveStaple(name: String) {
+    confirmingStaple = name
+  }
+
+  fun cancelRemoveStaple() {
+    confirmingStaple = null
+  }
+
+  /** Takes a tile off the grid. Nothing already added to a list is touched. */
+  fun removeStaple(name: String) {
+    repo.update { s, _ -> s.copy(staples = s.staples.filterNot { it.name == name }) }
+    confirmingStaple = null
+  }
+
   // ── Conflict ──────────────────────────────────────────────────────────────
 
   /** One entry, the two quantities added together, authored here as a fresh merged item. */
@@ -395,18 +664,64 @@ class PorygonViewModel(
    */
   fun approveCurrentNetwork() {
     val fingerprint = network.value.fingerprint ?: return
+    var wasKnown = true
     repo.update { s, _ ->
-      val known = s.networks.any { it.fingerprint == fingerprint }
+      wasKnown = s.networks.any { it.fingerprint == fingerprint }
       s.copy(
         networks =
-          if (known) s.networks.map { if (it.fingerprint == fingerprint) it.copy(approved = true) else it }
+          if (wasKnown) s.networks.map { if (it.fingerprint == fingerprint) it.copy(approved = true) else it }
           else listOf(approvedNow(fingerprint)) + s.networks
       )
+    }
+    // Asked here rather than left for later: this is the one moment the owner certainly knows which
+    // network they just approved.
+    if (!wasKnown) {
+      namingNetwork = fingerprint
+      networkNameDraft = ""
     }
   }
 
   private fun approvedNow(fingerprint: NetworkFingerprint) =
     ApprovedNetwork(fingerprint = fingerprint, name = "", detail = "Approved just now", approved = true)
+
+  /**
+   * Which network is being named, if any.
+   *
+   * Approving one leaves it called "Network a3f91c", because the SSID is deliberately not read —
+   * that would cost a location permission for a value any other network can claim. So the only
+   * name available is the one the owner gives it, and they are asked right after approving, while
+   * they still know which network they meant.
+   */
+  var namingNetwork by mutableStateOf<NetworkFingerprint?>(null)
+    private set
+
+  var networkNameDraft by mutableStateOf("")
+    private set
+
+  fun startNamingNetwork(network: ApprovedNetwork) {
+    namingNetwork = network.fingerprint
+    networkNameDraft = network.name
+  }
+
+  fun onNetworkNameDraftChange(value: String) {
+    networkNameDraft = value
+  }
+
+  fun cancelNamingNetwork() {
+    namingNetwork = null
+    networkNameDraft = ""
+  }
+
+  fun saveNetworkName() {
+    val fingerprint = namingNetwork ?: return
+    val name = networkNameDraft.trim()
+    if (name.isNotEmpty()) {
+      repo.update { s, _ ->
+        s.copy(networks = s.networks.map { if (it.fingerprint == fingerprint) it.copy(name = name) else it })
+      }
+    }
+    cancelNamingNetwork()
+  }
 
   // ── Export / import ───────────────────────────────────────────────────────
 

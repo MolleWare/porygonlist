@@ -1,10 +1,13 @@
 package io.github.molleware.porygonlist.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,7 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.GroceryList
@@ -43,7 +49,11 @@ import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
 import io.github.molleware.porygonlist.ui.components.Avatar
 import io.github.molleware.porygonlist.ui.components.Dot
+import io.github.molleware.porygonlist.ui.components.IconActionButton
 import io.github.molleware.porygonlist.ui.components.IconPaths
+import io.github.molleware.porygonlist.ui.components.PorygonTextField
+import io.github.molleware.porygonlist.ui.components.PrimaryButton
+import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
 import io.github.molleware.porygonlist.ui.itemCountLabel
@@ -57,6 +67,20 @@ fun ListsScreen(
   onOpenList: (Long) -> Unit,
   onToggleOnline: () -> Unit,
   onGoShare: () -> Unit,
+  onOpenSettings: () -> Unit,
+  draft: String,
+  onDraftChange: (String) -> Unit,
+  onCreateList: () -> Unit,
+  renamingList: Long?,
+  renameDraft: String,
+  onStartRename: (GroceryList) -> Unit,
+  onRenameDraftChange: (String) -> Unit,
+  onSaveRename: () -> Unit,
+  onCancelRename: () -> Unit,
+  confirmingDelete: Long?,
+  onAskDelete: (Long) -> Unit,
+  onCancelDelete: () -> Unit,
+  onDelete: (Long) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Column(
@@ -65,13 +89,17 @@ fun ListsScreen(
     Row(
       Modifier.fillMaxWidth().padding(bottom = 16.dp),
       horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.Bottom,
+      verticalAlignment = Alignment.CenterVertically,
     ) {
       Text("porygonlist", style = PorygonType.Wordmark, color = TextInk)
-      Text(
-        state.lists.flatMap { it.people }.distinctBy { it.device }.joinToString(" & ") { it.name },
-        style = PorygonType.Meta.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
-        color = Neutral700,
+      // Your own initial, and the way in to everything about this phone rather than about a list.
+      Avatar(
+        initial = state.displayName.take(1).uppercase(),
+        background = Accent,
+        contentColor = Accent900,
+        size = 38.dp,
+        fontSize = PorygonType.BodyLarge.fontSize,
+        modifier = Modifier.clip(CircleShape).clickable(onClick = onOpenSettings).semantics { contentDescription = "You and this phone" },
       )
     }
 
@@ -80,10 +108,116 @@ fun ListsScreen(
     SectionLabel("Lists", Modifier.padding(top = 24.dp, bottom = 10.dp))
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      state.lists.forEach { list -> ListCard(list, state.online, state.localDevice) { onOpenList(list.id) } }
+      state.lists.forEach { list ->
+        if (renamingList == list.id) {
+          ListEditCard(
+            name = renameDraft,
+            onNameChange = onRenameDraftChange,
+            onSave = onSaveRename,
+            onCancel = onCancelRename,
+            canDelete = state.lists.size > 1,
+            confirmingDelete = confirmingDelete == list.id,
+            sharedWith = list.people.count { it.device != state.localDevice },
+            onAskDelete = { onAskDelete(list.id) },
+            onCancelDelete = onCancelDelete,
+            onDelete = { onDelete(list.id) },
+          )
+        } else {
+          ListCard(
+            list = list,
+            online = state.online,
+            localDevice = state.localDevice,
+            onClick = { onOpenList(list.id) },
+            onLongClick = { onStartRename(list) },
+          )
+        }
+      }
     }
 
+    Row(
+      Modifier.fillMaxWidth().padding(top = 14.dp),
+      horizontalArrangement = Arrangement.spacedBy(9.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      PorygonTextField(
+        value = draft,
+        onValueChange = onDraftChange,
+        placeholder = "New list…",
+        modifier = Modifier.weight(1f),
+        imeAction = ImeAction.Done,
+        onSubmit = onCreateList,
+      )
+      IconActionButton(IconPaths.PLUS, contentDescription = "Make the list", onClick = onCreateList)
+    }
+    Text(
+      "Press and hold a list to rename or delete it.",
+      style = PorygonType.Fine,
+      color = Neutral700,
+      modifier = Modifier.padding(top = 10.dp),
+    )
+
     ShareCallToAction(onGoShare, Modifier.padding(top = 22.dp))
+  }
+}
+
+/** A list card turned into its own rename-and-delete form, so the answer is where the question was. */
+@Composable
+private fun ListEditCard(
+  name: String,
+  onNameChange: (String) -> Unit,
+  onSave: () -> Unit,
+  onCancel: () -> Unit,
+  canDelete: Boolean,
+  confirmingDelete: Boolean,
+  sharedWith: Int,
+  onAskDelete: () -> Unit,
+  onCancelDelete: () -> Unit,
+  onDelete: () -> Unit,
+) {
+  Column(
+    Modifier.fillMaxWidth()
+      .shadow(Elevation.Sm, Shapes.Card, ambientColor = ShadowInk, spotColor = ShadowInk)
+      .clip(Shapes.Card)
+      .background(Surface)
+      .padding(horizontal = 18.dp, vertical = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(11.dp),
+  ) {
+    PorygonTextField(
+      value = name,
+      onValueChange = onNameChange,
+      placeholder = "List name",
+      modifier = Modifier.fillMaxWidth(),
+      imeAction = ImeAction.Done,
+      onSubmit = onSave,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+      PrimaryButton("Save", onSave, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
+      SecondaryButton("Cancel", onCancel, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
+      if (canDelete && !confirmingDelete) {
+        SecondaryButton(
+          "Delete",
+          onAskDelete,
+          style = PorygonType.Meta,
+          contentColor = Accent2800,
+          contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
+        )
+      }
+    }
+
+    if (confirmingDelete) {
+      Text("Delete this list from this phone?", style = PorygonType.Meta, color = TextInk)
+      Text(
+        if (sharedWith > 0)
+          "It goes from here only. The ${if (sharedWith == 1) "person" else "people"} you share it with keep their copy."
+        else "Nobody else has this one, so it goes for good.",
+        style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+        color = Neutral700,
+      )
+      Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        PrimaryButton("Delete", onDelete, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
+        SecondaryButton("Keep it", onCancelDelete, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
+      }
+    }
   }
 }
 
@@ -121,13 +255,20 @@ private fun SyncPill(state: AppState, networkLabel: String, onToggle: () -> Unit
 }
 
 @Composable
-private fun ListCard(list: GroceryList, online: Boolean, localDevice: DeviceId, onClick: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun ListCard(
+  list: GroceryList,
+  online: Boolean,
+  localDevice: DeviceId,
+  onClick: () -> Unit,
+  onLongClick: () -> Unit,
+) {
   Column(
     Modifier.fillMaxWidth()
       .shadow(Elevation.Sm, Shapes.Card, ambientColor = ShadowInk, spotColor = ShadowInk)
       .clip(Shapes.Card)
       .background(Surface)
-      .clickable(onClick = onClick)
+      .combinedClickable(onClick = onClick, onLongClick = onLongClick)
       .padding(horizontal = 18.dp, vertical = 17.dp),
     verticalArrangement = Arrangement.spacedBy(9.dp),
   ) {
