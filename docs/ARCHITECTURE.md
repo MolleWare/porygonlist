@@ -306,9 +306,8 @@ transport, in dependency order.
   right.
 - **Phone replacement needs a deliberate re-pair.** A replaced handset has a new
   `DeviceId` and is rejected as an unknown peer until scanned again. Correct, but
-  worth knowing.
-- **Nothing is committed.** Roughly 35 changed or new files. Suggested split:
-  design/UI, sync foundations, identity and pairing.
+  worth knowing — the pairing screen now offers "this is X's new phone" for exactly
+  this case, which retires the dead id instead of leaving it waited on.
 
 ---
 
