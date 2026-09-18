@@ -198,50 +198,60 @@ fun ShareScreen(
       }
     }
 
-    // Pairing and sharing are two decisions. A paired phone is one this one will talk to; putting
-    // that person on a list is a separate act, which is what makes a list you keep to yourself
-    // possible at all.
-    if (pairablePeers.isNotEmpty()) {
-      SectionLabel("Add to ${list.name}", Modifier.padding(top = 26.dp, bottom = 10.dp))
-      Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        pairablePeers.forEach { peer ->
-          Row(
-            Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-          ) {
-            Avatar(
-              initial = peer.name.take(1).uppercase(),
-              background = Accent2,
-              contentColor = Neutral100,
-              size = 34.dp,
-              fontSize = PorygonType.BodyLarge.fontSize,
-            )
-            Column(Modifier.weight(1f)) {
-              Text(peer.name, style = PorygonType.RowName, color = TextInk)
-              Text("Paired, not on this list", style = PorygonType.Fine, color = Neutral700)
-            }
-            PrimaryButton(
-              "Add",
-              onClick = { onAddPerson(peer.deviceId) },
-              style = PorygonType.Meta,
-              contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            )
+    // Pairing and sharing are two decisions in the model, and should be: trusting a phone is about
+    // the phone, which is what makes a list you keep to yourself possible. But "give this list to
+    // somebody" is one intention, so it is one section — an already-paired person is one tap, and
+    // somebody new goes through pairing and lands on this list at the end of it.
+    SectionLabel("Give ${list.name} to someone", Modifier.padding(top = 26.dp, bottom = 10.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+      pairablePeers.forEach { peer ->
+        Row(
+          Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 12.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+          Avatar(
+            initial = peer.name.take(1).uppercase(),
+            background = Accent2,
+            contentColor = Neutral100,
+            size = 34.dp,
+            fontSize = PorygonType.BodyLarge.fontSize,
+          )
+          Column(Modifier.weight(1f)) {
+            Text(peer.name, style = PorygonType.RowName, color = TextInk)
+            Text("Paired with this phone, not on this list", style = PorygonType.Fine, color = Neutral700)
           }
+          PrimaryButton(
+            "Add",
+            onClick = { onAddPerson(peer.deviceId) },
+            style = PorygonType.Meta,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+          )
         }
       }
-    }
 
-    SectionLabel("Another phone", Modifier.padding(top = 26.dp, bottom = 10.dp))
-    Text(
-      if (state.peers.isEmpty())
-        "No phone is paired with this one yet. Until one is, nothing syncs however many networks you approve."
-      else "Pair another phone to share lists with somebody else.",
-      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
-      color = Neutral700,
-      modifier = Modifier.padding(bottom = 12.dp),
-    )
-    SecondaryButton("Pair a phone", onGoPair, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
+      Column(
+        Modifier.fillMaxWidth()
+          .clip(Shapes.Card)
+          .background(Accent2100)
+          .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 18.dp)
+      ) {
+        Text("Somebody new", style = PorygonType.CardHeading, color = TextInk, modifier = Modifier.padding(bottom = 4.dp))
+        Text(
+          "Swap codes once, so the two phones know each other, and they go straight onto " +
+            "${list.name}. After that it keeps itself up to date.",
+          style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
+          color = Neutral700,
+          modifier = Modifier.padding(bottom = 14.dp),
+        )
+        PrimaryButton(
+          "Share ${list.name}",
+          onGoPair,
+          modifier = Modifier.heightIn(min = 44.dp),
+          style = PorygonType.BodyLarge,
+        )
+      }
+    }
   }
 }
 
@@ -418,7 +428,9 @@ private fun NetworkRow(
         modifier = Modifier.clip(Shapes.Pill).clickable(onClick = onCancelNaming).padding(horizontal = 8.dp, vertical = 7.dp),
       )
     } else {
-      Column(Modifier.weight(1f).clip(Shapes.Row).clickable(onClick = onStartNaming)) {
+      // No clip here. Shapes.Row is a generous corner radius, and clipping a column this short with
+      // it bites the first character off both lines — which is what "Home" rendering as "dome" was.
+      Column(Modifier.weight(1f).clickable(onClick = onStartNaming)) {
         Text(network.label, style = PorygonType.RowName, color = TextInk)
         Text(network.detail, style = PorygonType.Fine, color = Neutral700, modifier = Modifier.padding(top = 1.dp))
       }

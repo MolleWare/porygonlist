@@ -56,6 +56,8 @@ fun PairScreen(
   code: String,
   onCodeChange: (String) -> Unit,
   note: String,
+  /** The list this pairing was started in order to share, if it was started that way. */
+  sharingList: String?,
   pendingName: String?,
   replaceCandidates: List<Person>,
   onPairAsNew: () -> Unit,
@@ -71,14 +73,15 @@ fun PairScreen(
   ) {
     BackLink("Back", onBack, tint = Accent700)
     Text(
-      "Pair a phone",
+      if (sharingList != null) "Share $sharingList" else "Pair a phone",
       style = PorygonType.ScreenTitle,
       color = TextInk,
       modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
     )
     Text(
       "Each of you needs the other's code. Show yours, take theirs, and from then on the two phones " +
-        "recognise each other on any network you have both approved.",
+        "recognise each other on any network you have both approved." +
+        if (sharingList != null) " They go onto $sharingList as soon as that is done." else "",
       style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.55),
       color = Neutral700,
       modifier = Modifier.padding(bottom = 22.dp),
@@ -150,7 +153,7 @@ fun PairScreen(
           color = Neutral700,
         )
         PrimaryButton(
-          "Add $pendingName",
+          if (sharingList != null) "Add $pendingName to $sharingList" else "Add $pendingName",
           onPairAsNew,
           modifier = Modifier.heightIn(min = 44.dp),
           style = PorygonType.BodyLarge,

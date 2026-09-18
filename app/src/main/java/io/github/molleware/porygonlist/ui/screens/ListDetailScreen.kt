@@ -89,6 +89,10 @@ fun ListDetailScreen(
   onKeepBoth: () -> Unit,
   /** Opens sharing for this list — who has it, and who else could. */
   onShare: () -> Unit,
+  confirmingClear: Boolean,
+  onAskClear: () -> Unit,
+  onCancelClear: () -> Unit,
+  onClearChecked: () -> Unit,
   onBack: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -151,6 +155,20 @@ fun ListDetailScreen(
           onEdit = { onEditItem(item) },
         )
       }
+    }
+
+    // Only once there is something in the trolley. Ticking says you have it and the row stays put
+    // so you can see what you have got; this is the thing that ends the shop.
+    val ticked = list.liveItems.count { it.checked }
+    if (ticked > 0) {
+      ClearTicked(
+        count = ticked,
+        confirming = confirmingClear,
+        onAsk = onAskClear,
+        onCancel = onCancelClear,
+        onConfirm = onClearChecked,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp),
+      )
     }
 
     Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp)) {
@@ -248,6 +266,56 @@ private fun ConflictCard(
         onKeepBoth,
         style = PorygonType.Meta,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+      )
+    }
+  }
+}
+
+/**
+ * What to do with everything already in the trolley.
+ *
+ * Asks before it acts, in the same place rather than in a dialogue: several items at once is worth
+ * a moment's pause, and the count is the whole of what needs saying.
+ */
+@Composable
+private fun ClearTicked(
+  count: Int,
+  confirming: Boolean,
+  onAsk: () -> Unit,
+  onCancel: () -> Unit,
+  onConfirm: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Row(
+    modifier.fillMaxWidth(),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(9.dp),
+  ) {
+    Text(
+      if (confirming) "Take $count off the list?" else "$count in the trolley",
+      style = PorygonType.Meta,
+      color = Neutral700,
+      modifier = Modifier.weight(1f),
+    )
+    if (confirming) {
+      PrimaryButton(
+        "Clear them",
+        onConfirm,
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+      )
+      SecondaryButton(
+        "Keep",
+        onCancel,
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+      )
+    } else {
+      SecondaryButton(
+        "Clear ticked",
+        onAsk,
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
       )
     }
   }

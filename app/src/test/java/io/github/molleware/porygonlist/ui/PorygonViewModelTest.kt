@@ -291,6 +291,109 @@ class PorygonViewModelTest {
     assertTrue("Tomatoes" in onNewList)
   }
 
+  // ── Clearing the trolley ──────────────────────────────────────────────────
+
+  @Test
+  fun `clearing takes the ticked items off and leaves the rest`() = runTest(dispatcher) {
+    repo.load()
+    val ticked = state().activeList.liveItems.filter { it.checked }.map { it.id }
+    val untickedBefore = state().activeList.liveItems.count { !it.checked }
+    assertTrue("the seeded list has something in the trolley", ticked.isNotEmpty())
+
+    vm.clearChecked()
+
+    assertEquals(0, state().activeList.liveItems.count { it.checked })
+    assertEquals(untickedBefore, state().activeList.liveItems.size)
+    // Tombstoned, not dropped: the other phone would otherwise hand the whole trolley back.
+    ticked.forEach { id -> assertTrue(state().activeList.items.single { it.id == id }.removed.value) }
+  }
+
+  @Test
+  fun `clearing is asked about first`() = runTest(dispatcher) {
+    repo.load()
+    val before = state().activeList.liveItems.size
+
+    vm.askClearChecked()
+    assertTrue(vm.confirmingClear)
+    vm.cancelClearChecked()
+
+    assertFalse(vm.confirmingClear)
+    assertEquals("backing out changes nothing", before, state().activeList.liveItems.size)
+  }
+
+  @Test
+  fun `clearing an empty trolley is harmless`() = runTest(dispatcher) {
+    repo.load()
+    vm.clearChecked()
+    val after = state().activeList.liveItems.size
+
+    vm.clearChecked()
+
+    assertEquals(after, state().activeList.liveItems.size)
+  }
+
+  // ── Sharing a list with somebody new ──────────────────────────────────────
+
+  @Test
+  fun `pairing started from a list puts them on that list`() = runTest(dispatcher) {
+    repo.load()
+    vm.onNameDraftChange("Hugo")
+    vm.saveName()
+    vm.onListDraftChange("Boat trip")
+    vm.createList()
+    val shared = state().activeListId
+
+    vm.startPairing(forListId = shared)
+    vm.onPairCodeChange(otherPhone("Ava"))
+    val theirDevice = vm.pendingInvite!!.deviceId
+    vm.pairAsNew()
+
+    val list = state().lists.single { it.id == shared }
+    assertTrue("trusted", state().peers.any { it.deviceId == theirDevice })
+    assertTrue("and on the list, in one action", list.people.any { it.device == theirDevice })
+    assertEquals("Ava", list.people.single { it.device == theirDevice }.name)
+  }
+
+  @Test
+  fun `pairing on its own shares nothing`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.startPairing()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    val theirDevice = vm.pendingInvite!!.deviceId
+    vm.pairAsNew()
+
+    assertTrue(state().peers.any { it.deviceId == theirDevice })
+    assertTrue("trusting a phone is not giving it your lists", state().lists.none { list -> list.people.any { it.device == theirDevice } })
+  }
+
+  @Test
+  fun `the sharing intent is spent once`() = runTest(dispatcher) {
+    repo.load()
+    vm.onNameDraftChange("Hugo")
+    vm.saveName()
+    vm.startPairing(forListId = state().activeListId)
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+
+    assertNull(vm.pairingForList)
+  }
+
+  @Test
+  fun `sharing a list that is not the one open still works`() = runTest(dispatcher) {
+    repo.load()
+    vm.onNameDraftChange("Hugo")
+    vm.saveName()
+    val other = state().lists.last { it.id != state().activeListId }.id
+
+    vm.startPairing(forListId = other)
+    vm.onPairCodeChange(otherPhone("Ava"))
+    val theirDevice = vm.pendingInvite!!.deviceId
+    vm.pairAsNew()
+
+    assertTrue(state().lists.single { it.id == other }.people.any { it.device == theirDevice })
+  }
+
   // ── Answering a duplicate ─────────────────────────────────────────────────
 
   @Test

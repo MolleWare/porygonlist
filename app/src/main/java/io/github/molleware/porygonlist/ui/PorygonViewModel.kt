@@ -287,11 +287,35 @@ class PorygonViewModel(
       .distinctBy { it.device }
       .filterNot { it.device == state.localDevice || it.device == pendingInvite?.deviceId }
 
+  /**
+   * The list this pairing is being done in order to share, if it was started that way.
+   *
+   * Pairing and sharing stay separate acts in the model, and should: trusting a phone is about the
+   * phone. But "share this list with someone new" is one intention, and making a person perform it
+   * as two unrelated steps — pair here, then find the list and add them — is how a feature ends up
+   * looking absent. Set on the way in, honoured once, cleared.
+   */
+  var pairingForList by mutableStateOf<Long?>(null)
+    private set
+
+  fun startPairing(forListId: Long? = null) {
+    pairingForList = forListId
+    pairCode = ""
+    pairNote = ""
+    pendingInvite = null
+  }
+
   /** Trusts the pasted code as a phone this one has not seen before. */
   fun pairAsNew() {
     val invite = pendingInvite ?: return
     pair(pairCode.trim())
-    pairNote = "Paired with ${invite.displayName}."
+    val listId = pairingForList
+    if (listId != null) {
+      addPersonToList(listId, invite.deviceId)
+      pairNote = "${invite.displayName} is on ${listName(listId)}."
+    } else {
+      pairNote = "Paired with ${invite.displayName}."
+    }
     clearPairDraft()
   }
 
@@ -303,9 +327,12 @@ class PorygonViewModel(
     clearPairDraft()
   }
 
+  private fun listName(id: Long): String = state.value?.lists?.firstOrNull { it.id == id }?.name.orEmpty()
+
   private fun clearPairDraft() {
     pairCode = ""
     pendingInvite = null
+    pairingForList = null
   }
 
   /**
@@ -365,12 +392,21 @@ class PorygonViewModel(
   }
 
   /** Starts sharing the open list with a phone already paired with this one. */
-  fun addPersonToActiveList(device: DeviceId) = repo.update { s, _ ->
+  fun addPersonToActiveList(device: DeviceId) {
+    val listId = state.value?.activeListId ?: return
+    addPersonToList(listId, device)
+  }
+
+  /** Puts a paired phone's owner on one list, by id rather than by whichever is open. */
+  fun addPersonToList(listId: Long, device: DeviceId) = repo.update { s, _ ->
     val peer = s.peerFor(device) ?: return@update s
-    s.withActiveList { list ->
-      if (list.people.any { it.device == device }) list
-      else list.copy(people = list.people + Person(device, peer.name, initialOf(peer.name)))
-    }
+    s.copy(
+      lists =
+        s.lists.map { list ->
+          if (list.id != listId || list.people.any { it.device == device }) list
+          else list.copy(people = list.people + Person(device, peer.name, initialOf(peer.name)))
+        }
+    )
   }
 
   // ── Lists ─────────────────────────────────────────────────────────────────
@@ -538,6 +574,41 @@ class PorygonViewModel(
           }
       )
     }
+  }
+
+  /** The list detail is asking whether the ticked-off items really should go. */
+  var confirmingClear by mutableStateOf(false)
+    private set
+
+  fun askClearChecked() {
+    confirmingClear = true
+  }
+
+  fun cancelClearChecked() {
+    confirmingClear = false
+  }
+
+  /**
+   * Takes everything already in the trolley off the list.
+   *
+   * Ticking something off says you have it; it stays visible so you can see what you have got, and
+   * this is what ends the shop. Tombstones rather than deletions, for the same reason a single
+   * removal is: a phone that never heard about it would offer the whole trolley back.
+   */
+  fun clearChecked() {
+    repo.update { s, node ->
+      val stamp = node.clock.tick()
+      s.withActiveList { list ->
+        list.copy(
+          items =
+            list.items.map { item ->
+              if (item.checked && !item.removed.value) item.copy(removed = item.removed.set(true, stamp), pending = !s.online)
+              else item
+            }
+        )
+      }
+    }
+    confirmingClear = false
   }
 
   // ── Edit sheet ────────────────────────────────────────────────────────────

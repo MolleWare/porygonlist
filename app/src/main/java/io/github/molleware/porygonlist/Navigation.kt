@@ -166,6 +166,10 @@ fun MainNavigation() {
                   onMerge = viewModel::mergeConflict,
                   onKeepBoth = viewModel::keepBoth,
                   onShare = { backStack.goTo(Share) },
+                  confirmingClear = viewModel.confirmingClear,
+                  onAskClear = viewModel::askClearChecked,
+                  onCancelClear = viewModel::cancelClearChecked,
+                  onClearChecked = viewModel::clearChecked,
                   onBack = { backStack.goTo(Lists) },
                   modifier = Modifier.fillMaxSize(),
                 )
@@ -200,7 +204,10 @@ fun MainNavigation() {
                   nameDraft = viewModel.nameDraft,
                   onNameDraftChange = viewModel::onNameDraftChange,
                   onSaveName = viewModel::saveName,
-                  onPair = { backStack.add(PairPhone) },
+                  onPair = {
+                    viewModel.startPairing()
+                    backStack.add(PairPhone)
+                  },
                   onUnpair = viewModel::unpair,
                   confirmingDelete = viewModel.confirmingIdentityDelete,
                   onAskDelete = viewModel::askDeleteIdentity,
@@ -216,6 +223,7 @@ fun MainNavigation() {
                   code = viewModel.pairCode,
                   onCodeChange = viewModel::onPairCodeChange,
                   note = viewModel.pairNote,
+                  sharingList = viewModel.pairingForList?.let { id -> appState.lists.firstOrNull { it.id == id }?.name },
                   pendingName = viewModel.pendingInvite?.displayName,
                   replaceCandidates = viewModel.replaceCandidates(appState),
                   onPairAsNew = viewModel::pairAsNew,
@@ -241,7 +249,10 @@ fun MainNavigation() {
                   onCancelNamingNetwork = viewModel::cancelNamingNetwork,
                   pairablePeers = viewModel.peersNotOnActiveList(appState),
                   onAddPerson = viewModel::addPersonToActiveList,
-                  onGoPair = { backStack.add(PairPhone) },
+                  onGoPair = {
+                    viewModel.startPairing(forListId = appState.activeListId)
+                    backStack.add(PairPhone)
+                  },
                   confirmingRemovalOf = viewModel.confirmingRemovalOf,
                   onAskRemovePerson = viewModel::askRemovePerson,
                   onCancelRemovePerson = viewModel::cancelRemovePerson,
