@@ -1,0 +1,281 @@
+package io.github.molleware.porygonlist.ui.screens
+
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.Conflict
+import io.github.molleware.porygonlist.data.GroceryItem
+import io.github.molleware.porygonlist.data.GroceryList
+import io.github.molleware.porygonlist.data.sync.ItemId
+import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.theme.Accent
+import io.github.molleware.porygonlist.theme.Accent100
+import io.github.molleware.porygonlist.theme.Accent2
+import io.github.molleware.porygonlist.theme.Accent2200
+import io.github.molleware.porygonlist.theme.Accent2300
+import io.github.molleware.porygonlist.theme.Accent2800
+import io.github.molleware.porygonlist.theme.Accent300
+import io.github.molleware.porygonlist.theme.Accent700
+import io.github.molleware.porygonlist.theme.Accent800
+import io.github.molleware.porygonlist.theme.Bg
+import io.github.molleware.porygonlist.theme.Neutral100
+import io.github.molleware.porygonlist.theme.Neutral600
+import io.github.molleware.porygonlist.theme.Neutral700
+import io.github.molleware.porygonlist.theme.PorygonType
+import io.github.molleware.porygonlist.theme.Shapes
+import io.github.molleware.porygonlist.theme.StrikeThrough
+import io.github.molleware.porygonlist.theme.Surface
+import io.github.molleware.porygonlist.theme.TextInk
+import io.github.molleware.porygonlist.ui.components.Avatar
+import io.github.molleware.porygonlist.ui.components.BackLink
+import io.github.molleware.porygonlist.ui.components.CheckCircle
+import io.github.molleware.porygonlist.ui.components.Dot
+import io.github.molleware.porygonlist.ui.components.IconActionButton
+import io.github.molleware.porygonlist.ui.components.IconPaths
+import io.github.molleware.porygonlist.ui.components.PorygonTextField
+import io.github.molleware.porygonlist.ui.components.PrimaryButton
+import io.github.molleware.porygonlist.ui.components.SecondaryButton
+import io.github.molleware.porygonlist.ui.components.StrokeIcon
+import io.github.molleware.porygonlist.ui.itemSubLabel
+import io.github.molleware.porygonlist.ui.others
+
+/** Things worth offering before you have typed anything. */
+private val SUGGESTIONS = listOf("Parmesan", "Spinach", "Lemons")
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun ListDetailScreen(
+  state: AppState,
+  draft: String,
+  onDraftChange: (String) -> Unit,
+  onSubmitDraft: () -> Unit,
+  onAddItem: (String) -> Unit,
+  onToggleChecked: (ItemId) -> Unit,
+  onEditItem: (GroceryItem) -> Unit,
+  onMerge: () -> Unit,
+  onKeepBoth: () -> Unit,
+  onBack: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val list = state.activeList
+  Column(modifier.verticalScroll(rememberScrollState()).padding(top = 18.dp, bottom = 88.dp)) {
+    Column(Modifier.padding(horizontal = 20.dp)) {
+      BackLink("All lists", onBack, tint = Accent700)
+      Text(
+        list.name,
+        style = PorygonType.ScreenTitle,
+        color = TextInk,
+        modifier = Modifier.padding(top = 9.dp, bottom = 5.dp),
+      )
+      Row(
+        Modifier.padding(bottom = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+      ) {
+        Dot(if (state.online) Accent2 else Accent)
+        Text(listStatus(list, state.online, state.localDevice), style = PorygonType.Meta, color = Neutral700)
+      }
+      Text(
+        "Hold an item, or tap its pencil, to change the name or the count.",
+        style = PorygonType.Fine,
+        color = Neutral700,
+        modifier = Modifier.padding(bottom = 14.dp),
+      )
+    }
+
+    state.conflict?.let { conflict ->
+      ConflictCard(
+        conflict = conflict,
+        onMerge = onMerge,
+        onKeepBoth = onKeepBoth,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
+      )
+    }
+
+    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      list.liveItems.forEach { item ->
+        ItemRow(
+          item = item,
+          subLabel = itemSubLabel(item, list, state.localDevice),
+          partnerInitial = list.others(state.localDevice).firstOrNull()?.initial ?: "?",
+          onToggle = { onToggleChecked(item.id) },
+          onEdit = { onEditItem(item) },
+        )
+      }
+    }
+
+    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp)) {
+      FlowRow(
+        Modifier.fillMaxWidth().padding(bottom = 11.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+      ) {
+        SUGGESTIONS.forEach { name ->
+          Text(
+            name,
+            style = PorygonType.Meta,
+            color = Accent800,
+            modifier =
+              Modifier.clip(Shapes.Pill)
+                .background(Accent100)
+                .clickable { onAddItem(name) }
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+          )
+        }
+      }
+      Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        PorygonTextField(
+          value = draft,
+          onValueChange = onDraftChange,
+          placeholder = "Add something…",
+          modifier = Modifier.weight(1f),
+          onSubmit = onSubmitDraft,
+        )
+        IconActionButton(IconPaths.PLUS, contentDescription = "Add item", onClick = onSubmitDraft)
+      }
+    }
+  }
+}
+
+private fun listStatus(list: GroceryList, online: Boolean, localDevice: DeviceId): String {
+  val others = list.others(localDevice)
+  if (others.isEmpty()) return "Just you"
+  val names = others.joinToString(" & ") { it.name }
+  return if (online) "Shared with $names · in step" else "Shared with $names · will hand over on wifi"
+}
+
+/**
+ * Surfaced when the same thing was added on both phones while neither could see the other.
+ *
+ * Merging is automatic everywhere else; this is the case where a person has to say what they meant,
+ * so it is shown rather than resolved quietly.
+ */
+@Composable
+private fun ConflictCard(conflict: Conflict, onMerge: () -> Unit, onKeepBoth: () -> Unit, modifier: Modifier = Modifier) {
+  Column(
+    modifier
+      .fillMaxWidth()
+      .clip(Shapes.Row)
+      .background(Accent100)
+      .border(1.dp, Accent300, Shapes.Row)
+      .padding(horizontal = 17.dp, vertical = 15.dp)
+  ) {
+    Row(
+      Modifier.padding(bottom = 5.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      Box(Modifier.size(24.dp).clip(CircleShape).background(Accent), contentAlignment = Alignment.Center) {
+        StrokeIcon(IconPaths.MERGE_LINES, contentDescription = null, size = 14.dp, strokeWidth = 2.9f, tint = Bg)
+      }
+      Text("You both added ${conflict.itemName}", style = PorygonType.InlineHeading, color = TextInk)
+    }
+    Text(
+      "${conflict.yours}, ${conflict.theirs}. Nobody was looking at the other phone.",
+      style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
+      color = Accent800,
+      modifier = Modifier.padding(bottom = 11.dp),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      PrimaryButton(
+        "Merge",
+        onMerge,
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+      )
+      SecondaryButton(
+        "Keep both",
+        onKeepBoth,
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+      )
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ItemRow(
+  item: GroceryItem,
+  subLabel: String,
+  partnerInitial: String,
+  onToggle: () -> Unit,
+  onEdit: () -> Unit,
+) {
+  Row(
+    Modifier.fillMaxWidth()
+      .clip(Shapes.Row)
+      .background(Surface)
+      // The ring marks an item the other person has open right now.
+      .then(if (item.editing) Modifier.border(2.dp, Accent2300, Shapes.Row) else Modifier)
+      .alpha(if (item.checked) 0.55f else 1f)
+      .padding(start = 5.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
+    // A 44dp target around a 26dp circle. The row's reduced start padding is the design's
+    // `margin-left:-9px`, which keeps the circle itself aligned to the 14dp gutter.
+    Box(
+      Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onToggle),
+      contentAlignment = Alignment.Center,
+    ) {
+      CheckCircle(item.checked)
+    }
+
+    Column(
+      Modifier.weight(1f).combinedClickable(onClick = {}, onLongClick = onEdit),
+    ) {
+      Text(
+        item.label,
+        style = PorygonType.ItemName,
+        color = TextInk,
+        textDecoration = if (item.checked) StrikeThrough else null,
+      )
+      Text(subLabel, style = PorygonType.Fine, color = Neutral700, modifier = Modifier.padding(top = 1.dp))
+    }
+
+    if (item.editing) {
+      Row(
+        Modifier.clip(Shapes.Pill).background(Accent2200).padding(start = 3.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        Avatar(partnerInitial, Accent2, Neutral100, size = 22.dp, fontSize = PorygonType.Tiny.fontSize)
+        Text("editing", style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.1), color = Accent2800)
+      }
+    }
+
+    if (item.pending) {
+      Text("waiting", style = PorygonType.Tiny, color = Accent700)
+    }
+
+    Box(
+      Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onEdit),
+      contentAlignment = Alignment.Center,
+    ) {
+      StrokeIcon(IconPaths.PENCIL, contentDescription = "Edit item", size = 17.dp, tint = Neutral600)
+    }
+  }
+}

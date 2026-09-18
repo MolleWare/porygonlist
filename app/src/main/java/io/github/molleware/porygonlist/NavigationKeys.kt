@@ -3,4 +3,17 @@ package io.github.molleware.porygonlist
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
-@Serializable data object Main : NavKey
+/** The lists you keep, and the sync banner over them. */
+@Serializable data object Lists : NavKey
+
+/** One list, open for editing. Which list is held in app state, not in the key. */
+@Serializable data object ListDetail : NavKey
+
+/** Shopping mode. */
+@Serializable data object Shop : NavKey
+
+/** The staples grid. */
+@Serializable data object Staples : NavKey
+
+/** Sharing: networks, export and import, people. */
+@Serializable data object Share : NavKey

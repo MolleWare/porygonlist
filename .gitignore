@@ -29,3 +29,7 @@ signing.properties
 /benchmark/build
 *.trace
 *.perfetto-trace
+
+# Scratch folder for handoff bundles and other material that should not ship in
+# a public repository.
+/removeme/

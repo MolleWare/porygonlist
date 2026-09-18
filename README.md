@@ -1,20 +1,33 @@
 # PorygonList
 
-Shared lists that sync between phones over the internet.
+Shared lists that sync directly between phones, with no server in the middle.
 
 Build a list with one or more other people and have every change show up on
 everyone's device, the way Syncthing keeps a folder in step across machines.
 
-**Status: early scaffold. Nothing works yet.** The repository currently holds a
-project skeleton and its build configuration. There is no list editing and no
-sync. It is not usable, and there is no release to install.
+There is no account and no backend. Lists hand over directly between devices
+when they are together on a local network you have approved, and nothing leaves
+the phone anywhere else. Away from a shared network, a list can be sent as a
+single line of text that the other person pastes straight back in.
+
+**Status: the interface is built; sync is not.** All five screens from the
+design are implemented and lists persist across launches. Sharing is still a
+stub — the sync banner toggles a flag rather than talking to another phone, and
+nothing crosses the network yet. There is no release to install.
+
+What works: multiple lists, adding and ticking off items, editing name and
+quantity, staples, shopping mode, conflict resolution, and handing a list over
+as a text message you can paste into the other person's app.
 
 ## Goals
 
 - **Fast to open.** A list app that takes a second to start is a list app you
   stop reaching for. Cold start is treated as a feature with a measured budget,
   not as something to look at later.
-- **Shared, not centralised.** Lists sync between the people who hold them.
+- **Serverless by design.** Lists sync peer to peer between the people who hold
+  them, over a local network, on devices the owner has approved. There is no
+  server to run, to trust, or to be breached — and no account to create. This
+  is the constraint the rest of the design answers to, not an optimisation.
 - **Free software, no Google dependencies.** No Play Services, no Firebase, no
   analytics. Intended for F-Droid first.
 
@@ -44,6 +57,34 @@ of part-way through a build. `./gradlew` directly works fine too.
 The build pins `jvmToolchain(21)` and deliberately does not use Gradle's
 toolchain auto-provisioning, so a missing JDK 21 fails the build rather than
 silently downloading one. Install JDK 21 and point `JAVA_HOME` at it.
+
+### Fonts
+
+The interface is drawn in Caprasimo (headings) and Figtree (body). Both are SIL
+OFL 1.1 and are bundled in the APK rather than fetched at runtime: the
+downloadable-fonts provider needs Play Services, which rules it out here, and it
+would put a network round trip on the cold-start path.
+
+```sh
+./scripts/fetch-fonts.sh        # pulls the TTFs into app/src/main/res/font/
+```
+
+Run it once and commit the result; the build itself never needs the network.
+Until then the app falls back to the system face, which changes the lettering
+but nothing else.
+
+## Design
+
+The interface comes from a [Claude Design](https://claude.ai/design) handoff.
+The prototype is HTML/CSS; the Compose implementation matches its visual output
+rather than its structure. Two things are worth knowing when comparing them:
+
+- The design file's inline `<style>` block overrides every colour token in the
+  design system it imports. The amber palette in `theme/Color.kt` is the
+  override — the design system's own orange/sage is not what renders.
+- Provenance ("you, 9:12") is stored as an author plus a timestamp and rendered
+  at display time, rather than kept as the literal strings the prototype uses.
+  A prototype has no yesterday.
 
 ## Measuring startup
 

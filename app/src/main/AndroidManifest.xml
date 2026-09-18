@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Lets the app tell which link it is on, so peer discovery can be held on networks the owner
+      has not opted into. Normal protection level: granted at install, no runtime prompt.
+
+      Deliberately NOT requested: ACCESS_FINE_LOCATION. Reading the SSID or BSSID needs it from
+      Android 10 onward, and those identifiers are spoofable anyway — the network is a discovery
+      hint here, never a trust decision, so the permission would buy nothing worth its cost.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
