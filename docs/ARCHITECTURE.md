@@ -20,11 +20,13 @@ Committed on the `app-flow` branch.
 | Pairing | **Done.** Show your code, paste theirs, replace a lost phone. No QR yet. |
 | Network gating | **Done.** Permission-free fingerprint decides whether to discover. |
 | Merge | **Done.** Per-field, tested for symmetry and idempotence. |
+| Duplicates | **Done.** Two phones adding the same thing are paired by name, not id. |
+| Suggestions | **Done.** Dependency-free trie over the owner's words and a built-in list. |
 | Sync protocol | **Done.** Payload, receive, receipt, tombstone collection. |
 | **Transport** | **Not started.** No discovery, no socket, no TLS. |
 | Fonts | **Not fetched.** `./scripts/fetch-fonts.sh` needs a machine with network. |
 
-196 unit tests, all passing. Debug and release both assemble; lint is clean of
+241 unit tests, all passing. Debug and release both assemble; lint is clean of
 anything this work introduced.
 
 The app declares exactly one permission: `ACCESS_NETWORK_STATE`. No location, no
@@ -295,9 +297,14 @@ transport, in dependency order.
   match a real phone or a real link. With pairing real they now actively mislead —
   the demo partner appears in People having never been paired with. **This is the
   next thing to decide:** what a first run should actually open onto.
-- **Clashes are reported but nothing renders them.** `ListMerge.clashes` comes back
-  populated; the design has one conflict card, for a different case. What to do with
-  a concurrent rename is an open question — probably "take the later one silently".
+- **Field clashes are reported but nothing renders them.** `ListMerge.clashes` comes
+  back populated for two blind edits to the *same* item; only `duplicates` — the same
+  thing added on both phones — reaches a card. What to do with a concurrent rename is
+  still open, probably "take the later one silently".
+- **Only one card at a time.** `AppState.conflict` holds a single pair. A second
+  duplicate arriving before the first is answered waits rather than replacing it, so
+  nothing is lost, but it is not shown until the next handover after the first is
+  answered.
 - **A list's own name is not a `Field`**, so concurrent renames of "Weekly shop" are
   not symmetric. Lists can now be renamed from the interface, which makes this
   reachable rather than theoretical.
