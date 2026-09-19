@@ -32,7 +32,6 @@ import io.github.molleware.porygonlist.theme.Accent900
 import io.github.molleware.porygonlist.theme.Neutral700
 import io.github.molleware.porygonlist.theme.PorygonType
 import io.github.molleware.porygonlist.theme.Shapes
-import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
 import io.github.molleware.porygonlist.ui.components.BackLink
 import io.github.molleware.porygonlist.ui.components.PorygonTextField
@@ -95,9 +94,7 @@ fun PairScreen(
       modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
     )
     Text(
-      "Each of you needs the other's code. Show yours, take theirs, and from then on the two phones " +
-        "recognise each other on any network you have both approved." +
-        if (sharingList != null) " They go onto $sharingList as soon as that is done." else "",
+      if (sharingList != null) "Swap codes once, and they're on $sharingList." else "Swap codes once, both ways.",
       style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.55),
       color = Neutral700,
       modifier = Modifier.padding(bottom = 22.dp),
@@ -122,7 +119,7 @@ fun PairScreen(
           light = Accent100,
         )
         Text(
-          "Have them point their camera at this.",
+          "Point their camera here.",
           style = PorygonType.Meta,
           color = Accent800,
           modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp),
@@ -142,19 +139,14 @@ fun PairScreen(
           style = PorygonType.BodyLarge,
         )
       }
-      Text(
-        "There is no secret in this. It is a public key and your name, which is why it is safe to " +
-          "send — what makes it mean anything is that it reached them from you.",
-        style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
-        color = Accent800,
-        modifier = Modifier.padding(top = 12.dp),
-      )
+      // No line here about it carrying no secret. It is true, and it is the reason this is safe to
+      // send, but a person deciding whether to send it does not read a paragraph first — the one at
+      // the foot of the screen covers it once, for anyone who wonders.
     }
 
     SectionLabel("Their code", Modifier.padding(top = 26.dp, bottom = 6.dp))
     Text(
-      "Open your own camera app and point it at the code on their screen — it will offer to open " +
-        "porygonlist, and their code lands here. If they sent it instead, tap the link or paste it below.",
+      "Point your camera at theirs.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
       color = Neutral700,
       modifier = Modifier.padding(bottom = 12.dp),
@@ -189,7 +181,7 @@ fun PairScreen(
       ) {
         Text("That code is $pendingName's phone", style = PorygonType.CardHeading, color = TextInk)
         Text(
-          "Is this someone new, or a phone replacing one you already share with?",
+          "Someone new, or a phone replacing one?",
           style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
           color = Neutral700,
         )
@@ -211,8 +203,7 @@ fun PairScreen(
         }
         if (replaceCandidates.isNotEmpty()) {
           Text(
-            "Replacing keeps everything that person has written on your lists, and stops waiting on " +
-              "the phone they no longer have.",
+            "Replacing keeps what they've written, and stops waiting on the old phone.",
             style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
             color = Neutral700,
           )
@@ -220,12 +211,11 @@ fun PairScreen(
       }
     }
 
-    // Worth saying once, quietly, at the foot: the camera in this flow is always the phone's own
-    // camera app, never this one. That is a deliberate property rather than a missing feature, and
-    // somebody looking for a "scan" button here should find out why there isn't one.
+    // The whole justification — no camera permission, nothing secret in a code, trust coming from
+    // the channel rather than the payload — lives in the KDoc above and in docs/ARCHITECTURE.md.
+    // On screen it is one line, for the person wondering where the scan button went.
     Text(
-      "Porygonlist never asks for your camera. Your phone's camera app already reads these, and " +
-        "the code carries a public key and a name — no secret either way.",
+      "No camera permission. A code is just a public key and a name.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
       color = Neutral700,
       modifier = Modifier.padding(top = 26.dp),
