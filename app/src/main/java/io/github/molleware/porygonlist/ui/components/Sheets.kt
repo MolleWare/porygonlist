@@ -228,7 +228,7 @@ fun ImportSheet(
   PorygonBottomSheet(onDismiss) {
     Text("Paste a list", style = PorygonType.SheetTitle, color = TextInk, modifier = Modifier.padding(bottom = 3.dp))
     Text(
-      "Drop in a message someone sent you. Items already on the list are left alone.",
+      "Paste a message someone sent you.",
       style = PorygonType.Meta.copy(fontSize = PorygonType.Fine.fontSize),
       color = Neutral700,
       modifier = Modifier.padding(bottom = 14.dp),

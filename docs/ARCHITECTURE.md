@@ -242,6 +242,38 @@ Removing a person from a list clears their tombstones as a side effect, and safe
 
 ---
 
+## 5b. Words on screen
+
+**A line of interface text is a nudge, not an explanation.** This app is read
+one-handed, in a shop, for eight seconds. The reader wants to know what to do
+next, not why the thing works.
+
+The rule: **say the action; cut the mechanism; cut the reassurance.** If a
+sentence explains *why* the app behaves as it does, it belongs in a KDoc or in
+this document, where the person who needs it will actually look. It does not
+belong under a button.
+
+What that looks like in practice:
+
+| Before | After |
+| --- | --- |
+| "Tap a network's name to call it something you will recognise. Off a listed network nothing leaves the phone — your edits wait, then hand over the next time you meet on one of these." | "Tap a name to rename it." |
+| "Each of you needs the other's code. Show yours, take theirs, and from then on the two phones recognise each other on any network you have both approved." | "Swap codes once, both ways." |
+| "Add the things you buy over and over, and they are one tap from then on." | "The things you buy over and over." |
+
+Two exceptions, and only two:
+
+- **Irreversible actions keep their consequences.** Deleting the identity still
+  says the lists go with it and pairings break, because that is what the person
+  cannot find out afterwards. Terseness is not a licence to drop a warning.
+- **One line may answer the obvious question.** The pairing screen's "No camera
+  permission" exists because somebody will hunt for a scan button. One line, at
+  the foot, not a card.
+
+This was a real regression rather than a hypothetical: the screens had
+accumulated about 3,800 characters of prose, and the pairing screen needed two
+scrolls to reach the field its own intro paragraph was describing.
+
 ## 6. Storage and formats
 
 | Format | Marker | Carries |
@@ -325,7 +357,7 @@ transport, in dependency order.
 
 ### Smaller loose ends
 
-- **The seed still ships a fake partner and fake networks.** `hugodemo01` and
+- **The seed still ships a fake partner and fake networks.** `avademo01` and
   `seed01`–`seed03` exist so the design's screens have content; neither can ever
   match a real phone or a real link. With pairing real they now actively mislead —
   the demo partner appears in People having never been paired with. **This is the

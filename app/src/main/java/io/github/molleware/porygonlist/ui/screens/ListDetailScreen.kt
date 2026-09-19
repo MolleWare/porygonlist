@@ -20,6 +20,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -34,6 +40,7 @@ import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent100
 import io.github.molleware.porygonlist.theme.Accent2
+import io.github.molleware.porygonlist.theme.Accent2100
 import io.github.molleware.porygonlist.theme.Accent2200
 import io.github.molleware.porygonlist.theme.Accent2300
 import io.github.molleware.porygonlist.theme.Accent2800
@@ -42,7 +49,6 @@ import io.github.molleware.porygonlist.theme.Accent700
 import io.github.molleware.porygonlist.theme.Accent800
 import io.github.molleware.porygonlist.theme.Accent900
 import io.github.molleware.porygonlist.theme.Bg
-import io.github.molleware.porygonlist.theme.Neutral100
 import io.github.molleware.porygonlist.theme.Neutral600
 import io.github.molleware.porygonlist.theme.Neutral700
 import io.github.molleware.porygonlist.theme.PorygonType
@@ -97,7 +103,33 @@ fun ListDetailScreen(
   modifier: Modifier = Modifier,
 ) {
   val list = state.activeList
-  Column(modifier.verticalScroll(rememberScrollState()).padding(top = 18.dp, bottom = tabBarClearance())) {
+  val scrollState = rememberScrollState()
+
+  // A new item lands at the end of the list, which is below the fold once the list is long enough.
+  // Follow it down, so you can see what you just added and the field is still under your thumb for
+  // the next one.
+  //
+  // Only your own adds do this. Items also arrive from the other phone, and moving the view while
+  // someone is reading it would be the wrong kind of helpful.
+  var followAdd by remember { mutableStateOf(false) }
+  LaunchedEffect(list.liveItems.size) {
+    if (!followAdd) return@LaunchedEffect
+    followAdd = false
+    // The new row has to be measured before maxValue means anything.
+    withFrameNanos {}
+    scrollState.animateScrollTo(scrollState.maxValue)
+  }
+  val addAndFollow = { name: String ->
+    followAdd = true
+    onAddItem(name)
+  }
+  // A blank draft adds nothing, so there would be no new row to follow.
+  val submitAndFollow = {
+    if (draft.isNotBlank()) followAdd = true
+    onSubmitDraft()
+  }
+
+  Column(modifier.verticalScroll(scrollState).padding(top = 18.dp, bottom = tabBarClearance())) {
     Column(Modifier.padding(horizontal = 20.dp)) {
       BackLink("All lists", onBack, tint = Accent700)
       Text(
@@ -127,7 +159,7 @@ fun ListDetailScreen(
       }
       Spacer(Modifier.padding(bottom = 16.dp))
       Text(
-        "Hold an item, or tap its pencil, to change the name or the count.",
+        "Hold an item to edit it.",
         style = PorygonType.Fine,
         color = Neutral700,
         modifier = Modifier.padding(bottom = 14.dp),
@@ -189,7 +221,7 @@ fun ListDetailScreen(
             modifier =
               Modifier.clip(Shapes.Pill)
                 .background(if (matching) Accent300 else Accent100)
-                .clickable { onAddItem(name) }
+                .clickable { addAndFollow(name) }
                 .padding(horizontal = 14.dp, vertical = 7.dp),
           )
         }
@@ -200,9 +232,9 @@ fun ListDetailScreen(
           onValueChange = onDraftChange,
           placeholder = "Add something…",
           modifier = Modifier.weight(1f),
-          onSubmit = onSubmitDraft,
+          onSubmit = submitAndFollow,
         )
-        IconActionButton(IconPaths.PLUS, contentDescription = "Add item", onClick = onSubmitDraft)
+        IconActionButton(IconPaths.PLUS, contentDescription = "Add item", onClick = submitAndFollow)
       }
     }
   }
@@ -368,7 +400,7 @@ private fun ItemRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
-        Avatar(partnerInitial, Accent2, Neutral100, size = 22.dp, fontSize = PorygonType.Tiny.fontSize)
+        Avatar(partnerInitial, Accent2, Accent2100, size = 22.dp, fontSize = PorygonType.Tiny.fontSize)
         Text("editing", style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.1), color = Accent2800)
       }
     }

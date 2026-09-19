@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -42,11 +41,8 @@ import io.github.molleware.porygonlist.theme.Accent2
 import io.github.molleware.porygonlist.theme.Accent2100
 import io.github.molleware.porygonlist.theme.Accent2300
 import io.github.molleware.porygonlist.theme.Accent2800
-import io.github.molleware.porygonlist.theme.Accent2800
 import io.github.molleware.porygonlist.theme.Accent700
 import io.github.molleware.porygonlist.theme.Accent800
-import io.github.molleware.porygonlist.theme.Accent900
-import io.github.molleware.porygonlist.theme.Neutral100
 import io.github.molleware.porygonlist.theme.Neutral300
 import io.github.molleware.porygonlist.theme.Neutral700
 import io.github.molleware.porygonlist.theme.PorygonType
@@ -116,10 +112,8 @@ fun ShareScreen(
       modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
     )
     Text(
-      if (list.others(state.localDevice).isEmpty())
-        "Nobody else has this list yet. Add someone below, and it syncs on its own whenever you are both " +
-          "on a network you have approved here."
-      else "Lists sync on their own whenever you and $partner are both on a network you have approved here.",
+      if (list.others(state.localDevice).isEmpty()) "Nobody else has this list yet."
+      else "Syncs with $partner on an approved network.",
       style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.55),
       color = Neutral700,
       modifier = Modifier.padding(bottom = 20.dp),
@@ -127,6 +121,7 @@ fun ShareScreen(
 
     CurrentNetworkPill(
       label = here?.label ?: network.fingerprint?.let { "Network ${it.short}" } ?: "This network",
+      partner = partner,
       discovery = discovery,
       canApprove = network.fingerprint != null && !discovering,
       onApprove = onApproveCurrent,
@@ -149,8 +144,7 @@ fun ShareScreen(
       }
     }
     Text(
-      "Tap a network's name to call it something you will recognise. Off a listed network nothing leaves the " +
-        "phone — your edits wait, then hand over the next time you meet on one of these.",
+      "Tap a name to rename it.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.55),
       color = Neutral700,
       modifier = Modifier.padding(top = 14.dp, bottom = 26.dp),
@@ -170,8 +164,7 @@ fun ShareScreen(
         modifier = Modifier.padding(bottom = 4.dp),
       )
       Text(
-        "For when you are in the shop and nowhere near a shared network. It is one message, and whoever gets " +
-          "it can paste it straight back in.",
+        "One message. They paste it straight back in.",
         style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
         color = Accent800,
         modifier = Modifier.padding(bottom = 14.dp),
@@ -213,7 +206,7 @@ fun ShareScreen(
           Avatar(
             initial = peer.name.take(1).uppercase(),
             background = Accent2,
-            contentColor = Neutral100,
+            contentColor = Accent2100,
             size = 34.dp,
             fontSize = PorygonType.BodyLarge.fontSize,
           )
@@ -238,8 +231,7 @@ fun ShareScreen(
       ) {
         Text("Somebody new", style = PorygonType.CardHeading, color = TextInk, modifier = Modifier.padding(bottom = 4.dp))
         Text(
-          "Swap codes once, so the two phones know each other, and they go straight onto " +
-            "${list.name}. After that it keeps itself up to date.",
+          "Swap codes once, and they're on ${list.name}.",
           style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
           color = Neutral700,
           modifier = Modifier.padding(bottom = 14.dp),
@@ -284,8 +276,8 @@ private fun StrandedRemovals(
       modifier = Modifier.padding(bottom = 4.dp),
     )
     Text(
-      if (waitingOn.isEmpty()) "These are waiting for another phone to catch up."
-      else "These are waiting for ${waitingOn.joinToString(" and ")} to catch up.",
+      if (waitingOn.isEmpty()) "Waiting for another phone."
+      else "Waiting for ${waitingOn.joinToString(" and ")}.",
       style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
       color = Accent800,
       modifier = Modifier.padding(bottom = 14.dp),
@@ -299,7 +291,7 @@ private fun StrandedRemovals(
         modifier = Modifier.padding(bottom = 4.dp),
       )
       Text(
-        "Anything that phone still has may come back the next time you meet on a network.",
+        "They may come back when you next meet.",
         style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
         color = Accent800,
         modifier = Modifier.padding(bottom = 14.dp),
@@ -323,6 +315,7 @@ private fun StrandedRemovals(
 @Composable
 private fun CurrentNetworkPill(
   label: String,
+  partner: String,
   discovery: DiscoveryDecision,
   canApprove: Boolean,
   onApprove: () -> Unit,
@@ -343,13 +336,15 @@ private fun CurrentNetworkPill(
         append(" — ")
         append(
           when {
-            discovering -> "looking for Hugo here"
+            discovering -> "looking for $partner here"
             discovery is DiscoveryDecision.Hold ->
               when (discovery.reason) {
-                HoldReason.OFFLINE -> "no network, nothing is leaving this phone"
-                HoldReason.NOT_WIFI -> "not wifi, nothing is leaving this phone"
-                HoldReason.UNIDENTIFIABLE -> "cannot be told apart from other networks"
-                HoldReason.NOT_APPROVED -> "not approved, nothing is leaving this phone"
+                // The dot beside this is already the "nothing is leaving" signal; four variants
+                // spelling it out in words made the banner the longest line on the screen.
+                HoldReason.OFFLINE -> "no network"
+                HoldReason.NOT_WIFI -> "not wifi"
+                HoldReason.UNIDENTIFIABLE -> "not recognised"
+                HoldReason.NOT_APPROVED -> "not approved"
               }
             else -> ""
           }
@@ -363,7 +358,7 @@ private fun CurrentNetworkPill(
       Text(
         "Approve",
         style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
-        color = Accent900,
+        color = Accent100,
         modifier =
           Modifier.clip(Shapes.Pill).background(Accent).clickable(onClick = onApprove).padding(horizontal = 14.dp, vertical = 7.dp),
       )
@@ -400,7 +395,7 @@ private fun NetworkRow(
         IconPaths.WIFI,
         contentDescription = null,
         size = 17.dp,
-        tint = if (network.approved && isCurrent) Color.White else Accent2800,
+        tint = if (network.approved && isCurrent) Accent2100 else Accent2800,
       )
     }
     if (naming) {
@@ -417,7 +412,7 @@ private fun NetworkRow(
       Text(
         "Save",
         style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
-        color = Accent900,
+        color = Accent100,
         modifier =
           Modifier.clip(Shapes.Pill).background(Accent).clickable(onClick = onSaveName).padding(horizontal = 12.dp, vertical = 7.dp),
       )
@@ -457,7 +452,7 @@ private fun PersonRow(
       Avatar(
         initial = person.initial,
         background = if (isYou) Accent else Accent2,
-        contentColor = if (isYou) Accent900 else Neutral100,
+        contentColor = if (isYou) Accent100 else Accent2100,
         size = 34.dp,
         fontSize = PorygonType.BodyLarge.fontSize,
       )
@@ -493,7 +488,7 @@ private fun PersonRow(
         modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
       )
       Text(
-        "They keep the copy they already have. Nothing more passes between you on this list.",
+        "They keep the copy they have.",
         style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
         color = Neutral700,
         modifier = Modifier.padding(bottom = 12.dp),

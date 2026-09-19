@@ -47,8 +47,7 @@ fun NameScreen(name: String, onNameChange: (String) -> Unit, onContinue: () -> U
       modifier = Modifier.padding(top = 18.dp),
     )
     Text(
-      "Your name goes beside the things you add, so whoever you share a list with can see what came " +
-        "from you. A first name is plenty.",
+      "It goes beside the things you add. A first name is plenty.",
       style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.55),
       color = Neutral700,
     )
@@ -72,8 +71,7 @@ fun NameScreen(name: String, onNameChange: (String) -> Unit, onContinue: () -> U
     )
 
     Text(
-      "This phone made itself a key when you opened the app. It never leaves the device and there is " +
-        "nothing to write down — it is what proves your lists came from you.",
+      "This phone made itself a key. Nothing to write down.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.55),
       color = Neutral700,
       modifier = Modifier.padding(top = 10.dp),

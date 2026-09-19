@@ -21,8 +21,8 @@ import androidx.compose.ui.unit.dp
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.sync.ItemId
-import io.github.molleware.porygonlist.theme.Accent
-import io.github.molleware.porygonlist.theme.Accent2
+import io.github.molleware.porygonlist.theme.Accent2300
+import io.github.molleware.porygonlist.theme.Accent2900
 import io.github.molleware.porygonlist.theme.Accent400
 import io.github.molleware.porygonlist.theme.Neutral100
 import io.github.molleware.porygonlist.theme.Neutral400
@@ -74,7 +74,7 @@ fun ShopScreen(state: AppState, onToggleChecked: (ItemId) -> Unit, onLeave: () -
       )
       val progress = if (total == 0) 0f else done.toFloat() / total
       Box(Modifier.fillMaxWidth().height(8.dp).clip(Shapes.Pill).background(ShopTrack)) {
-        Box(Modifier.fillMaxWidth(progress).height(8.dp).clip(Shapes.Pill).background(Accent))
+        Box(Modifier.fillMaxWidth(progress).height(8.dp).clip(Shapes.Pill).background(Accent400))
       }
     }
 
@@ -94,8 +94,7 @@ fun ShopScreen(state: AppState, onToggleChecked: (ItemId) -> Unit, onLeave: () -
     }
 
     Text(
-      "$partner is at home crossing things off too. Anything they tick fades out here the moment your " +
-        "phones see each other.",
+      "$partner is crossing things off too.",
       style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.55),
       color = Neutral400,
       modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 24.dp),
@@ -133,7 +132,7 @@ private fun ShopItemRow(
     }
     // Marks something the other person put on the list, so you know whose errand it is.
     if (createdByOther && !item.checked) {
-      Avatar(partnerInitial, Accent2, Neutral100)
+      Avatar(partnerInitial, Accent2300, Accent2900)
     }
   }
 }

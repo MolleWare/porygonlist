@@ -36,10 +36,8 @@ import io.github.molleware.porygonlist.theme.Accent100
 import io.github.molleware.porygonlist.theme.Accent2
 import io.github.molleware.porygonlist.theme.Accent2100
 import io.github.molleware.porygonlist.theme.Accent2800
-import io.github.molleware.porygonlist.theme.Accent900
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.theme.Elevation
-import io.github.molleware.porygonlist.theme.Neutral100
 import io.github.molleware.porygonlist.theme.Neutral500
 import io.github.molleware.porygonlist.theme.Neutral700
 import io.github.molleware.porygonlist.theme.PorygonType
@@ -99,7 +97,7 @@ fun ListsScreen(
       Avatar(
         initial = state.displayName.take(1).uppercase(),
         background = Accent,
-        contentColor = Accent900,
+        contentColor = Accent100,
         size = 38.dp,
         fontSize = PorygonType.BodyLarge.fontSize,
         modifier = Modifier.clip(CircleShape).clickable(onClick = onOpenSettings).semantics { contentDescription = "You and this phone" },
@@ -220,9 +218,8 @@ private fun ListEditCard(
     if (confirmingDelete) {
       Text("Delete this list from this phone?", style = PorygonType.Meta, color = TextInk)
       Text(
-        if (sharedWith > 0)
-          "It goes from here only. The ${if (sharedWith == 1) "person" else "people"} you share it with keep their copy."
-        else "Nobody else has this one, so it goes for good.",
+        if (sharedWith > 0) "From this phone only — they keep their copy."
+        else "Nobody else has this one.",
         style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
         color = Neutral700,
       )
@@ -300,7 +297,7 @@ private fun ListCard(
           Avatar(
             initial = person.initial,
             background = if (isYou) Accent else Accent2,
-            contentColor = if (isYou) Accent900 else Neutral100,
+            contentColor = if (isYou) Accent100 else Accent2100,
             ringColor = Bg,
           )
         }
@@ -328,7 +325,7 @@ private fun ShareCallToAction(onClick: () -> Unit, modifier: Modifier = Modifier
     verticalAlignment = Alignment.Top,
   ) {
     Box(Modifier.size(34.dp).clip(CircleShape).background(Accent2), contentAlignment = Alignment.Center) {
-      StrokeIcon(IconPaths.WIFI, contentDescription = null, size = 18.dp, tint = Color.White)
+      StrokeIcon(IconPaths.WIFI, contentDescription = null, size = 18.dp, tint = Accent2100)
     }
     Column {
       Text(
@@ -338,7 +335,7 @@ private fun ShareCallToAction(onClick: () -> Unit, modifier: Modifier = Modifier
         modifier = Modifier.padding(bottom = 3.dp),
       )
       Text(
-        "Lists hop straight between phones on the same wifi. No account, nothing on a server.",
+        "Straight between phones. No account, no server.",
         style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5, fontWeight = FontWeight.Normal),
         color = Accent2800,
       )

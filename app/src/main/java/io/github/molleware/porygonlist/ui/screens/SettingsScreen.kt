@@ -23,10 +23,9 @@ import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent100
 import io.github.molleware.porygonlist.theme.Accent2
+import io.github.molleware.porygonlist.theme.Accent2100
 import io.github.molleware.porygonlist.theme.Accent700
 import io.github.molleware.porygonlist.theme.Accent800
-import io.github.molleware.porygonlist.theme.Accent900
-import io.github.molleware.porygonlist.theme.Neutral100
 import io.github.molleware.porygonlist.theme.Neutral700
 import io.github.molleware.porygonlist.theme.PorygonType
 import io.github.molleware.porygonlist.theme.Shapes
@@ -69,7 +68,7 @@ fun SettingsScreen(
       Avatar(
         initial = state.displayName.take(1).uppercase(),
         background = Accent,
-        contentColor = Accent900,
+        contentColor = Accent100,
         size = 46.dp,
         fontSize = PorygonType.CardHeading.fontSize,
       )
@@ -81,8 +80,7 @@ fun SettingsScreen(
 
     SectionLabel("Your name", Modifier.padding(top = 26.dp, bottom = 10.dp))
     Text(
-      "Changing it here changes it on your lists too. The other phones learn about it the next time " +
-        "you meet on an approved network.",
+      "Shows on your lists too.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
       color = Neutral700,
       modifier = Modifier.padding(bottom = 10.dp),
@@ -103,8 +101,7 @@ fun SettingsScreen(
     Column(Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 14.dp)) {
       Text(deviceId.value, style = PorygonType.RowName, color = TextInk)
       Text(
-        "Worked out from this phone's key, not chosen. Another phone that pairs with you sees the " +
-          "same thing, which is how you can both check you paired with each other.",
+        "Whoever pairs with you sees this too.",
         style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
         color = Neutral700,
         modifier = Modifier.padding(top = 4.dp),
@@ -114,8 +111,7 @@ fun SettingsScreen(
     SectionLabel("Paired phones", Modifier.padding(top = 26.dp, bottom = 10.dp))
     if (state.peers.isEmpty()) {
       Text(
-        "None yet. Pairing is what lets two phones recognise each other on a network — until then " +
-          "nothing syncs, however many networks you approve.",
+        "None yet. Nothing syncs until you pair.",
         style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
         color = Neutral700,
         modifier = Modifier.padding(bottom = 12.dp),
@@ -148,7 +144,7 @@ private fun PeerRow(peer: TrustedPeer, onUnpair: () -> Unit) {
     Avatar(
       initial = peer.name.take(1).uppercase(),
       background = Accent2,
-      contentColor = Neutral100,
+      contentColor = Accent2100,
       size = 34.dp,
       fontSize = PorygonType.BodyLarge.fontSize,
     )
@@ -188,11 +184,12 @@ private fun DeleteIdentityCard(
   ) {
     Text("Delete this phone's identity", style = PorygonType.CardHeading, color = TextInk, modifier = Modifier.padding(bottom = 4.dp))
     Text(
-      "Your key cannot be changed, only replaced — so this is how you start again. Your lists go " +
-        "with it, because they were written by a phone that will no longer exist." +
+      // Cut, but not to a nudge. This one is irreversible and takes the lists with it, so the two
+      // things a person cannot undo afterwards stay on screen.
+      "Your lists go with it." +
         if (peerCount > 0) {
           val phones = if (peerCount == 1) "The phone" else "All $peerCount phones"
-          " $phones you have paired with will not recognise you afterwards, and you will have to pair again."
+          " $phones you paired with will need pairing again."
         } else "",
       style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
       color = Accent800,

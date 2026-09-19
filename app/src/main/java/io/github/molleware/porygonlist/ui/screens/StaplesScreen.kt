@@ -67,8 +67,8 @@ fun StaplesScreen(
   ) {
     Text("Staples", style = PorygonType.ScreenTitle, color = TextInk, modifier = Modifier.padding(bottom = 5.dp))
     Text(
-      if (staples.isEmpty()) "Add the things you buy over and over, and they are one tap from then on."
-      else "Tap to drop something onto $activeListName. Press and hold a tile to take it off the grid.",
+      if (staples.isEmpty()) "The things you buy over and over."
+      else "Tap to add to $activeListName. Hold to remove.",
       style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.5),
       color = Neutral700,
       modifier = Modifier.padding(bottom = 20.dp),
