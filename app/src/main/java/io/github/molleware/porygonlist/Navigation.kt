@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -48,7 +49,7 @@ import io.github.molleware.porygonlist.ui.screens.ShopScreen
 import io.github.molleware.porygonlist.ui.screens.StaplesScreen
 
 @Composable
-fun MainNavigation() {
+fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {}) {
   val context = LocalContext.current
   val viewModel: PorygonViewModel =
     viewModel {
@@ -90,6 +91,22 @@ fun MainNavigation() {
         modifier = Modifier.fillMaxSize().safeDrawingPadding(),
       )
       return@Box
+    }
+
+    // A pairing link opened from outside — a camera app that read someone's QR code, or a tap on a
+    // link in a message. It fills the field and opens the screen; it does not pair. The person still
+    // answers "is this someone new, or a replacement?" exactly as they would for a pasted code,
+    // which is what keeps an intent from any app on the phone from being an act of trust.
+    //
+    // Sits below the first-run gate deliberately: until there is a name, there is nobody to pair as,
+    // so the link waits rather than being dropped.
+    if (pairLink != null) {
+      LaunchedEffect(pairLink) {
+        viewModel.startPairing()
+        viewModel.onPairCodeChange(pairLink)
+        backStack.goTo(PairPhone)
+        onPairLinkHandled()
+      }
     }
 
     // Back closes an open sheet before it touches navigation.

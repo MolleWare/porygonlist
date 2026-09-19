@@ -127,6 +127,48 @@ class PairingCodecTest {
   }
 
   @Test
+  fun `a link round trips and matches the bare code it wraps`() {
+    val link = PairingCodec.link(ava, "Ava")
+    val invite = PairingCodec.decode(link)!!
+
+    assertTrue(link.startsWith("porygonlist://pair?c=PLPAIR1."))
+    assertEquals(ava.deviceId, invite.deviceId)
+    assertEquals("Ava", invite.displayName)
+    assertTrue(ava.publicKey.contentEquals(invite.publicKey))
+    // The link is the bare code with a prefix, not a different encoding of it.
+    assertEquals(PairingCodec.decode(PairingCodec.encode(ava, "Ava")), invite)
+  }
+
+  @Test
+  fun `the bare form still decodes, so codes already sent keep working`() {
+    val bare = PairingCodec.encode(hugo, "Hugo")
+
+    assertFalse(bare.startsWith("porygonlist://"))
+    assertEquals(hugo.deviceId, PairingCodec.decode(bare)!!.deviceId)
+  }
+
+  @Test
+  fun `a link survives the ways one arrives`() {
+    val link = PairingCodec.link(ava, "Ava")
+
+    // Pasted out of a message with whitespace around it.
+    assertEquals(ava.deviceId, PairingCodec.decode("  $link \n")!!.deviceId)
+    // A scheme an app has upper-cased on the way through.
+    assertEquals(ava.deviceId, PairingCodec.decode(link.replace("porygonlist://", "PORYGONLIST://"))!!.deviceId)
+    // A parameter this app does not define, appended by something in between.
+    assertEquals(ava.deviceId, PairingCodec.decode("$link&utm=whatever")!!.deviceId)
+  }
+
+  @Test
+  fun `a link with no code in it is rejected`() {
+    assertNull(PairingCodec.decode("porygonlist://pair?c="))
+    assertNull(PairingCodec.decode("porygonlist://pair?c=nonsense"))
+    assertNull(PairingCodec.decode("porygonlist://pair"))
+    // Right shape, wrong scheme — this is the case a malicious page would try.
+    assertNull(PairingCodec.decode("https://pair?c=PLPAIR1.abc.def"))
+  }
+
+  @Test
   fun `an invite carries no private material`() {
     val code = PairingCodec.encode(ava, "Ava")
 

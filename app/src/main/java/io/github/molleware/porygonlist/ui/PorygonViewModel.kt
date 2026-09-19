@@ -218,9 +218,13 @@ class PorygonViewModel(
    *
    * Contains a public key and a name, no secret. It is safe on a screen or in a message; what makes
    * pairing trustworthy is the channel, not confidentiality.
+   *
+   * In link form, so that the other phone's camera app can act on the QR code and so that the same
+   * string is tappable when it arrives in a message. [PairingCodec.decode] still reads the bare
+   * form, so codes sent before this keep working.
    */
   fun invite(displayName: String = state.value?.displayName.orEmpty()): String =
-    PairingCodec.encode(identity(), displayName)
+    PairingCodec.link(identity(), displayName)
 
   /**
    * Accepts an invite read from a QR code or pasted in.

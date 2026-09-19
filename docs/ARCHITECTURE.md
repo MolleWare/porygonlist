@@ -17,7 +17,7 @@ Committed on the `app-flow` branch.
 | Settings | **Done.** Your name and id, paired phones, and deleting the identity. |
 | Local persistence | **Done.** Hand-rolled text codec, no dependencies. |
 | Device identity | **Done.** EC P-256 in the Android Keystore, id derived from the key. |
-| Pairing | **Done.** Show your code, paste theirs, replace a lost phone. No QR yet. |
+| Pairing | **Done.** QR code or tappable link, paste theirs, replace a lost phone. No camera needed. |
 | Network gating | **Done.** Permission-free fingerprint decides whether to discover. |
 | Merge | **Done.** Per-field, tested for symmetry and idempotence. |
 | Duplicates | **Done.** Two phones adding the same thing are paired by name, not id. |
@@ -64,8 +64,8 @@ Base32 is used because its alphabet omits `0`, `1`, `8` and `9`, so there is no
 
 ```mermaid
 flowchart LR
-  A[Ava's phone] -->|shows| C["PLPAIR1.&lt;pubkey&gt;.&lt;name&gt;"]
-  C -->|QR or text| B[Hugo's phone]
+  A[Ava's phone] -->|shows| C["porygonlist://pair?c=PLPAIR1.&lt;pubkey&gt;.&lt;name&gt;"]
+  C -->|their camera app,<br/>a tapped link, or a paste| B[Hugo's phone]
   B --> D[Derive DeviceId<br/>from the key]
   D --> E[TrustedPeer stored<br/>id + public key]
   E --> F[Pins the key for<br/>every later connection]
@@ -283,10 +283,43 @@ transport, in dependency order.
    no certificate-building library is needed. Pin in a custom `X509TrustManager`.
 3. **Wire it up.** `payloadFor` / `receive` / `confirmDelivery` are the seams and
    are already tested; the transport only has to move bytes between them.
-4. **QR scanning.** Pairing works by pasting a code. A camera path needs
-   `com.google.zxing:core` (Apache 2.0, F-Droid-safe) plus CameraX and the camera
-   permission. **Avoid ML Kit** — it needs Play Services. Nothing about the trust
-   changes when it lands: what makes pairing sound is the channel, not the format.
+4. **The QR handshake.** Done, and done without a camera. `data/crypto/QrCode.kt`
+   encodes the invite, `ui/components/QrCodeImage.kt` draws it, and the invite is
+   a `porygonlist://pair?c=…` link rather than a bare code.
+
+   That link is what replaces a scanner. The *other* phone's ordinary camera app
+   reads the QR and offers to open it here; the same string in a message is
+   tappable. So the app ships **no camera permission, no camera library and no
+   decoder** — which is the whole reason this shape was chosen.
+
+   **Decoding was the thing worth avoiding.** Encoding is small: byte mode, level
+   M, versions 1–12 is a fraction of a general encoder and hand-writing it keeps
+   the dependency count at zero, exactly as the state codec does. Decoding is not:
+   finding a symbol in a camera frame, correcting its perspective and running
+   Reed–Solomon *correction* rather than generation. The alternative was
+   `com.google.zxing:core` plus CameraX, roughly 1.5–2 MB against a 1.22 MB app.
+   **If a real scanner is ever wanted, use zxing and avoid ML Kit** — ML Kit needs
+   Play Services, which this phone does not have.
+
+   **Opening a link is not an act of trust.** The intent filter is `BROWSABLE`, so
+   anything on the phone can hand us one. It fills the pairing field and opens the
+   screen; the person still answers "someone new, or a replacement?". Nothing is
+   paired without that tap, and `MainActivity` deliberately does not even decode
+   the link. `PairingCodec.decode` still reads the bare `PLPAIR1.…` form, so codes
+   sent before this keep working.
+
+   **The encoder is verified, but not by the committed tests.** `QrCodeTest` checks
+   structure only — size, finder and timing patterns, quiet zone. Proving the
+   payload needs a reference decoder, and the whole point was not to carry one. It
+   was validated out of band against OpenCV: all 287 payload lengths from 1 to 287
+   bytes round-tripped, covering every version in the table, both character-count
+   widths and every multi-block interleaving layout, plus a decode straight off a
+   screenshot of the phone. Re-run that sweep if the encoder is ever touched.
+
+   **The one thing not verified on hardware**: that a given camera app offers to
+   open a custom scheme. Firing the intent works, and the flow was driven end to
+   end from both a cold start and a running app, but "point a real camera at it"
+   needs two devices.
 5. **Fonts.** Run `./scripts/fetch-fonts.sh`, commit the TTFs, swap the two
    families in `theme/Type.kt`.
 

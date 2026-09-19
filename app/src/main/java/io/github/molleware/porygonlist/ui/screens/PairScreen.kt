@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -27,6 +28,7 @@ import io.github.molleware.porygonlist.theme.Accent100
 import io.github.molleware.porygonlist.theme.Accent2100
 import io.github.molleware.porygonlist.theme.Accent700
 import io.github.molleware.porygonlist.theme.Accent800
+import io.github.molleware.porygonlist.theme.Accent900
 import io.github.molleware.porygonlist.theme.Neutral700
 import io.github.molleware.porygonlist.theme.PorygonType
 import io.github.molleware.porygonlist.theme.Shapes
@@ -35,17 +37,28 @@ import io.github.molleware.porygonlist.theme.TextInk
 import io.github.molleware.porygonlist.ui.components.BackLink
 import io.github.molleware.porygonlist.ui.components.PorygonTextField
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
+import io.github.molleware.porygonlist.ui.components.QrCodeImage
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
+import io.github.molleware.porygonlist.ui.components.rememberQrCode
 import kotlinx.coroutines.launch
+
+/**
+ * How large the invite's QR code is drawn.
+ *
+ * Sized so that a version-7 symbol's modules land around five pixels each on a typical phone,
+ * which is comfortably above what a camera held at arm's length needs to resolve.
+ */
+private val QR_SIZE = 232.dp
 
 /**
  * Two phones agreeing to recognise each other.
  *
  * Both halves are on one screen because pairing is symmetric: each phone has to end up holding the
- * other's key, so whoever is looking at this has to both show a code and take one. There is no
- * camera here yet — a code is read by pasting it — but nothing about the trust changes when one
- * arrives, because what makes this trustworthy is the channel it travelled, not the format.
+ * other's key, so whoever is looking at this has to both show a code and take one. Showing is a QR
+ * code the other phone's own camera app can read; taking one means pasting it, or tapping the link
+ * they sent. There is no camera here and no camera permission — what makes this trustworthy is the
+ * channel the code travelled, not the format it travelled in.
  *
  * The code is a public key and a name. It carries no secret, so it is safe in a message, and it
  * cannot be used to impersonate the phone that showed it.
@@ -94,6 +107,18 @@ fun PairScreen(
         .background(Accent100)
         .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 18.dp)
     ) {
+      // Drawn from the same string shown below it, so there is never a version of the code on
+      // screen that the text does not account for.
+      val qr = rememberQrCode(invite)
+      if (qr != null) {
+        QrCodeImage(
+          code = qr,
+          contentDescription = "Your pairing code as a QR code. The text below says the same thing.",
+          modifier = Modifier.align(Alignment.CenterHorizontally).size(QR_SIZE).padding(bottom = 14.dp),
+          dark = Accent900,
+          light = Accent100,
+        )
+      }
       Text(
         invite,
         style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.45),
@@ -186,10 +211,11 @@ fun PairScreen(
         .background(Surface)
         .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
-      Text("No camera yet", style = PorygonType.RowName, color = TextInk)
+      Text("Use their camera, not this one", style = PorygonType.RowName, color = TextInk)
       Text(
-        "Scanning a QR code is the intended way to do this in person. Until it is built, send the " +
-          "code however you would send anything else — it gives nothing away.",
+        "Point their phone's ordinary camera at the code above and it will offer to open " +
+          "porygonlist. This app never asks for the camera itself. Going the other way, have them " +
+          "send you their code — it is a link, so tapping it brings it straight here.",
         style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
         color = Neutral700,
         modifier = Modifier.padding(top = 4.dp),
