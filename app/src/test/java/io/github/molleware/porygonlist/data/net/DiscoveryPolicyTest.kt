@@ -75,6 +75,44 @@ class DiscoveryPolicyTest {
   }
 
   @Test
+  fun `a vpn is held even on an approved wifi`() {
+    // The tunnel's fingerprint is what gets computed while a VPN is up, and it is the same one
+    // everywhere — so a match against the approved list means nothing here.
+    val tunnelled = NetworkSnapshot(fingerprint = home, isWifi = true, isUsable = true, isVpn = true)
+
+    assertEquals(DiscoveryDecision.Hold(HoldReason.VPN), discoveryDecision(tunnelled, setOf(home)))
+  }
+
+  @Test
+  fun `a vpn is reported as a vpn rather than as the wrong network`() {
+    // This is the case the ordering exists for. A VPN reports the transports of whatever it runs
+    // over, so it can arrive with isWifi false — and saying "not wifi" would send somebody to look
+    // at their router when the thing to turn off is the VPN.
+    val overCellular = NetworkSnapshot(fingerprint = work, isWifi = false, isUsable = true, isVpn = true)
+
+    assertEquals(DiscoveryDecision.Hold(HoldReason.VPN), discoveryDecision(overCellular, setOf(home)))
+  }
+
+  @Test
+  fun `a vpn on an unidentifiable network still names the vpn`() {
+    val tunnelled = NetworkSnapshot(fingerprint = null, isWifi = true, isUsable = true, isVpn = true)
+
+    assertEquals(DiscoveryDecision.Hold(HoldReason.VPN), discoveryDecision(tunnelled, setOf(home)))
+  }
+
+  @Test
+  fun `being offline outranks a vpn, because there is nothing to tunnel over`() {
+    val nothing = NetworkSnapshot(fingerprint = home, isWifi = true, isUsable = false, isVpn = true)
+
+    assertEquals(DiscoveryDecision.Hold(HoldReason.OFFLINE), discoveryDecision(nothing, setOf(home)))
+  }
+
+  @Test
+  fun `no vpn is the ordinary case and changes nothing`() {
+    assertEquals(DiscoveryDecision.Discover, discoveryDecision(wifi(home), setOf(home)))
+  }
+
+  @Test
   fun `mobile data is held even if somehow approved`() {
     val cellular = NetworkSnapshot(fingerprint = home, isWifi = false, isUsable = true)
 

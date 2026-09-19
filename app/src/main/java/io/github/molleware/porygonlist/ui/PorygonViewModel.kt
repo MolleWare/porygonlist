@@ -805,6 +805,9 @@ class PorygonViewModel(
    * apart from any other would opt into every network sharing its shape.
    */
   fun approveCurrentNetwork() {
+    // Never while a VPN is up. The fingerprint would be the tunnel's, which is the same one this
+    // phone sees in every café in the world — approving it would quietly opt into all of them.
+    if (network.value.isVpn) return
     val fingerprint = network.value.fingerprint ?: return
     var wasKnown = true
     repo.update { s, _ ->

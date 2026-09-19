@@ -131,6 +131,9 @@ class AndroidNetworkMonitor(private val context: Context) : NetworkMonitor {
       // VALIDATED means the link actually works, rather than being mid-handshake or held by a
       // captive portal. Discovering behind a portal would be packets into a wall.
       isUsable = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+      // NOT_VPN is absent exactly when this *is* a VPN. Free of any permission — it comes off the
+      // same capabilities the wifi check already reads.
+      isVpn = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN),
     )
   }
 

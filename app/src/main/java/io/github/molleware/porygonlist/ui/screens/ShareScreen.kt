@@ -129,7 +129,8 @@ fun ShareScreen(
       label = networkLabel(here, network, wifiName, unknown = "This network"),
       partner = partner,
       discovery = discovery,
-      canApprove = network.fingerprint != null && !discovering,
+      // Not offered under a VPN: what would be approved is the tunnel, not the wifi.
+      canApprove = network.fingerprint != null && !discovering && !network.isVpn,
       onApprove = onApproveCurrent,
     )
 
@@ -365,10 +366,16 @@ private fun CurrentNetworkPill(
             discovering -> "looking for $partner here"
             discovery is DiscoveryDecision.Hold ->
               when (discovery.reason) {
-                // The dot beside this is already the "nothing is leaving" signal; four variants
+                // The dot beside this is already the "nothing is leaving" signal; five variants
                 // spelling it out in words made the banner the longest line on the screen.
                 HoldReason.OFFLINE -> "no network"
+                // Names the thing to turn off. "not approved" would be a lie here and "not
+                // recognised" would send somebody to their router.
+                HoldReason.VPN -> "VPN on, nothing can reach the other phone"
                 HoldReason.NOT_WIFI -> "not wifi"
+                // Names the VPN rather than saying "not recognised", because this one is a switch
+                // the owner can flip — and would not think to, if the banner blamed the network.
+                HoldReason.VPN -> "VPN is on"
                 HoldReason.UNIDENTIFIABLE -> "not recognised"
                 HoldReason.NOT_APPROVED -> "not approved"
               }

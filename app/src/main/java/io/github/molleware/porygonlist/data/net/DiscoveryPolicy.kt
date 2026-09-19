@@ -12,6 +12,14 @@ data class NetworkSnapshot(
   val isWifi: Boolean,
   /** The link is up and usable, as opposed to connecting or sitting behind a captive portal. */
   val isUsable: Boolean,
+  /**
+   * A VPN is carrying this phone's traffic.
+   *
+   * Read straight off the link's capabilities, so it costs no permission beyond the one already
+   * held. It matters more than it looks: with a tunnel up, [fingerprint] describes the tunnel and
+   * not the wifi, so it is the same in every café in the world.
+   */
+  val isVpn: Boolean = false,
 ) {
   companion object {
     /** No network at all. */
@@ -38,6 +46,25 @@ enum class HoldReason {
    */
   NOT_WIFI,
 
+  /**
+   * A VPN is carrying this phone's traffic.
+   *
+   * Two separate reasons to stop, either of which would be enough.
+   *
+   * The identification breaks first. The fingerprint is built from the default network, which *is*
+   * the tunnel while a VPN is up — so it describes the VPN and not the wifi. That fingerprint is
+   * identical in every café in the world, which means matching it against the approved list would
+   * eventually say "this is your home network" somewhere that is not. Holding here is what closes
+   * that, and it closes it without needing the fingerprint itself to change.
+   *
+   * The reachability is the other half. An app cannot send around a VPN unless the VPN itself
+   * allows it, so unless the tunnel is configured to let local traffic past, a peer one metre away
+   * on the same wifi is not reachable. Some VPNs do allow it and some do not, which is exactly the
+   * kind of thing that must not be guessed at: the honest answer is to say a VPN is on and let
+   * somebody who wants to sync turn it off.
+   */
+  VPN,
+
   /** No gateway to hash, so this network cannot be matched against the approved list. */
   UNIDENTIFIABLE,
 
@@ -59,6 +86,10 @@ enum class HoldReason {
 fun discoveryDecision(snapshot: NetworkSnapshot, approved: Set<NetworkFingerprint>): DiscoveryDecision =
   when {
     !snapshot.isUsable -> DiscoveryDecision.Hold(HoldReason.OFFLINE)
+    // Before the wifi check, not after. A VPN reports the transports of whatever it runs over, so
+    // this can be reached with isWifi either way — and "a VPN is on" is the useful thing to be told
+    // in both, where "not wifi" would send somebody looking at their router.
+    snapshot.isVpn -> DiscoveryDecision.Hold(HoldReason.VPN)
     !snapshot.isWifi -> DiscoveryDecision.Hold(HoldReason.NOT_WIFI)
     snapshot.fingerprint == null -> DiscoveryDecision.Hold(HoldReason.UNIDENTIFIABLE)
     snapshot.fingerprint !in approved -> DiscoveryDecision.Hold(HoldReason.NOT_APPROVED)

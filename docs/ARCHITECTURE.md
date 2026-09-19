@@ -18,7 +18,7 @@ Committed on the `app-flow` branch.
 | Local persistence | **Done.** Hand-rolled text codec, no dependencies. |
 | Device identity | **Done.** EC P-256 in the Android Keystore, id derived from the key. |
 | Pairing | **Done.** QR code or tappable link, paste theirs, replace a lost phone. No camera needed. |
-| Network gating | **Done.** Permission-free fingerprint decides whether to discover. |
+| Network gating | **Done.** Permission-free fingerprint decides whether to discover; a VPN holds it. |
 | Merge | **Done.** Per-field, tested for symmetry and idempotence. |
 | Duplicates | **Done.** Two phones adding the same thing are paired by name, not id. |
 | Suggestions | **Done.** Dependency-free trie over the owner's words and a built-in list. |
@@ -26,7 +26,7 @@ Committed on the `app-flow` branch.
 | **Transport** | **Not started.** No discovery, no socket, no TLS. |
 | Fonts | **Not fetched.** `./scripts/fetch-fonts.sh` needs a machine with network. |
 
-269 unit tests, all passing. Debug and release both assemble; lint is clean of
+274 unit tests, all passing. Debug and release both assemble; lint is clean of
 anything this work introduced.
 
 The app declares two permissions. `ACCESS_NETWORK_STATE` is normal-level, granted
@@ -115,7 +115,9 @@ wifi. A network that matches is still a hostile place.
 flowchart TD
   A[Link changes] --> B{Usable?}
   B -->|no| H1[Hold: OFFLINE]
-  B -->|yes| C{Wifi?}
+  B -->|yes| V{VPN?}
+  V -->|yes| H5[Hold: VPN]
+  V -->|no| C{Wifi?}
   C -->|no| H2[Hold: NOT_WIFI]
   C -->|yes| D{Fingerprint?}
   D -->|none| H3[Hold: UNIDENTIFIABLE]
@@ -156,12 +158,30 @@ Three things make the permission optional rather than required:
   missing **or when location services are switched off** — a separate condition,
   and the one that catches people out.
 
-**Still open:** the fingerprint is built from the *default* network, so with a VPN
-up it describes the tunnel rather than the wifi. Same wifi with the VPN toggled
-fingerprints as two networks, and — worse — the tunnel looks the same everywhere,
-so a café can match an approved home network. The name does not have this problem;
-`currentWifiName` already asks the wifi network specifically, with `NOT_VPN`. The
-fix is to fingerprint from that same network.
+### A VPN holds discovery
+
+The fingerprint is built from the *default* network, and while a VPN is up the
+default network is the tunnel. So the fingerprint describes the VPN and not the
+wifi — which means it is **the same in every café in the world**. Matching that
+against the approved list would eventually announce this phone somewhere that
+merely happens to be behind the same tunnel.
+
+`HoldReason.VPN` closes it by refusing to act at all while a VPN is up, checked
+*before* the wifi test and before any matching. `approveCurrentNetwork` refuses
+too, so a tunnel fingerprint never enters the approved list in the first place.
+
+That also answers a question worth being straight about: **a VPN probably does
+stop lists syncing.** An app cannot send around a VPN unless the VPN itself
+permits it, so unless the tunnel is configured to let local traffic past, a peer
+one metre away is unreachable. Some VPNs allow it, some do not, and it is not
+worth guessing — the banner names the VPN, and anyone who wants to sync can turn
+it off. Detecting it costs nothing: `NET_CAPABILITY_NOT_VPN` is on the same
+capabilities the wifi check already reads.
+
+Fingerprinting the underlying wifi instead — as `currentWifiName` already does,
+with `NOT_VPN` — would let sync continue under a VPN that allows local traffic.
+That is the better end state and is **still open**; holding is the safe version of
+it, and it is correct on its own terms rather than a placeholder.
 
 ---
 
