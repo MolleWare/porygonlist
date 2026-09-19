@@ -72,7 +72,7 @@ fun GroceryList.partnerName(localDevice: DeviceId): String = others(localDevice)
 /**
  * The line under an item's name in the list detail.
  *
- * This tracks the *last writer*, which is what the design shows: an item Hugo added and you then
+ * This tracks the *last writer*, which is what the design shows: an item Ava added and you then
  * renamed reads as yours. Who originally added it stays on the item as `createdBy`.
  */
 fun itemSubLabel(
@@ -104,7 +104,7 @@ fun shopSubLabel(item: GroceryItem, list: GroceryList, localDevice: DeviceId): S
     else -> "${list.nameFor(item.createdBy, localDevice)} added this"
   }
 
-/** The meta line on a list card: "in step with Hugo", or what is waiting. */
+/** The meta line on a list card: "in step with Ava", or what is waiting. */
 fun listCardMeta(list: GroceryList, online: Boolean, localDevice: DeviceId): String {
   val waiting = list.items.count { it.pending }
   val others = list.others(localDevice)

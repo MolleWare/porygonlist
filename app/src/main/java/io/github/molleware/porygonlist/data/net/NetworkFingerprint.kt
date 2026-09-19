@@ -9,7 +9,7 @@ import java.security.MessageDigest
  * **This is not a security boundary and must never be used as one.** It is spoofable, it collides,
  * and a network that matches is still a hostile place. Its only job is to answer "is it worth
  * looking for peers here", so that the app is not broadcasting its presence all day on an office or
- * café network. Whether the peer it then finds is really Hugo is settled by keys, not by this.
+ * café network. Whether the peer it then finds is really Ava is settled by keys, not by this.
  *
  * Built from the gateway, the subnet and the DNS servers, because those are readable from
  * `LinkProperties` with no permission at all. The SSID and BSSID would be better identifiers and

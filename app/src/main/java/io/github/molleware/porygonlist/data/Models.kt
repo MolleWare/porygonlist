@@ -399,18 +399,18 @@ data class AppState(
      * exactly as the mockup does, rather than an empty shell.
      *
      * [partner] stands in for the second phone until real pairing exists — the design is drawn with
-     * Hugo already there.
+     * Ava already there.
      *
      * The owner is seeded nameless on purpose. First run asks before any of this is reachable, and
      * shipping a placeholder name would mean the app addressing someone as a person they are not.
      */
     fun seed(
       localDevice: DeviceId,
-      partner: DeviceId = DeviceId("hugodemo01"),
+      partner: DeviceId = DeviceId("avademo01"),
       now: Long = System.currentTimeMillis(),
     ): AppState {
       val you = Person(localDevice, "", "")
-      val hugo = Person(partner, "Hugo", "H")
+      val ava = Person(partner, "Ava", "A")
       val minute = 60_000L
 
       var counter = 0L
@@ -434,7 +434,7 @@ data class AppState(
           id = 1,
           name = "Weekly shop",
           accent = ListAccent.ACCENT,
-          people = listOf(you, hugo),
+          people = listOf(you, ava),
           items =
             listOf(
               item("Sourdough", localDevice, now - 40 * minute),
@@ -500,7 +500,7 @@ data class AppState(
           listOf(
             weekly,
             GroceryList(2, "Corner shop", ListAccent.ACCENT_2, corner, listOf(you)),
-            GroceryList(3, "Party, Saturday", ListAccent.NEUTRAL, party, listOf(you, hugo)),
+            GroceryList(3, "Party, Saturday", ListAccent.NEUTRAL, party, listOf(you, ava)),
           ),
         activeListId = 1,
         online = true,
@@ -508,8 +508,8 @@ data class AppState(
         // a network they are actually standing on, and carry its real fingerprint.
         networks =
           listOf(
-            ApprovedNetwork(NetworkFingerprint("seed01"), "Home", "Hugo is approved here too", approved = true),
-            ApprovedNetwork(NetworkFingerprint("seed02"), "Hugo's hotspot", "Used in the car", approved = true),
+            ApprovedNetwork(NetworkFingerprint("seed01"), "Home", "Ava is approved here too", approved = true),
+            ApprovedNetwork(NetworkFingerprint("seed02"), "Ava's hotspot", "Used in the car", approved = true),
             ApprovedNetwork(NetworkFingerprint("seed03"), "Mum-and-Dad", "Approved, seen in June", approved = false),
           ),
         conflict = conflict,
