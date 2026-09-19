@@ -1,8 +1,10 @@
 package io.github.molleware.porygonlist.ui
 
+import io.github.molleware.porygonlist.data.ApprovedNetwork
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.Origin
+import io.github.molleware.porygonlist.data.net.NetworkSnapshot
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import java.time.Instant
 import java.time.ZoneId
@@ -119,3 +121,27 @@ fun listCardMeta(list: GroceryList, online: Boolean, localDevice: DeviceId): Str
 
 fun itemCountLabel(list: GroceryList): String =
   "${list.liveItems.size} ${if (list.liveItems.size == 1) "item" else "items"}"
+
+/**
+ * What to call the network this phone is standing on.
+ *
+ * Three sources, in the order a person would rank them: the name they gave it, the name the network
+ * gives itself, and failing both the fingerprint's short form. The middle one is null whenever the
+ * optional location permission is not granted, which is why the third still exists.
+ *
+ * The owner's own name wins over the SSID deliberately. Someone who renamed a network to "Mum's"
+ * did it because "BT-HUB-7A2X" was not helping them.
+ *
+ * [unknown] differs between callers only in its capital letter — it starts a sentence in one place
+ * and sits mid-sentence in another.
+ */
+fun networkLabel(
+  known: ApprovedNetwork?,
+  snapshot: NetworkSnapshot,
+  wifiName: String?,
+  unknown: String = "this network",
+): String =
+  known?.name?.ifBlank { null }
+    ?: wifiName
+    ?: snapshot.fingerprint?.let { "Network ${it.short}" }
+    ?: unknown

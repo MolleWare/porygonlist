@@ -26,11 +26,15 @@ Committed on the `app-flow` branch.
 | **Transport** | **Not started.** No discovery, no socket, no TLS. |
 | Fonts | **Not fetched.** `./scripts/fetch-fonts.sh` needs a machine with network. |
 
-241 unit tests, all passing. Debug and release both assemble; lint is clean of
+269 unit tests, all passing. Debug and release both assemble; lint is clean of
 anything this work introduced.
 
-The app declares exactly one permission: `ACCESS_NETWORK_STATE`. No location, no
-Play Services, no Google dependencies of any kind.
+The app declares two permissions. `ACCESS_NETWORK_STATE` is normal-level, granted
+at install, and everything load-bearing runs on it. `ACCESS_FINE_LOCATION` is
+optional, asked for at the moment it pays off, and buys exactly one thing: the
+wifi's own name instead of `Network a3f91c`. **It decides nothing** — decline it
+and the app behaves as it did before it existed. No Play Services, no Google
+dependencies of any kind.
 
 ---
 
@@ -129,8 +133,35 @@ address is excluded because DHCP changes it; the subnet prefix does not.
 starts somewhere unintended, leaking presence but no list data, and the connection
 still has to authenticate. That is only acceptable because trust is in the keys.
 
-Reading the real SSID or BSSID would need `ACCESS_FINE_LOCATION` from Android 10
-onward, for a value that is spoofable anyway. Not worth the permission.
+### The SSID is a label, never an identity
+
+Matching is done on the fingerprint above and nothing else. The SSID is read, when
+the optional `ACCESS_FINE_LOCATION` is granted, purely so the Share screen can say
+"Kingfisher" instead of "Network a3f91c" — because a list of networks called
+`Network a3f91c` is useless for telling which one you are standing on.
+
+Keeping those two jobs apart is the whole point. An SSID is free to claim: a phone
+in a car park can advertise "Home". If it decided anything, that would be an
+attack; as a label it is merely a convenience, and `discoveryDecision` never sees
+it. The precedence is owner's name, then SSID, then fingerprint — see
+`ui/Format.kt:networkLabel`.
+
+Three things make the permission optional rather than required:
+
+- Declining it changes nothing but the name. Approval, discovery and sync are
+  unaffected, which is what was decided when the network half was first costed.
+- It is asked for on the Share screen beside the network names, not at launch.
+- `WifiName.clean` returns null for everything that is not a real name, which
+  includes the `<unknown ssid>` the framework hands back when the permission is
+  missing **or when location services are switched off** — a separate condition,
+  and the one that catches people out.
+
+**Still open:** the fingerprint is built from the *default* network, so with a VPN
+up it describes the tunnel rather than the wifi. Same wifi with the VPN toggled
+fingerprints as two networks, and — worse — the tunnel looks the same everywhere,
+so a café can match an approved home network. The name does not have this problem;
+`currentWifiName` already asks the wifi network specifically, with `NOT_VPN`. The
+fix is to fingerprint from that same network.
 
 ---
 

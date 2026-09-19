@@ -59,7 +59,7 @@ data class EditDraft(val itemId: ItemId, val name: String, val qty: Int, val add
 
 class PorygonViewModel(
   private val repo: ListRepository,
-  networkMonitor: NetworkMonitor,
+  private val monitor: NetworkMonitor,
   /** Read through a function: deleting the identity replaces the one behind it. */
   private val identity: () -> LocalIdentity,
   /** Destroys the key. Paired with [ListRepository.reset], never called on its own. */
@@ -75,7 +75,7 @@ class PorygonViewModel(
    * lists, and a stale copy read back at launch would be worse than none.
    */
   val network: StateFlow<NetworkSnapshot> =
-    networkMonitor.snapshots.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NetworkSnapshot.Offline)
+    monitor.snapshots.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NetworkSnapshot.Offline)
 
   /**
    * Whether to look for peers here — the gate that keeps the app silent on work and public wifi.
@@ -816,15 +816,51 @@ class PorygonViewModel(
       )
     }
     // Asked here rather than left for later: this is the one moment the owner certainly knows which
-    // network they just approved.
-    if (!wasKnown) {
+    // network they just approved. Not asked at all when the phone has already told us the name —
+    // demanding someone type "Kingfisher" under the word Kingfisher is ceremony, not a question.
+    if (!wasKnown && wifiName == null) {
       namingNetwork = fingerprint
       networkNameDraft = ""
     }
   }
 
   private fun approvedNow(fingerprint: NetworkFingerprint) =
-    ApprovedNetwork(fingerprint = fingerprint, name = "", detail = "Approved just now", approved = true)
+    ApprovedNetwork(
+      fingerprint = fingerprint,
+      // The network's own name if the phone will tell us it, so the common case needs no typing at
+      // all. Blank without the location permission, which is what the naming prompt is for.
+      name = wifiName.orEmpty(),
+      detail = "Approved just now",
+      approved = true,
+    )
+
+  /**
+   * The name the wifi gives itself, or null when the phone will not say.
+   *
+   * Held rather than read inline because reading it touches the framework, and composition is not
+   * the place for that. Refreshed by [refreshWifiName] when the screen that shows it opens and
+   * after the permission is asked for.
+   */
+  var wifiName by mutableStateOf<String?>(null)
+    private set
+
+  /**
+   * Re-reads the name, and adopts it for the current network if that network has none.
+   *
+   * The adoption only ever fills a blank. A name somebody typed is theirs, and an SSID turning up
+   * later must not overwrite it — they renamed it for a reason.
+   */
+  fun refreshWifiName() {
+    wifiName = monitor.currentWifiName()
+    val name = wifiName ?: return
+    val fingerprint = network.value.fingerprint ?: return
+
+    repo.update { s, _ ->
+      val known = s.networks.firstOrNull { it.fingerprint == fingerprint }
+      if (known == null || known.name.isNotBlank()) s
+      else s.copy(networks = s.networks.map { if (it.fingerprint == fingerprint) it.copy(name = name) else it })
+    }
+  }
 
   /**
    * Which network is being named, if any.

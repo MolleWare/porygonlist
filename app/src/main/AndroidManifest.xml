@@ -5,11 +5,26 @@
       Lets the app tell which link it is on, so peer discovery can be held on networks the owner
       has not opted into. Normal protection level: granted at install, no runtime prompt.
 
-      Deliberately NOT requested: ACCESS_FINE_LOCATION. Reading the SSID or BSSID needs it from
-      Android 10 onward, and those identifiers are spoofable anyway — the network is a discovery
-      hint here, never a trust decision, so the permission would buy nothing worth its cost.
+      Nothing about identifying a network depends on this: that is ACCESS_NETWORK_STATE and the
+      fingerprint below it.
     -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      Optional, and only ever for a name.
+
+      Android will not hand over the SSID of the network you are on without it, so without this the
+      Share screen can only call your wifi "Network a3f91c" — true, and useless for telling two of
+      them apart. Granting it puts the real name there instead.
+
+      What it deliberately does NOT do is decide anything. An SSID is free to claim: a phone in a
+      car park can advertise "Home". So discovery still matches on the permission-free fingerprint,
+      and the trust that matters is still the pinned key. Decline this and the app behaves exactly
+      as it did before it existed — see WifiName and docs/ARCHITECTURE.md.
+
+      maxSdkVersion is not set and must not be: the requirement runs to current Android.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <application
         android:allowBackup="true"

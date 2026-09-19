@@ -1,6 +1,12 @@
 package io.github.molleware.porygonlist
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +25,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -38,6 +47,7 @@ import io.github.molleware.porygonlist.ui.components.ImportSheet
 import io.github.molleware.porygonlist.ui.components.Tab
 import io.github.molleware.porygonlist.ui.components.TabBar
 import io.github.molleware.porygonlist.ui.itemSubLabel
+import io.github.molleware.porygonlist.ui.networkLabel
 import io.github.molleware.porygonlist.ui.partnerName
 import io.github.molleware.porygonlist.ui.screens.ListDetailScreen
 import io.github.molleware.porygonlist.ui.screens.ListsScreen
@@ -55,7 +65,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
     viewModel {
       PorygonViewModel(
         repo = Graph.listRepository(context),
-        networkMonitor = Graph.networkMonitor(context),
+        monitor = Graph.networkMonitor(context),
         identity = Graph::identity,
         deleteIdentity = Graph::deleteIdentity,
       )
@@ -67,9 +77,11 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
   // What to call the network in passing. The owner's own name for it where there is one, otherwise
   // the fingerprint's short form — never an SSID, which is not read.
   val networkLabel =
-    state?.networks?.firstOrNull { it.fingerprint == networkSnapshot.fingerprint }?.label
-      ?: networkSnapshot.fingerprint?.let { "Network ${it.short}" }
-      ?: "this network"
+    networkLabel(
+      known = state?.networks?.firstOrNull { it.fingerprint == networkSnapshot.fingerprint },
+      snapshot = networkSnapshot,
+      wifiName = viewModel.wifiName,
+    )
 
   val backStack = rememberNavBackStack(Lists)
   val current = backStack.lastOrNull() ?: Lists
@@ -250,6 +262,24 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                 )
               }
               entry<Share> {
+                // Read once per visit rather than held: the permission can be revoked from settings
+                // while the app is alive, and a cached "granted" would leave the offer hidden with
+                // no way back to it.
+                var nameGranted by remember { mutableStateOf(hasFineLocation(context)) }
+                val askForName =
+                  rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                    nameGranted = granted
+                    // Re-read straight away. Granting a permission does not make a network callback
+                    // fire, so without this the name would not appear until the wifi changed.
+                    if (granted) viewModel.refreshWifiName()
+                  }
+
+                // Covers arriving with the permission already granted, which no launcher result
+                // reports.
+                LaunchedEffect(nameGranted, networkSnapshot.fingerprint) {
+                  if (nameGranted) viewModel.refreshWifiName()
+                }
+
                 ShareScreen(
                   state = appState,
                   network = networkSnapshot,
@@ -258,6 +288,11 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onToggleNetwork = viewModel::toggleNetwork,
                   onExport = viewModel::openExport,
                   onImport = viewModel::openImport,
+                  wifiName = viewModel.wifiName,
+                  // Nothing to offer when it is already granted, or when there is no wifi for a
+                  // name to belong to.
+                  canAskForWifiName = !nameGranted && networkSnapshot.isWifi,
+                  onAskForWifiName = { askForName.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
                   namingNetwork = viewModel.namingNetwork,
                   networkNameDraft = viewModel.networkNameDraft,
                   onNetworkNameDraftChange = viewModel::onNetworkNameDraftChange,
@@ -334,6 +369,16 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
     }
   }
 }
+
+/**
+ * Whether the app may read the wifi's name.
+ *
+ * The only permission this app asks for at runtime, and it buys a label and nothing else — see the
+ * manifest and `WifiName`. Declining it costs nothing but the name.
+ */
+private fun hasFineLocation(context: Context): Boolean =
+  ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+    PackageManager.PERMISSION_GRANTED
 
 /** Switching tabs replaces the stack rather than piling destinations up behind the bar. */
 private fun androidx.navigation3.runtime.NavBackStack<NavKey>.goTo(key: NavKey) {

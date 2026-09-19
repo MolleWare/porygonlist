@@ -49,6 +49,7 @@ import io.github.molleware.porygonlist.theme.PorygonType
 import io.github.molleware.porygonlist.theme.Shapes
 import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
+import io.github.molleware.porygonlist.ui.networkLabel
 import io.github.molleware.porygonlist.ui.components.Avatar
 import io.github.molleware.porygonlist.ui.components.BackLink
 import io.github.molleware.porygonlist.ui.components.Dot
@@ -78,6 +79,11 @@ fun ShareScreen(
   onToggleNetwork: (NetworkFingerprint) -> Unit,
   onExport: () -> Unit,
   onImport: () -> Unit,
+  /** The name the wifi gives itself, when the optional location permission allows reading it. */
+  wifiName: String?,
+  /** False once the permission is granted, or when there is no wifi to name. */
+  canAskForWifiName: Boolean,
+  onAskForWifiName: () -> Unit,
   namingNetwork: NetworkFingerprint?,
   networkNameDraft: String,
   onNetworkNameDraftChange: (String) -> Unit,
@@ -120,7 +126,7 @@ fun ShareScreen(
     )
 
     CurrentNetworkPill(
-      label = here?.label ?: network.fingerprint?.let { "Network ${it.short}" } ?: "This network",
+      label = networkLabel(here, network, wifiName, unknown = "This network"),
       partner = partner,
       discovery = discovery,
       canApprove = network.fingerprint != null && !discovering,
@@ -147,8 +153,28 @@ fun ShareScreen(
       "Tap a name to rename it.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.55),
       color = Neutral700,
-      modifier = Modifier.padding(top = 14.dp, bottom = 26.dp),
+      modifier = Modifier.padding(top = 14.dp, bottom = if (canAskForWifiName) 10.dp else 26.dp),
     )
+
+    // Offered here, beside the names, rather than thrown up on arrival. The permission buys one
+    // thing — the wifi's own name instead of "Network a3f91c" — so it is asked for at the moment
+    // that is visibly what you want, and never again once it has been granted or the networks are
+    // already named.
+    if (canAskForWifiName) {
+      SecondaryButton(
+        "Use the wifi's own name",
+        onAskForWifiName,
+        modifier = Modifier.padding(bottom = 6.dp),
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp),
+      )
+      Text(
+        "Android only gives out the wifi name with location permission. It stays a label — what syncs is still decided by the code you swapped.",
+        style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.55),
+        color = Neutral700,
+        modifier = Modifier.padding(bottom = 26.dp),
+      )
+    }
 
     SectionLabel("Away from wifi", Modifier.padding(bottom = 10.dp))
     Column(
@@ -182,7 +208,7 @@ fun ShareScreen(
           person = person,
           isYou = person.device == state.localDevice,
           discovering = discovering,
-          networkLabel = here?.label ?: "this network",
+          networkLabel = networkLabel(here, network, wifiName),
           confirming = confirmingRemovalOf == person.device,
           onAskRemove = { onAskRemovePerson(person.device) },
           onCancelRemove = onCancelRemovePerson,

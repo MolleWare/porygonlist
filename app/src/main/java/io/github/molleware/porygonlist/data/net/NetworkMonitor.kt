@@ -5,6 +5,10 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.wifi.WifiInfo
+import android.net.wifi.WifiManager
+import android.os.Build
 import java.net.Inet4Address
 import java.net.InetAddress
 import kotlinx.coroutines.channels.awaitClose
@@ -15,6 +19,19 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 /** Reports the link this phone is on, as it changes. */
 interface NetworkMonitor {
   val snapshots: Flow<NetworkSnapshot>
+
+  /**
+   * The name the wifi gives itself, or null when the phone will not say.
+   *
+   * Pull rather than push, and deliberately so. The value depends on a permission that can be
+   * granted while the app is in the foreground, and granting one does not make a network callback
+   * fire again — so a name pushed through [snapshots] would stay stale until the network changed,
+   * which is precisely the moment someone is watching for it to appear. Callers read it when they
+   * need it and re-read it after asking for the permission.
+   *
+   * Never an identity. See [WifiName].
+   */
+  fun currentWifiName(): String?
 }
 
 /**
@@ -27,7 +44,7 @@ interface NetworkMonitor {
  * Not unit-tested — it is a thin adapter onto framework types, and the decision it feeds is pure
  * and tested on its own.
  */
-class AndroidNetworkMonitor(context: Context) : NetworkMonitor {
+class AndroidNetworkMonitor(private val context: Context) : NetworkMonitor {
 
   private val connectivity =
     context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -70,6 +87,40 @@ class AndroidNetworkMonitor(context: Context) : NetworkMonitor {
         awaitClose { if (registered) runCatching { connectivity.unregisterNetworkCallback(callback) } }
       }
       .distinctUntilChanged()
+
+  /**
+   * Reads the SSID off the wifi network, whatever the default network happens to be.
+   *
+   * Asked of the *wifi* network rather than the default one because of VPNs: with a tunnel up the
+   * default network is the tunnel, and its capabilities carry no `WifiInfo` at all — so the name
+   * would come back empty exactly for the people running a VPN. `NOT_VPN` keeps this to the real
+   * link.
+   *
+   * `transportInfo` carries the `WifiInfo` from Android 10; below that the only route is
+   * `WifiManager`, and this app's floor is API 26, so the older path stays. Either way the value is
+   * redacted to `<unknown ssid>` unless `ACCESS_FINE_LOCATION` is granted **and** location services
+   * are switched on — [WifiName.clean] turns both into null.
+   */
+  @Suppress("DEPRECATION")
+  override fun currentWifiName(): String? =
+    runCatching {
+        val raw =
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val wifi =
+              connectivity.allNetworks.firstOrNull { network ->
+                val caps = connectivity.getNetworkCapabilities(network)
+                caps != null &&
+                  caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
+                  caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+              }
+            (wifi?.let { connectivity.getNetworkCapabilities(it) }?.transportInfo as? WifiInfo)?.ssid
+          } else {
+            val manager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            manager?.connectionInfo?.ssid
+          }
+        WifiName.clean(raw)
+      }
+      .getOrNull()
 
   private fun snapshotOf(capabilities: NetworkCapabilities?, link: LinkProperties?): NetworkSnapshot {
     if (capabilities == null) return NetworkSnapshot.Offline
