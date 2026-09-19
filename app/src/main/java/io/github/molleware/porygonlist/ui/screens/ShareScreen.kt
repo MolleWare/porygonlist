@@ -61,7 +61,6 @@ import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
 import io.github.molleware.porygonlist.ui.others
-import io.github.molleware.porygonlist.ui.partnerName
 
 /**
  * Where sharing is explained and controlled.
@@ -101,7 +100,9 @@ fun ShareScreen(
   modifier: Modifier = Modifier,
 ) {
   val list = state.activeList
-  val partner = list.partnerName(state.localDevice)
+  // Null when nobody else is on this list. "looking for them here" with no "them" is the screen
+  // inventing a person, which is the same thing the Lists banner used to do.
+  val partner = list.others(state.localDevice).firstOrNull()?.name
   val discovering = discovery is DiscoveryDecision.Discover
   val here = state.networks.firstOrNull { it.fingerprint == network.fingerprint }
 
@@ -118,7 +119,7 @@ fun ShareScreen(
       modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
     )
     Text(
-      if (list.others(state.localDevice).isEmpty()) "Nobody else has this list yet."
+      if (partner == null) "Nobody else has this list yet."
       else "Syncs with $partner on an approved network.",
       style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.55),
       color = Neutral700,
@@ -342,7 +343,7 @@ private fun StrandedRemovals(
 @Composable
 private fun CurrentNetworkPill(
   label: String,
-  partner: String,
+  partner: String?,
   discovery: DiscoveryDecision,
   canApprove: Boolean,
   onApprove: () -> Unit,
@@ -363,15 +364,13 @@ private fun CurrentNetworkPill(
         append(" — ")
         append(
           when {
-            discovering -> "looking for $partner here"
+            discovering && partner != null -> "looking for $partner here"
+            discovering -> "looking here"
             discovery is DiscoveryDecision.Hold ->
               when (discovery.reason) {
                 // The dot beside this is already the "nothing is leaving" signal; five variants
                 // spelling it out in words made the banner the longest line on the screen.
                 HoldReason.OFFLINE -> "no network"
-                // Names the thing to turn off. "not approved" would be a lie here and "not
-                // recognised" would send somebody to their router.
-                HoldReason.VPN -> "VPN on, nothing can reach the other phone"
                 HoldReason.NOT_WIFI -> "not wifi"
                 // Names the VPN rather than saying "not recognised", because this one is a switch
                 // the owner can flip — and would not think to, if the banner blamed the network.

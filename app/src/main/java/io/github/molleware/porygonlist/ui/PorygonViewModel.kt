@@ -821,7 +821,7 @@ class PorygonViewModel(
     // Asked here rather than left for later: this is the one moment the owner certainly knows which
     // network they just approved. Not asked at all when the phone has already told us the name —
     // demanding someone type "Kingfisher" under the word Kingfisher is ceremony, not a question.
-    if (!wasKnown && wifiName == null) {
+    if (!wasKnown && wifiName.value == null) {
       namingNetwork = fingerprint
       networkNameDraft = ""
     }
@@ -832,7 +832,7 @@ class PorygonViewModel(
       fingerprint = fingerprint,
       // The network's own name if the phone will tell us it, so the common case needs no typing at
       // all. Blank without the location permission, which is what the naming prompt is for.
-      name = wifiName.orEmpty(),
+      name = wifiName.value.orEmpty(),
       detail = "Approved just now",
       approved = true,
     )
@@ -840,28 +840,39 @@ class PorygonViewModel(
   /**
    * The name the wifi gives itself, or null when the phone will not say.
    *
-   * Held rather than read inline because reading it touches the framework, and composition is not
-   * the place for that. Refreshed by [refreshWifiName] when the screen that shows it opens and
-   * after the permission is asked for.
+   * Straight from the monitor, which can only learn it asynchronously — see [NetworkMonitor.wifiName].
    */
-  var wifiName by mutableStateOf<String?>(null)
-    private set
+  val wifiName: StateFlow<String?> = monitor.wifiName
 
-  /**
-   * Re-reads the name, and adopts it for the current network if that network has none.
-   *
-   * The adoption only ever fills a blank. A name somebody typed is theirs, and an SSID turning up
-   * later must not overwrite it — they renamed it for a reason.
-   */
-  fun refreshWifiName() {
-    wifiName = monitor.currentWifiName()
-    val name = wifiName ?: return
-    val fingerprint = network.value.fingerprint ?: return
+  /** Asks the monitor to look again. Call after the location permission is granted. */
+  fun refreshWifiName() = monitor.refreshWifiName()
 
-    repo.update { s, _ ->
-      val known = s.networks.firstOrNull { it.fingerprint == fingerprint }
-      if (known == null || known.name.isNotBlank()) s
-      else s.copy(networks = s.networks.map { if (it.fingerprint == fingerprint) it.copy(name = name) else it })
+  init {
+    // The name is wanted on every screen that names the network, not only the one that can ask for
+    // the permission — asking on the Share screen alone left the Lists banner saying
+    // "Network 0833af" for the rest of the session.
+    //
+    // Hung off `network` rather than run in the constructor body so it stays off the startup path:
+    // that flow is WhileSubscribed, so nothing here happens until the UI subscribes, which is after
+    // the first frame.
+    viewModelScope.launch { network.collect { monitor.refreshWifiName() } }
+
+    // Adopting the name is separate from reading it, because it arrives later than the network
+    // does. Only ever fills a blank: a name somebody typed is theirs, and an SSID turning up
+    // afterwards must not overwrite it — they renamed it for a reason.
+    viewModelScope.launch {
+      wifiName.collect { name ->
+        if (name == null) return@collect
+        val fingerprint = network.value.fingerprint ?: return@collect
+        val known = state.value?.networks?.firstOrNull { it.fingerprint == fingerprint }
+        // Checked before writing rather than inside the update: a no-op that still goes through
+        // repo.update is a save this app has no reason to make.
+        if (known == null || known.name.isNotBlank()) return@collect
+
+        repo.update { s, _ ->
+          s.copy(networks = s.networks.map { if (it.fingerprint == fingerprint) it.copy(name = name) else it })
+        }
+      }
     }
   }
 

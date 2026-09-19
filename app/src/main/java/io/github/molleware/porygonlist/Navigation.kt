@@ -73,14 +73,15 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
   val state by viewModel.state.collectAsStateWithLifecycle()
   val networkSnapshot by viewModel.network.collectAsStateWithLifecycle()
   val discovery by viewModel.discovery.collectAsStateWithLifecycle()
+  val wifiName by viewModel.wifiName.collectAsStateWithLifecycle()
 
-  // What to call the network in passing. The owner's own name for it where there is one, otherwise
-  // the fingerprint's short form — never an SSID, which is not read.
+  // What to call the network in passing: the owner's own name for it, then the wifi's own name if
+  // the optional permission allows reading it, then the fingerprint's short form.
   val networkLabel =
     networkLabel(
       known = state?.networks?.firstOrNull { it.fingerprint == networkSnapshot.fingerprint },
       snapshot = networkSnapshot,
-      wifiName = viewModel.wifiName,
+      wifiName = wifiName,
     )
 
   val backStack = rememberNavBackStack(Lists)
@@ -274,12 +275,6 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                     if (granted) viewModel.refreshWifiName()
                   }
 
-                // Covers arriving with the permission already granted, which no launcher result
-                // reports.
-                LaunchedEffect(nameGranted, networkSnapshot.fingerprint) {
-                  if (nameGranted) viewModel.refreshWifiName()
-                }
-
                 ShareScreen(
                   state = appState,
                   network = networkSnapshot,
@@ -288,7 +283,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onToggleNetwork = viewModel::toggleNetwork,
                   onExport = viewModel::openExport,
                   onImport = viewModel::openImport,
-                  wifiName = viewModel.wifiName,
+                  wifiName = wifiName,
                   // Nothing to offer when it is already granted, or when there is no wifi for a
                   // name to belong to.
                   canAskForWifiName = !nameGranted && networkSnapshot.isWifi,

@@ -70,8 +70,10 @@ private class FakeRepository(private val identity: () -> LocalIdentity) : ListRe
 private object OfflineMonitor : NetworkMonitor {
   override val snapshots = flowOf(NetworkSnapshot.Offline)
 
-  /** Offline, so there is no wifi and no name to read. */
-  override fun currentWifiName(): String? = null
+  /** Offline, so there is no wifi and never a name. */
+  override val wifiName = MutableStateFlow<String?>(null)
+
+  override fun refreshWifiName() = Unit
 }
 
 class PorygonViewModelTest {

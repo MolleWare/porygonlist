@@ -9,10 +9,14 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import androidx.annotation.RequiresApi
 import java.net.Inet4Address
 import java.net.InetAddress
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -23,15 +27,24 @@ interface NetworkMonitor {
   /**
    * The name the wifi gives itself, or null when the phone will not say.
    *
-   * Pull rather than push, and deliberately so. The value depends on a permission that can be
-   * granted while the app is in the foreground, and granting one does not make a network callback
-   * fire again — so a name pushed through [snapshots] would stay stale until the network changed,
-   * which is precisely the moment someone is watching for it to appear. Callers read it when they
-   * need it and re-read it after asking for the permission.
+   * A flow rather than a getter because of how Android hands this over. From API 31 a
+   * `WifiInfo` read through `getNetworkCapabilities` comes back with its location-sensitive
+   * fields **redacted regardless of permission** — an unredacted one arrives only through a
+   * registered `NetworkCallback`. So there is nothing to return synchronously, and the value
+   * turns up shortly after [refreshWifiName] asks for it.
    *
    * Never an identity. See [WifiName].
    */
-  fun currentWifiName(): String?
+  val wifiName: StateFlow<String?>
+
+  /**
+   * Starts watching for the name, or looks again.
+   *
+   * Called once when something wants the name, and again after the location permission is granted:
+   * granting does not make an existing callback re-fire, so the registration is torn down and
+   * remade to force a fresh, unredacted one.
+   */
+  fun refreshWifiName()
 }
 
 /**
@@ -88,32 +101,91 @@ class AndroidNetworkMonitor(private val context: Context) : NetworkMonitor {
       }
       .distinctUntilChanged()
 
+  private val _wifiName = MutableStateFlow<String?>(null)
+  override val wifiName: StateFlow<String?> = _wifiName.asStateFlow()
+
+  private var registered: ConnectivityManager.NetworkCallback? = null
+
   /**
-   * Reads the SSID off the wifi network, whatever the default network happens to be.
+   * Registers — or re-registers — the callback that carries the name.
+   *
+   * The re-registration is the point. `getNetworkCapabilities` redacts the `WifiInfo` from API 31
+   * whatever permission is held, so the name can only arrive through a callback; and granting a
+   * permission does not make an already-registered callback fire again. Tearing the registration
+   * down and remaking it is what produces a fresh, unredacted one the moment somebody says yes.
    *
    * Asked of the *wifi* network rather than the default one because of VPNs: with a tunnel up the
-   * default network is the tunnel, and its capabilities carry no `WifiInfo` at all — so the name
-   * would come back empty exactly for the people running a VPN. `NOT_VPN` keeps this to the real
-   * link.
+   * default network is the tunnel, whose capabilities carry no `WifiInfo` at all, so the name would
+   * go missing for exactly the people running one. `NOT_VPN` keeps this on the real link.
+   */
+  override fun refreshWifiName() {
+    registered?.let { existing -> runCatching { connectivity.unregisterNetworkCallback(existing) } }
+    registered = null
+
+    val callback = wifiCallback()
+    val request =
+      NetworkRequest.Builder()
+        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+        .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+        .build()
+
+    // A name is a nicety, so failing to register is silent: the fingerprint's short form still
+    // names the network and nothing else depends on this.
+    if (runCatching { connectivity.registerNetworkCallback(request, callback) }.isSuccess) {
+      registered = callback
+    }
+  }
+
+  /**
+   * The callback, asking for location-sensitive fields where that has to be asked for.
+   *
+   * From API 31 holding `ACCESS_FINE_LOCATION` is **not enough on its own**: a `WifiInfo` delivered
+   * to a callback built the ordinary way comes back with the SSID as `<unknown ssid>` and the BSSID
+   * as `02:00:00:00:00:00`, while every other field — address, signal, link speed — is real. The
+   * callback has to be *constructed* with [FLAG_INCLUDE_LOCATION_INFO] to opt into them.
+   *
+   * That flag arrived in API 31, so below it the plain constructor is the only one there is, and
+   * nothing is redacted there anyway.
+   */
+  private fun wifiCallback(): ConnectivityManager.NetworkCallback =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) LocatedWifiCallback() else PlainWifiCallback()
+
+  private fun nameChanged(caps: NetworkCapabilities) {
+    _wifiName.value = nameFrom(caps)
+  }
+
+  private fun nameLost() {
+    _wifiName.value = null
+  }
+
+  @RequiresApi(Build.VERSION_CODES.S)
+  private inner class LocatedWifiCallback :
+    ConnectivityManager.NetworkCallback(FLAG_INCLUDE_LOCATION_INFO) {
+    override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = nameChanged(caps)
+
+    override fun onLost(network: Network) = nameLost()
+  }
+
+  private inner class PlainWifiCallback : ConnectivityManager.NetworkCallback() {
+    override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = nameChanged(caps)
+
+    override fun onLost(network: Network) = nameLost()
+  }
+
+  /**
+   * The SSID out of a wifi network's capabilities.
    *
    * `transportInfo` carries the `WifiInfo` from Android 10; below that the only route is
    * `WifiManager`, and this app's floor is API 26, so the older path stays. Either way the value is
-   * redacted to `<unknown ssid>` unless `ACCESS_FINE_LOCATION` is granted **and** location services
-   * are switched on — [WifiName.clean] turns both into null.
+   * `<unknown ssid>` unless `ACCESS_FINE_LOCATION` is granted **and** location services are on —
+   * [WifiName.clean] turns both into null.
    */
   @Suppress("DEPRECATION")
-  override fun currentWifiName(): String? =
+  private fun nameFrom(caps: NetworkCapabilities): String? =
     runCatching {
         val raw =
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val wifi =
-              connectivity.allNetworks.firstOrNull { network ->
-                val caps = connectivity.getNetworkCapabilities(network)
-                caps != null &&
-                  caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
-                  caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
-              }
-            (wifi?.let { connectivity.getNetworkCapabilities(it) }?.transportInfo as? WifiInfo)?.ssid
+            (caps.transportInfo as? WifiInfo)?.ssid
           } else {
             val manager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
             manager?.connectionInfo?.ssid

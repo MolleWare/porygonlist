@@ -237,7 +237,9 @@ private fun ListEditCard(
  */
 @Composable
 private fun SyncPill(state: AppState, networkLabel: String, onToggle: () -> Unit) {
-  val partner = state.lists.flatMap { it.people }.firstOrNull { it.device != state.localDevice }?.name ?: "them"
+  // Null, not "them", when nobody else is on any list. "In step with them" beside a card reading
+  // "just you" is the app claiming to have synced with somebody who does not exist.
+  val partner = state.lists.flatMap { it.people }.firstOrNull { it.device != state.localDevice }?.name
   val waiting = state.lists.sumOf { list -> list.items.count { it.pending } }
 
   Row(
@@ -251,7 +253,11 @@ private fun SyncPill(state: AppState, networkLabel: String, onToggle: () -> Unit
   ) {
     Dot(if (state.online) Accent2 else Accent)
     Text(
-      if (state.online) "In step with $partner" else "Off the network",
+      when {
+        !state.online -> "Off the network"
+        partner != null -> "In step with $partner"
+        else -> "Nobody to sync with yet"
+      },
       style = PorygonType.MetaBold,
       color = TextInk,
     )
