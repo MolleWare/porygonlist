@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Themed-icon layer: the same bird as a single silhouette.
+
+  Android tints this layer with the wallpaper's colours and throws the rest of
+  the icon away, so facets are no use here — only the outline survives. The
+  vertices are the outer ones from `ic_launcher_foreground.xml`, in order; the
+  eye is a second subpath punched out by evenOdd, which is what keeps the shape
+  from reading as a lump at launcher size.
+
+  Edit this whenever the foreground's outline moves, or the themed icon will
+  quietly be a different bird from the normal one.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#000000"
+        android:fillType="evenOdd"
+        android:pathData="M84,42 L62,34 L56,24 L28,40 L36,56 L26,70 L46,79 L68,64 L64,48 Z M60,33 L66,39 L60,45 L54,39 Z" />
+</vector>
