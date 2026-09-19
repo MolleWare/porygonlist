@@ -17,6 +17,12 @@ local.properties
 # Machine-specific script configuration. See scripts/env.local.sh.example.
 /scripts/env.local.sh
 
+# Per-machine agent permissions. The shared .claude/settings.json is committed;
+# this one accumulates absolute paths from whoever's machine it is. It is also
+# covered by the usual global gitignore, which is exactly why it belongs here
+# too — a contributor cloning this repo does not have that global rule.
+.claude/settings.local.json
+
 # Signing material. This repository is public: a leaked upload key cannot be
 # rotated for an app already published, so these must never be committed.
 *.jks

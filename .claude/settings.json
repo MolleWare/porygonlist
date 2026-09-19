@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/build.sh *)",
+      "Bash(./scripts/device.sh *)",
+      "Bash(./scripts/startup.sh *)",
+      "Bash(./scripts/install.sh *)",
+      "Bash(./scripts/logs.sh *)",
+      "Bash(./scripts/test.sh *)",
+      "Bash(./gradlew :app:assembleDebug *)",
+      "Bash(./gradlew :app:compileDebugKotlin *)",
+      "Bash(./gradlew :app:testDebugUnitTest *)"
+    ]
+  }
+}
