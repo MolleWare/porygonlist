@@ -55,10 +55,13 @@ private val QR_SIZE = 232.dp
  * Two phones agreeing to recognise each other.
  *
  * Both halves are on one screen because pairing is symmetric: each phone has to end up holding the
- * other's key, so whoever is looking at this has to both show a code and take one. Showing is a QR
- * code the other phone's own camera app can read; taking one means pasting it, or tapping the link
- * they sent. There is no camera here and no camera permission — what makes this trustworthy is the
- * channel the code travelled, not the format it travelled in.
+ * other's key, so whoever is looking at this has to both show a code and take one — and the screen
+ * says which is which, in those terms. Show yours: they point their camera at it. Take theirs: point
+ * your own camera app at their screen, because the invite is a link and the phone already knows how
+ * to open one.
+ *
+ * There is no camera in this app and no camera permission. That is the point rather than a gap: what
+ * makes pairing trustworthy is the channel the code travelled, not the format it travelled in.
  *
  * The code is a public key and a name. It carries no secret, so it is safe in a message, and it
  * cannot be used to impersonate the phone that showed it.
@@ -114,9 +117,15 @@ fun PairScreen(
         QrCodeImage(
           code = qr,
           contentDescription = "Your pairing code as a QR code. The text below says the same thing.",
-          modifier = Modifier.align(Alignment.CenterHorizontally).size(QR_SIZE).padding(bottom = 14.dp),
+          modifier = Modifier.align(Alignment.CenterHorizontally).size(QR_SIZE).padding(bottom = 12.dp),
           dark = Accent900,
           light = Accent100,
+        )
+        Text(
+          "Have them point their camera at this.",
+          style = PorygonType.Meta,
+          color = Accent800,
+          modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp),
         )
       }
       Text(
@@ -142,11 +151,18 @@ fun PairScreen(
       )
     }
 
-    SectionLabel("Their code", Modifier.padding(top = 26.dp, bottom = 10.dp))
+    SectionLabel("Their code", Modifier.padding(top = 26.dp, bottom = 6.dp))
+    Text(
+      "Open your own camera app and point it at the code on their screen — it will offer to open " +
+        "porygonlist, and their code lands here. If they sent it instead, tap the link or paste it below.",
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(bottom = 12.dp),
+    )
     PorygonTextField(
       value = code,
       onValueChange = onCodeChange,
-      placeholder = "Paste the code they sent you",
+      placeholder = "Or paste their code",
       modifier = Modifier.fillMaxWidth(),
       shape = Shapes.Row,
       singleLine = false,
@@ -204,22 +220,15 @@ fun PairScreen(
       }
     }
 
-    Column(
-      Modifier.fillMaxWidth()
-        .padding(top = 26.dp)
-        .clip(Shapes.Row)
-        .background(Surface)
-        .padding(horizontal = 16.dp, vertical = 14.dp)
-    ) {
-      Text("Use their camera, not this one", style = PorygonType.RowName, color = TextInk)
-      Text(
-        "Point their phone's ordinary camera at the code above and it will offer to open " +
-          "porygonlist. This app never asks for the camera itself. Going the other way, have them " +
-          "send you their code — it is a link, so tapping it brings it straight here.",
-        style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
-        color = Neutral700,
-        modifier = Modifier.padding(top = 4.dp),
-      )
-    }
+    // Worth saying once, quietly, at the foot: the camera in this flow is always the phone's own
+    // camera app, never this one. That is a deliberate property rather than a missing feature, and
+    // somebody looking for a "scan" button here should find out why there isn't one.
+    Text(
+      "Porygonlist never asks for your camera. Your phone's camera app already reads these, and " +
+        "the code carries a public key and a name — no secret either way.",
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(top = 26.dp),
+    )
   }
 }
