@@ -63,16 +63,18 @@ object Elevation {
 /**
  * The design is light-only. Shopping mode is deliberately dark, but that is one screen painting
  * itself on the neutral-900 ground rather than a second theme — so there is no dark colour scheme
- * here, and no dynamic colour: the amber palette is the brand.
+ * here, and no dynamic colour: the green/terracotta palette is the brand.
+ *
+ * Both accents are dark, so every `on*` role that sits on one is a light tint from the same ramp.
  */
 private val PorygonColorScheme =
   lightColorScheme(
     primary = Accent,
-    onPrimary = Accent900,
+    onPrimary = Accent100,
     primaryContainer = Accent100,
     onPrimaryContainer = Accent800,
     secondary = Accent2,
-    onSecondary = Neutral100,
+    onSecondary = Accent2100,
     secondaryContainer = Accent2100,
     onSecondaryContainer = Accent2800,
     background = Bg,

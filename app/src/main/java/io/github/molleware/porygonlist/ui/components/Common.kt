@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.molleware.porygonlist.theme.Accent
+import io.github.molleware.porygonlist.theme.Accent100
+import io.github.molleware.porygonlist.theme.Accent400
 import io.github.molleware.porygonlist.theme.Accent900
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.theme.Divider
@@ -128,7 +130,7 @@ fun PrimaryButton(
     modifier.clip(Shapes.Pill).background(Accent).clickable(onClick = onClick).padding(contentPadding),
     contentAlignment = Alignment.Center,
   ) {
-    Text(text, style = style.copy(fontFamily = PorygonType.InlineHeading.fontFamily), color = Accent900, textAlign = TextAlign.Center)
+    Text(text, style = style.copy(fontFamily = PorygonType.InlineHeading.fontFamily), color = Accent100, textAlign = TextAlign.Center)
   }
 }
 
@@ -160,7 +162,7 @@ fun IconActionButton(
   size: Dp = 46.dp,
   iconSize: Dp = 20.dp,
   background: Color = Accent,
-  tint: Color = Accent900,
+  tint: Color = Accent100,
   strokeWidth: Float = 2.9f,
   border: Color? = null,
 ) {
@@ -190,12 +192,17 @@ fun CheckCircle(
   dark: Boolean = false,
   iconSize: Dp = 14.dp,
 ) {
-  val borderColor = if (checked) Accent else if (dark) ShopBoxBorder else Neutral400
+  // The accent is a dark green, so on shopping mode's dark ground a filled circle would vanish
+  // (1.4:1). There the fill steps up the ramp and the mark steps down — the same inversion the
+  // "Leave shopping mode" link and the tab bar already make.
+  val fill = if (dark) Accent400 else Accent
+  val mark = if (dark) Accent900 else Accent100
+  val borderColor = if (checked) fill else if (dark) ShopBoxBorder else Neutral400
   Box(
     modifier
       .size(size)
       .clip(CircleShape)
-      .background(if (checked) Accent else Color.Transparent)
+      .background(if (checked) fill else Color.Transparent)
       .border(2.dp, borderColor, CircleShape),
     contentAlignment = Alignment.Center,
   ) {
@@ -205,7 +212,7 @@ fun CheckCircle(
         contentDescription = null,
         size = iconSize,
         strokeWidth = 3.2f,
-        tint = Bg,
+        tint = mark,
       )
     }
   }

@@ -3,63 +3,81 @@ package io.github.molleware.porygonlist.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Design tokens from the Claude Design handoff (`Porygonlist.dc.html`).
+ * Palette: ColorHunt `1d4533-f7eae0-f9d2ba-5e3122` — deep green, cream, peach, brown.
  *
- * The bundle has two layers: the "Organic" design system in `_ds/.../styles.css`, and an inline
- * `<style>` block in the design file that redefines every colour token. The inline block wins, so
- * these are the amber/brown values the screen actually renders — not the orange/sage in the DS file.
- * The DS still governs radii, shadows and type.
+ * This replaces the amber/brown values ported from the Claude Design handoff (`Porygonlist.dc.html`).
+ * Radii, shadows and type still come from that handoff; only colour is ours. If a fresh handoff zip
+ * ever lands it will carry the old amber tokens and overwrite this file — re-apply these.
+ *
+ * Unlike the pastel set this replaces, these four span the range: two near-whites for the grounds
+ * and two darks that can carry a control on their own. So both accents are **dark, with light
+ * labels** — the inverse of the pastel scheme, and closer to how the original design treated its
+ * brown second accent.
+ *
+ * The ramps extend each source hue along the shared lightness scale the amber ramps used, so the
+ * design's tonal rhythm survives the swap. Green and brown both land on step 800, which makes them
+ * a matched pair: the same value, distinguished only by hue.
+ *
+ * One consequence worth knowing: a dark accent is invisible on shopping mode's dark ground (1.44:1),
+ * so that screen steps up to the 300/400 rungs. The design already did this for its back link, and
+ * [TabBar] already did it for its labels; the rule is now applied consistently.
  */
 
-// Semantic roles.
-val Bg = Color(0xFFF8EED4)
-val Surface = Color(0xFFF0DFB4)
-val TextInk = Color(0xFF241A08)
-val Accent = Color(0xFFE5A81C)
-val Accent2 = Color(0xFF6B4A20)
+// The palette, verbatim.
+private val PaletteGreen = Color(0xFF1D4533)
+private val PaletteCream = Color(0xFFF7EAE0)
+private val PalettePeach = Color(0xFFF9D2BA)
+private val PaletteBrown = Color(0xFF5E3122)
 
-/** `color-mix(in srgb, #241a08 16%, transparent)` — the ink at 16% alpha. */
+// Semantic roles.
+val Bg = PaletteCream
+val Surface = PalettePeach
+val TextInk = Color(0xFF2C1A15)
+val Accent = PaletteGreen
+val Accent2 = PaletteBrown
+
+/** The ink at 16% alpha, as the design's `color-mix(… 16%, transparent)` divider. */
 val Divider = TextInk.copy(alpha = 0.16f)
 
 // Tonal ramps. Generated in OKLCH on one shared lightness scale, so the same step of any role
-// matches the others in visual value.
-val Neutral100 = Color(0xFFFBF5E8)
-val Neutral200 = Color(0xFFF1E7D2)
-val Neutral300 = Color(0xFFDED0B4)
-val Neutral400 = Color(0xFFC2B190)
-val Neutral500 = Color(0xFFA39272)
-val Neutral600 = Color(0xFF847357)
-val Neutral700 = Color(0xFF66573E)
-val Neutral800 = Color(0xFF483C28)
-val Neutral900 = Color(0xFF2B2317)
+// matches the others in visual value. Step 800 of each accent ramp is a palette colour verbatim.
+val Neutral100 = Color(0xFFFAF4F0)
+val Neutral200 = Color(0xFFF0E6DE)
+val Neutral300 = Color(0xFFDECEC2)
+val Neutral400 = Color(0xFFC1AFA2)
+val Neutral500 = Color(0xFFA29183)
+val Neutral600 = Color(0xFF817267)
+val Neutral700 = Color(0xFF63574D)
+val Neutral800 = Color(0xFF453C35)
+val Neutral900 = Color(0xFF29231F)
 
-val Accent100 = Color(0xFFFFF8DE)
-val Accent200 = Color(0xFFFFEEB0)
-val Accent300 = Color(0xFFFFDC72)
-val Accent400 = Color(0xFFF6C33C)
-val Accent500 = Color(0xFFE5A81C)
-val Accent600 = Color(0xFFC08900)
-val Accent700 = Color(0xFF976A00)
-val Accent800 = Color(0xFF6D4C02)
-val Accent900 = Color(0xFF463104)
+val Accent100 = Color(0xFFE6FCF0)
+val Accent200 = Color(0xFFCCF3DE)
+val Accent300 = Color(0xFFA4E2C2)
+val Accent400 = Color(0xFF7CC5A2)
+val Accent500 = Color(0xFF5DA683)
+val Accent600 = Color(0xFF438567)
+val Accent700 = Color(0xFF30664D)
+val Accent800 = PaletteGreen
+val Accent900 = Color(0xFF132A1F)
 
-val Accent2100 = Color(0xFFF8ECE0)
-val Accent2200 = Color(0xFFECD9C3)
-val Accent2300 = Color(0xFFD8BC9C)
-val Accent2400 = Color(0xFFBD9A71)
-val Accent2500 = Color(0xFF9D7A4F)
-val Accent2600 = Color(0xFF7F5D33)
-val Accent2700 = Color(0xFF624521)
-val Accent2800 = Color(0xFF452F16)
-val Accent2900 = Color(0xFF2C1E0E)
+val Accent2100 = Color(0xFFFFF0E4)
+val Accent2200 = Color(0xFFFFDDC8)
+val Accent2300 = Color(0xFFFFC0A0)
+val Accent2400 = Color(0xFFEB9E79)
+val Accent2500 = Color(0xFFC97F5B)
+val Accent2600 = Color(0xFFA46343)
+val Accent2700 = Color(0xFF7F4A30)
+val Accent2800 = PaletteBrown
+val Accent2900 = Color(0xFF351E12)
 
 /**
- * Shadow ink. The inline override does not touch `--shadow-*`, so these keep the design system's
- * own neutral-900 (#2e2b25) rather than the overridden one above.
+ * Shadow ink. The design system's own neutral-900, left untinted so the lift under cards and sheets
+ * stays a plain dark rather than picking up the palette's warmth.
  */
 val ShadowInk = Color(0xFF2E2B25)
 
-/** Scrim behind the bottom sheets: `color-mix(in srgb, var(--color-neutral-900) 45%, transparent)`. */
+/** Scrim behind the bottom sheets: the design's neutral-900 at 45%. */
 val SheetScrim = Neutral900.copy(alpha = 0.45f)
 
 // Shop mode paints straight onto the dark ground with white alphas rather than ramp steps.
