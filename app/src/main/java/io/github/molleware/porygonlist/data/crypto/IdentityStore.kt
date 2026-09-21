@@ -21,6 +21,20 @@ interface LocalIdentity {
   val publicKey: ByteArray
 
   fun sign(data: ByteArray): ByteArray
+
+  /**
+   * The same key pair as something TLS can present, or null where there is none to present.
+   *
+   * The certificate is not built here and does not need a library: generating a key in the Android
+   * Keystore **also generates a self-signed X.509 certificate wrapping it**, which comes back from
+   * `getCertificate(alias)`. Its subject and validity are whatever the platform chose and none of
+   * it is believed by anything — a peer pins [publicKey] and ignores the rest of the certificate,
+   * because the certificate is only the envelope TLS insists the key travel in.
+   *
+   * The private key it comes with is an opaque keystore handle rather than key material. It can be
+   * signed with and not read, which is what keeps the identity on the phone even here.
+   */
+  fun keyEntry(): java.security.KeyStore.PrivateKeyEntry?
 }
 
 interface IdentityStore {
@@ -69,6 +83,9 @@ class AndroidKeystoreIdentityStore(private val alias: String = DEFAULT_ALIAS) : 
           sign()
         }
       }
+
+      override fun keyEntry(): KeyStore.PrivateKeyEntry? =
+        runCatching { keyStore.getEntry(alias, null) as? KeyStore.PrivateKeyEntry }.getOrNull()
     }
   }
 
@@ -80,7 +97,22 @@ class AndroidKeystoreIdentityStore(private val alias: String = DEFAULT_ALIAS) : 
     val spec =
       KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY)
         .setAlgorithmParameterSpec(ECGenParameterSpec(CURVE))
-        .setDigests(KeyProperties.DIGEST_SHA256)
+        // SHA-256 is what [LocalIdentity.sign] asks for. DIGEST_NONE is what **TLS** asks for, and
+        // leaving it out is why a pinned handshake on a real phone closed without an error on
+        // either side: Conscrypt hashes the handshake transcript itself and hands the key a raw
+        // 32-byte digest to sign, so a key authorised only for SHA-256 refuses, and the server
+        // hangs up before it has sent a certificate. Measured on a Pixel 6 — with NONE added the
+        // same code negotiates TLSv1.3 / TLS_AES_128_GCM_SHA256 first time.
+        //
+        // What it costs: the key will sign any 32 bytes put in front of it, rather than only
+        // things it has hashed itself. That is the same bargain every keystore-backed client
+        // certificate on Android makes, and this key signs nothing but handshakes and its own
+        // pairing invites.
+        //
+        // **Adding this to an existing key is not possible.** Authorised digests are fixed when
+        // the key is generated, so a phone whose identity predates this has to mint a new one —
+        // and a new key is a new DeviceId. See docs/ARCHITECTURE.md.
+        .setDigests(KeyProperties.DIGEST_NONE, KeyProperties.DIGEST_SHA256)
         // Deliberately not requiring user authentication: sync has to work with the phone in a
         // pocket, and the key guards a grocery list.
         .build()
@@ -125,6 +157,16 @@ class InMemoryIdentityStore(seedKeyPair: java.security.KeyPair? = null) : Identi
               update(data)
               sign()
             }
+
+          /**
+           * Null: there is no certificate here, so there is nothing TLS could present.
+           *
+           * Generating one would mean hand-writing an X.509 encoder for a fixture, and the thing
+           * it would be standing in for — the platform minting a certificate alongside a keystore
+           * key — is exactly the part that cannot be reproduced off a device. Callers already
+           * treat null as "cannot serve TLS", so a preview or a JVM test simply does not.
+           */
+          override fun keyEntry(): java.security.KeyStore.PrivateKeyEntry? = null
         }
         .also { cached = it }
 

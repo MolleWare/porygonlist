@@ -14,6 +14,10 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        // Never set, which is why `./scripts/test.sh instrumented` could only ever report an empty
+        // suite: without a runner the androidTest variant has nothing to execute the tests with.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
