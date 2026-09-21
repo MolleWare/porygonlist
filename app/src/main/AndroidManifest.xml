@@ -11,6 +11,22 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!--
+      Opening and accepting sockets. Normal protection level: granted at install, no runtime
+      prompt, and it is the permission Android requires for any socket at all — there is no
+      narrower one meaning "the local network only".
+
+      So the name overstates what this app does with it, and the limit has to come from the code
+      rather than from the manifest. Nothing here ever addresses anything off the link: peers are
+      found by mDNS on the local subnet, the address connected to is one the responder gave, and
+      the whole of it is held shut unless discoveryDecision says the owner approved this network.
+      There is no server, no account and no relay — see docs/ARCHITECTURE.md.
+
+      NsdManager itself needs nothing: the responder runs in the system process, which is also why
+      no multicast lock is taken here.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
       Optional, and only ever for a name.
 
       Android will not hand over the SSID of the network you are on without it, so without this the

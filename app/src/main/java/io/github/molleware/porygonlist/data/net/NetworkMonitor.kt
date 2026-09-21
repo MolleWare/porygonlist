@@ -206,8 +206,23 @@ class AndroidNetworkMonitor(private val context: Context) : NetworkMonitor {
       // NOT_VPN is absent exactly when this *is* a VPN. Free of any permission — it comes off the
       // same capabilities the wifi check already reads.
       isVpn = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN),
+      address = link?.let { addressOn(it) },
     )
   }
+
+  /**
+   * This phone's own address on the link, for a pairing invite to name.
+   *
+   * IPv4 only, and for the same reason the fingerprint skips IPv6: a privacy-extension address
+   * rotates by design, so an invite drawn with one could be stale before the other phone reads it.
+   * Loopback is excluded because the address is for somebody else to dial.
+   */
+  private fun addressOn(link: LinkProperties): String? =
+    link.linkAddresses
+      .map { it.address }
+      .filterIsInstance<Inet4Address>()
+      .firstOrNull { !it.isLoopbackAddress && !it.isAnyLocalAddress }
+      ?.hostAddressOrNull()
 
   /**
    * Builds the fingerprint from the routing table.

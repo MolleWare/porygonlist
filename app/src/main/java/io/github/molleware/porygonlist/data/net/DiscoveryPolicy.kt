@@ -20,6 +20,17 @@ data class NetworkSnapshot(
    * not the wifi, so it is the same in every café in the world.
    */
   val isVpn: Boolean = false,
+  /**
+   * This phone's own IPv4 address on the link, or null when it has none.
+   *
+   * Read off the same [LinkProperties] the fingerprint is built from, so it costs no permission.
+   * Wanted for one thing: a pairing invite has to say where to call back, and a phone cannot ask
+   * its own listening socket — bound to every interface, it only knows the port.
+   *
+   * Not an identity and not persisted. A DHCP lease changes it, which is exactly why it is read
+   * live at the moment an invite is drawn rather than remembered.
+   */
+  val address: String? = null,
 ) {
   companion object {
     /** No network at all. */
