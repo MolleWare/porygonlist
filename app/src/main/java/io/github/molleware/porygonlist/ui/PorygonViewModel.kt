@@ -16,6 +16,8 @@ import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PairingCodec
 import io.github.molleware.porygonlist.data.crypto.PairingInvite
+import io.github.molleware.porygonlist.data.crypto.PairingToken
+import io.github.molleware.porygonlist.data.crypto.PeerAddress
 import io.github.molleware.porygonlist.data.LocalNode
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
@@ -26,19 +28,30 @@ import io.github.molleware.porygonlist.data.alreadyOn
 import io.github.molleware.porygonlist.data.suggestionVocabulary
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
+import io.github.molleware.porygonlist.data.net.ListenReason
 import io.github.molleware.porygonlist.data.net.NetworkFingerprint
+import io.github.molleware.porygonlist.data.net.PairingHandshake
 import io.github.molleware.porygonlist.data.net.NetworkMonitor
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
+import io.github.molleware.porygonlist.data.net.PeerDiscovery
+import io.github.molleware.porygonlist.data.net.ReachablePeer
+import io.github.molleware.porygonlist.data.net.SyncEndpoint
 import io.github.molleware.porygonlist.data.net.discoveryDecision
+import io.github.molleware.porygonlist.data.net.reachablePeers
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ItemId
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * How much has to be typed before anything is offered.
@@ -64,6 +77,15 @@ class PorygonViewModel(
   private val identity: () -> LocalIdentity,
   /** Destroys the key. Paired with [ListRepository.reset], never called on its own. */
   private val deleteIdentity: () -> Unit,
+  /**
+   * Finds other phones, and lets them find this one.
+   *
+   * Null in tests and previews, where there is no network to look at: the gate below then simply
+   * has nothing to open, and everything else on this class behaves as it always did.
+   */
+  private val peerDiscovery: PeerDiscovery? = null,
+  /** The socket peers connect back on. Null alongside [peerDiscovery], for the same reason. */
+  private val endpoint: SyncEndpoint? = null,
 ) : ViewModel() {
 
   val state: StateFlow<AppState?> = repo.state
@@ -88,6 +110,23 @@ class PorygonViewModel(
         discoveryDecision(snapshot, appState?.approvedFingerprints.orEmpty())
       }
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiscoveryDecision.Hold(HoldReason.OFFLINE))
+
+  /**
+   * The paired phones that are on this network right now.
+   *
+   * Found, not trusted. An entry means a phone claiming that id answered a browse at that address;
+   * it is matched against the paired set here so that the connection which follows has the pinned
+   * key to check it against, and a stranger advertising on the same wifi never gets that far.
+   *
+   * Empty whenever discovery is held, because [PeerDiscovery.stop] empties its own flow — there is
+   * no separate clearing step to forget, and a stale address cannot survive a network change.
+   */
+  val reachable: StateFlow<List<ReachablePeer>> =
+    combine(peerDiscovery?.found ?: MutableStateFlow(emptySet()), state) { found, appState ->
+        if (appState == null) emptyList()
+        else reachablePeers(found, appState.peers, appState.localDevice)
+      }
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
   /** The "Add something…" field. */
   var draft by mutableStateOf("")
@@ -119,6 +158,50 @@ class PorygonViewModel(
   init {
     // Deliberately here and not in Application.onCreate: the first frame does not wait on disk.
     viewModelScope.launch { repo.load() }
+    watchDiscoveryGate()
+    watchIncomingPairings()
+  }
+
+  /**
+   * Turns the network side on and off as [discovery] decides.
+   *
+   * The gate is the only thing that ever starts it. Nothing binds a socket or registers a service
+   * until the decision is [DiscoveryDecision.Discover], which cannot happen before the state file
+   * has loaded and named this network as approved — so the cold-start path stays clear of all of
+   * it, and an unapproved network costs nothing at all.
+   *
+   * Stopping on every other decision is not tidiness. Coming off an approved network onto a café's
+   * wifi, or having a VPN come up, has to take the advertisement down with it; leaving it running
+   * would announce this phone in exactly the places the gate exists to stay quiet in.
+   *
+   * The port is read back from [SyncEndpoint] rather than chosen, and re-read on every open: the
+   * system may give a different one after a stop, and advertising the previous number would send
+   * the other phone at a closed door.
+   */
+  private fun watchDiscoveryGate() {
+    val discoveryService = peerDiscovery ?: return
+    val socket = endpoint ?: return
+
+    viewModelScope.launch {
+      // Waits for the state file before subscribing to anything. Collecting [discovery] is what
+      // makes the network monitor hot, and the monitor's first act is a binder call to register a
+      // callback — not something to do while the first frame is still being drawn. The load
+      // finishes after it, and no network decision could have been acted on before it anyway,
+      // because the approved list is in the file being read.
+      repo.state.filterNotNull().first()
+
+      discovery.collect { decision ->
+        if (decision is DiscoveryDecision.Discover) {
+          val port = socket.start(ListenReason.DISCOVERY)
+          // No port means the socket would not bind. Silence is the honest answer: advertising a
+          // phone that cannot be connected to just costs the other one a timeout.
+          if (port != null) discoveryService.start(port) else discoveryService.stop()
+        } else {
+          discoveryService.stop()
+          socket.stop(ListenReason.DISCOVERY)
+        }
+      }
+    }
   }
 
   // ── Who you are ───────────────────────────────────────────────────────────
@@ -224,7 +307,79 @@ class PorygonViewModel(
    * form, so codes sent before this keep working.
    */
   fun invite(displayName: String = state.value?.displayName.orEmpty()): String =
+    PairingCodec.link(identity(), displayName, at = listeningAt(), token = listeningAt()?.let { pairingToken })
+
+  /**
+   * The same invite with nothing live in it: no address, no token.
+   *
+   * This is what the screen prints and what the copy button puts on the clipboard, and the two
+   * forms have to be different. A pairing code is safe to send precisely because it is a public
+   * key and a name — put a one-time token in it and it stops being safe to send, because a text
+   * message is forwarded, backed up and read over shoulders long after the screen it came from
+   * has closed.
+   *
+   * So the live parts are in the QR alone, where they are looked at once from across a table, and
+   * the durable form stays exactly the string it has always been.
+   */
+  fun textInvite(displayName: String = state.value?.displayName.orEmpty()): String =
     PairingCodec.link(identity(), displayName)
+
+  /**
+   * Where this phone can be called back, while the pairing screen has it listening.
+   *
+   * Both halves have to be true at once. The port comes from a socket that is actually open, and
+   * the address from the link this phone is standing on right now — neither is remembered, because
+   * a remembered one is wrong the moment the wifi or the lease changes, and wrong invisibly.
+   *
+   * Null drops the hint and the invite is the older kind: still correct, still scannable, just
+   * back to both people swapping codes.
+   */
+  private fun listeningAt(): PeerAddress? {
+    val port = listeningPort ?: return null
+    val snapshot = network.value
+    // Under a VPN the address on the default link is the tunnel's, not the wifi's — the same
+    // reason discovery holds for a VPN, and it bites harder here: an address that looks perfectly
+    // local goes out in a code, and the phone that scans it dials somewhere that is not this one.
+    // Better to carry no address and let both people swap codes.
+    if (snapshot.isVpn) return null
+    val host = snapshot.address ?: return null
+    return PeerAddress(host, port)
+  }
+
+  /**
+   * Whether the code on screen can actually be scanned once instead of twice.
+   *
+   * An open socket is not enough, which is what this originally said. The QR only carries a way
+   * back if there is an address to put in it as well, so a phone with a port open but no usable
+   * address would have promised "one scan does both" and then quietly needed two. This asks the
+   * same question the invite does, so the screen cannot claim more than the code carries.
+   */
+  val reachableForPairing: Boolean
+    get() = listeningAt() != null
+
+  /**
+   * The port the pairing screen has open, as Compose state.
+   *
+   * Held here rather than read off the endpoint because opening the socket is slow enough to be
+   * worth doing off the main thread — so the screen draws its code first and this arrives a moment
+   * later. It has to be state, or the QR would keep the addressless version it was first drawn
+   * with and the handshake would never be offered.
+   */
+  var listeningPort by mutableStateOf<Int?>(null)
+    private set
+
+  /** True while this phone is handing its key back to one that just scanned its code. */
+  var handingBack by mutableStateOf(false)
+    private set
+
+  /**
+   * The token in the code currently on screen.
+   *
+   * Minted per visit to the pairing screen and never persisted — a token that outlived the screen
+   * would be a standing invitation to pair with this phone, which is the opposite of what it is
+   * for. Kept out of Compose state deliberately: it is not drawn, only embedded.
+   */
+  private var pairingToken: PairingToken? = null
 
   /**
    * Accepts an invite read from a QR code or pasted in.
@@ -234,8 +389,16 @@ class PorygonViewModel(
    * in, and also the one moment an attacker would want, so it belongs behind a deliberate scan
    * rather than anything automatic.
    */
-  fun pair(code: String): PairingInvite? {
-    val invite = PairingCodec.decode(code) ?: return null
+  fun pair(code: String): PairingInvite? = PairingCodec.decode(code)?.let { trust(it) }
+
+  /**
+   * Records an invite as a phone this one trusts, whether it was typed, scanned, or handed over.
+   *
+   * Split out from [pair] because an invite that arrived through [PairingHandshake] never existed
+   * as text on this phone — re-encoding it only to decode it again would be inventing a string to
+   * throw away, and the two paths have to agree on what pairing means.
+   */
+  private fun trust(invite: PairingInvite): PairingInvite? {
     // Pairing with yourself would make this phone its own peer and wait for its own receipts.
     if (invite.deviceId == identity().deviceId) return null
 
@@ -289,7 +452,12 @@ class PorygonViewModel(
     state.lists
       .flatMap { it.people }
       .distinctBy { it.device }
-      .filterNot { it.device == state.localDevice || it.device == pendingInvite?.deviceId }
+      // The phone in question is excluded whether it is still a question or has already paired
+      // itself: a just-added person is on the list now, and offering them as somebody they might
+      // be replacing would let them replace themselves.
+      .filterNot {
+        it.device == state.localDevice || it.device == pendingInvite?.deviceId || it.device == justPaired?.deviceId
+      }
 
   /**
    * The list this pairing is being done in order to share, if it was started that way.
@@ -302,17 +470,53 @@ class PorygonViewModel(
   var pairingForList by mutableStateOf<Long?>(null)
     private set
 
+  /**
+   * Opens the pairing screen, and puts this phone on the air for as long as it is up.
+   *
+   * The socket and the token are what make one scan enough: the code carries where to call and a
+   * value only this screen knows, so the phone that scans it can hand its own key straight back.
+   * Both die in [stopPairing]. Nothing here depends on the network being an approved one — see
+   * [ListenReason.PAIRING] for why that is deliberate rather than a gap.
+   */
   fun startPairing(forListId: Long? = null) {
     pairingForList = forListId
     pairCode = ""
     pairNote = ""
     pendingInvite = null
+    justPaired = null
+
+    val socket = endpoint ?: return
+    val token = PairingToken.mint()
+    pairingToken = token
+    viewModelScope.launch {
+      // Binding a socket and building an SSL context are both slow enough to keep off the frame
+      // that is drawing the code. The QR appears without an address and gains one a moment later.
+      val port = withContext(Dispatchers.IO) { socket.start(ListenReason.PAIRING, token) }
+      listeningPort = port
+    }
+  }
+
+  /**
+   * Leaves the pairing screen: the code stops working and the socket closes.
+   *
+   * Called on the way out however that happens, because the alternative is a phone that quietly
+   * goes on accepting introductions from a code nobody is looking at any more.
+   */
+  fun stopPairing() {
+    pairingToken = null
+    listeningPort = null
+    justPaired = null
+    endpoint?.stop(ListenReason.PAIRING)
   }
 
   /** Trusts the pasted code as a phone this one has not seen before. */
   fun pairAsNew() {
     val invite = pendingInvite ?: return
-    pair(pairCode.trim())
+    // Captured before the draft is cleared: it is the link, not the invite, that says where to
+    // call back and what to say when we get there.
+    val link = pairCode.trim()
+
+    trust(invite)
     val listId = pairingForList
     if (listId != null) {
       addPersonToList(listId, invite.deviceId)
@@ -321,6 +525,117 @@ class PorygonViewModel(
       pairNote = "Paired with ${invite.displayName}."
     }
     clearPairDraft()
+
+    handBackOurKey(link, invite)
+  }
+
+  /**
+   * Gives this phone's own key to the one whose code was just scanned.
+   *
+   * This is the leg that used to be a second scan. It runs after the local pairing rather than
+   * before, so that a network that will not carry it costs nothing: the pairing this person asked
+   * for has already happened, and what fails is only the shortcut.
+   *
+   * Every outcome ends in a sentence on the screen, including the good one. "Paired" on its own
+   * would leave the person wondering whether the other phone knows — which is exactly the doubt
+   * that made two scans feel necessary.
+   */
+  private fun handBackOurKey(link: String, invite: PairingInvite) {
+    val me = identity()
+    val myName = state.value?.displayName.orEmpty()
+    val paired = pairNote
+
+    viewModelScope.launch {
+      handingBack = true
+      val outcome = withContext(Dispatchers.IO) { PairingHandshake.deliver(link, me, myName, invite.publicKey) }
+      handingBack = false
+
+      pairNote =
+        when (outcome) {
+          // Said plainly, because the whole point is that there is nothing left to do.
+          PairingHandshake.Outcome.Delivered -> "$paired They have your code too — nothing else to do."
+          // A code that came as a text carries no address. Not a failure, just the older way.
+          PairingHandshake.Outcome.NoAddress -> "$paired Now show them your code."
+          is PairingHandshake.Outcome.Failed -> "$paired Show them your code — ${outcome.reason}."
+        }
+    }
+  }
+
+  /**
+   * Invites arriving from a phone that has just scanned this one's code.
+   *
+   * They land in exactly the place a pasted code lands, in front of exactly the same question.
+   * That is the point: having read the screen earns a phone the owner's attention, and nothing
+   * more. What it saves is the scan, not the decision.
+   */
+  private fun watchIncomingPairings() {
+    val socket = endpoint ?: return
+    viewModelScope.launch {
+      socket.incoming.collect { invite ->
+        if (invite.deviceId == identity().deviceId) return@collect
+
+        trust(invite)
+        val listId = pairingForList
+        if (listId != null) addPersonToList(listId, invite.deviceId)
+
+        justPaired = invite
+        pairCode = ""
+        pendingInvite = null
+        pairNote = ""
+      }
+    }
+  }
+
+  /**
+   * The phone that just paired itself by scanning this one's code.
+   *
+   * Shown as something that has happened, not something to approve. The consent was putting the
+   * code on screen and holding it up; being asked to confirm it a second time, for a phone that
+   * proved it read that very screen, is the ceremony this whole change exists to remove.
+   *
+   * It is still on screen and still undoable, which is the part that matters — a wrong name
+   * appearing is visible immediately, and [undoJustPaired] is one tap away.
+   */
+  var justPaired by mutableStateOf<PairingInvite?>(null)
+    private set
+
+  /**
+   * Takes back an automatic pairing.
+   *
+   * The way out when the wrong phone got there first. It unpairs rather than merely hiding the
+   * card, because the card is the only notice this happened at all.
+   */
+  fun undoJustPaired() {
+    val invite = justPaired ?: return
+    justPaired = null
+    unpair(invite.deviceId)
+    pairNote = "${invite.displayName} was removed. Show your code again to try once more."
+  }
+
+  /**
+   * Records that the phone which just paired is somebody's replacement handset, not a new person.
+   *
+   * Offered after the fact rather than before it, for the same reason the pairing itself is: the
+   * common case is a new person, and making everyone answer a question that matters to almost
+   * nobody is how a fast thing becomes a slow one. Taking it back is still cheap — the automatic
+   * pairing has already happened, and this corrects it rather than racing it.
+   */
+  fun justPairedIsReplacementFor(oldDevice: DeviceId) {
+    val invite = justPaired ?: return
+    justPaired = null
+    replaceDevice(oldDevice, invite)
+    pairNote = "${invite.displayName}'s new phone took over."
+  }
+
+  fun dismissJustPaired() {
+    justPaired = null
+  }
+
+  override fun onCleared() {
+    // The socket outlives this object otherwise: it belongs to the graph, and nothing else would
+    // think to close the pairing half of it.
+    stopPairing()
+    super.onCleared()
   }
 
   /** Records that [oldDevice]'s owner is now holding the phone in the pasted code. */
@@ -494,13 +809,15 @@ class PorygonViewModel(
    * copies. Propagating a whole-list deletion would need a tombstone for the list itself, and
    * handing one phone the power to wipe a shared list off everyone else's is not obviously right.
    *
-   * The last list is never deleted — the app has no state that shows no list at all.
+   * The last list can go too. A new install starts with none, so no-lists is a state the app already
+   * has to show; refusing to delete the only one would make the bin stop working for no reason the
+   * owner can see.
    */
   fun deleteList(id: Long) {
     repo.update { s, _ ->
-      if (s.lists.size <= 1) return@update s
       val remaining = s.lists.filterNot { it.id == id }
-      s.copy(lists = remaining, activeListId = if (s.activeListId == id) remaining.first().id else s.activeListId)
+      // Id 0 is never handed out, so this leaves nothing active, which is what no lists means.
+      s.copy(lists = remaining, activeListId = if (s.activeListId == id) remaining.firstOrNull()?.id ?: 0 else s.activeListId)
     }
     confirmingListDelete = null
   }
@@ -558,9 +875,7 @@ class PorygonViewModel(
 
   fun addItem(name: String, origin: Origin = Origin.LOCAL) {
     if (name.isBlank()) return
-    repo.update { s, node ->
-      s.withActiveList { it.copy(items = it.items + node.newItem(s, name.trim(), origin = origin)) }
-    }
+    repo.update { s, node -> s.withItemAdded(node, name, origin = origin) }
   }
 
   /**
@@ -568,16 +883,46 @@ class PorygonViewModel(
    * learns about it. Note it does not reattribute the item — who put it on the list is part of its
    * identity, and only the last writer moves.
    */
-  fun toggleChecked(itemId: ItemId) = repo.update { s, node ->
-    val stamp = node.clock.tick()
-    s.withActiveList { list ->
-      list.copy(
-        items =
-          list.items.map {
-            if (it.id != itemId) it else it.copy(checked = !it.checked, checkedAt = stamp, pending = !s.online)
-          }
-      )
+  /**
+   * True for as long as the burst on screen has to run. Set by the tick that finishes a list.
+   *
+   * Consumed by the UI rather than reset on a timer, so nothing depends on the animation's duration
+   * being known in two places, and a rotation mid-flight does not replay it.
+   */
+  var celebrating by mutableStateOf(false)
+    private set
+
+  fun celebrationShown() {
+    celebrating = false
+  }
+
+  fun toggleChecked(itemId: ItemId) {
+    var finishedTheList = false
+    repo.update { s, node ->
+      val stamp = node.clock.tick()
+      val next =
+        s.withActiveList { list ->
+          list.copy(
+            items =
+              list.items.map {
+                if (it.id != itemId) it else it.copy(checked = !it.checked, checkedAt = stamp, pending = !s.online)
+              }
+          )
+        }
+      // The *transition* into a finished list, not the state of being one: computed from before and
+      // after so that unticking, re-ticking on an already-finished list, or simply opening one that
+      // was finished yesterday all stay quiet. An empty list has not been finished, it is empty.
+      val before = s.activeList
+      val after = next.activeList
+      finishedTheList =
+        after.liveItems.isNotEmpty() &&
+          after.liveItems.all { it.checked } &&
+          before.liveItems.any { !it.checked }
+      next
     }
+    // Only for a tick made here. A peer finishing the list is their moment, and confetti on a phone
+    // sitting in a pocket is a notification nobody asked for.
+    if (finishedTheList) celebrating = true
   }
 
   /** The list detail is asking whether the ticked-off items really should go. */
@@ -717,7 +1062,7 @@ class PorygonViewModel(
    * otherwise a tap adds the thing and the tile goes on claiming it has never been used.
    */
   fun useStaple(name: String) = repo.update { s, node ->
-    s.withActiveList { it.copy(items = it.items + node.newItem(s, name.trim())) }
+    s.withItemAdded(node, name)
       .copy(staples = s.staples.map { if (it.name == name) it.copy(uses = it.uses + 1) else it })
   }
 
@@ -915,6 +1260,37 @@ class PorygonViewModel(
     cancelNamingNetwork()
   }
 
+  /** Which network row is asking to be forgotten. Null when none is. */
+  var confirmingNetworkRemoval by mutableStateOf<NetworkFingerprint?>(null)
+    private set
+
+  fun askForgetNetwork(fingerprint: NetworkFingerprint) {
+    confirmingNetworkRemoval = fingerprint
+  }
+
+  fun cancelForgetNetwork() {
+    confirmingNetworkRemoval = null
+  }
+
+  /**
+   * Drops a network from the list entirely.
+   *
+   * Distinct from switching it off, which is what [toggleNetwork] does: an entry switched off is
+   * one the owner may want back, and it keeps the name they gave it. Forgetting is for the café
+   * approved once in March — the list is a record of places this phone will talk on, and a record
+   * nobody prunes stops being one worth reading.
+   *
+   * Nobody is unpaired by this. Which phones are trusted is settled by keys, and a network only
+   * ever decides *where* they are allowed to look for each other — see the two-part trust model in
+   * `docs/ARCHITECTURE.md`. Standing on a forgotten network simply offers it for approval again.
+   */
+  fun forgetNetwork(fingerprint: NetworkFingerprint) {
+    repo.update { s, _ -> s.copy(networks = s.networks.filterNot { it.fingerprint == fingerprint }) }
+    confirmingNetworkRemoval = null
+    // A row being renamed as it is forgotten would otherwise leave the form open over nothing.
+    if (namingNetwork == fingerprint) cancelNamingNetwork()
+  }
+
   // ── Export / import ───────────────────────────────────────────────────────
 
   fun openExport() {
@@ -964,6 +1340,47 @@ class PorygonViewModel(
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /**
+   * Puts [name] on the open list, or asks for more of what is already there.
+   *
+   * Wanting two of something is a quantity, not two lines. Every way of adding goes through here —
+   * the field, a suggestion, a staple tile — because they are the same act to the person doing it,
+   * and a staple tapped twice used to leave two identical rows to reconcile by hand.
+   *
+   * Matching is on the folded name, the same comparison `alreadyOn` and the suggestion filter use,
+   * so "eggs" finds "Eggs". A **ticked** item is not matched: it is already in the trolley, and
+   * quietly raising its count would hide the new need behind a line that reads as done.
+   *
+   * The bump is stamped like any other field write, so it merges against a peer's edit rather than
+   * overwriting it blind.
+   */
+  private fun AppState.withItemAdded(
+    node: LocalNode,
+    name: String,
+    qty: Int = 1,
+    origin: Origin = Origin.LOCAL,
+  ): AppState {
+    val trimmed = name.trim()
+    val folded = WordTrie.fold(trimmed)
+    val existing = activeList.liveItems.firstOrNull { !it.checked && WordTrie.fold(it.name.value) == folded }
+    val state = this
+
+    if (existing == null) {
+      return withActiveList { it.copy(items = it.items + node.newItem(state, trimmed, qty = qty, origin = origin)) }
+    }
+
+    val stamp = node.clock.tick()
+    return withActiveList { list ->
+      list.copy(
+        items =
+          list.items.map { item ->
+            if (item.id != existing.id) item
+            else item.copy(qty = item.qty.set(item.qty.value + qty, stamp), pending = !state.online)
+          }
+      )
+    }
+  }
 
   /**
    * Mints an item authored by this phone: a fresh id from this device's factory, and one stamp

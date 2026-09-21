@@ -46,8 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent100
-import io.github.molleware.porygonlist.theme.Accent400
-import io.github.molleware.porygonlist.theme.Accent900
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.theme.Divider
 import io.github.molleware.porygonlist.theme.Elevation
@@ -56,7 +54,6 @@ import io.github.molleware.porygonlist.theme.Neutral700
 import io.github.molleware.porygonlist.theme.PorygonType
 import io.github.molleware.porygonlist.theme.ShadowInk
 import io.github.molleware.porygonlist.theme.Shapes
-import io.github.molleware.porygonlist.theme.ShopBoxBorder
 import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
 
@@ -182,22 +179,21 @@ fun IconActionButton(
 /**
  * The round tick box beside an item.
  *
- * In shopping mode it grows to 34dp and borders in white, since it sits on the dark ground.
+ * In shopping mode it grows to 34dp, for a target findable without looking.
  */
 @Composable
 fun CheckCircle(
   checked: Boolean,
   modifier: Modifier = Modifier,
   size: Dp = 26.dp,
-  dark: Boolean = false,
   iconSize: Dp = 14.dp,
 ) {
-  // The accent is a dark green, so on shopping mode's dark ground a filled circle would vanish
-  // (1.4:1). There the fill steps up the ramp and the mark steps down — the same inversion the
-  // "Leave shopping mode" link and the tab bar already make.
-  val fill = if (dark) Accent400 else Accent
-  val mark = if (dark) Accent900 else Accent100
-  val borderColor = if (checked) fill else if (dark) ShopBoxBorder else Neutral400
+  // One pair of colours everywhere. There used to be a `dark` variant stepping the fill up the
+  // ramp, because a dark-green circle vanished on shopping mode's dark ground (1.4:1); that
+  // ground is gone, and with it the only caller that needed it.
+  val fill = Accent
+  val mark = Accent100
+  val borderColor = if (checked) fill else Neutral400
   Box(
     modifier
       .size(size)

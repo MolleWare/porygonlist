@@ -18,9 +18,10 @@ import androidx.compose.ui.graphics.Color
  * design's tonal rhythm survives the swap. Green and brown both land on step 800, which makes them
  * a matched pair: the same value, distinguished only by hue.
  *
- * One consequence worth knowing: a dark accent is invisible on shopping mode's dark ground (1.44:1),
- * so that screen steps up to the 300/400 rungs. The design already did this for its back link, and
- * [TabBar] already did it for its labels; the rule is now applied consistently.
+ * There is one ground, and no inversion anywhere. Shopping mode used to be the exception; it is
+ * now the same cream as the rest, distinguished by type size and by what it leaves out rather
+ * than by colour. So a dark accent is never asked to sit on a dark ground, and the 300/400 rungs
+ * are no longer load-bearing for contrast.
  */
 
 // The palette, verbatim.
@@ -80,9 +81,6 @@ val ShadowInk = Color(0xFF2E2B25)
 /** Scrim behind the bottom sheets: the design's neutral-900 at 45%. */
 val SheetScrim = Neutral900.copy(alpha = 0.45f)
 
-// Shop mode paints straight onto the dark ground with white alphas rather than ramp steps.
-val ShopRow = Color.White.copy(alpha = 0.10f)
-val ShopRowChecked = Color.White.copy(alpha = 0.05f)
-val ShopTrack = Color.White.copy(alpha = 0.12f)
-val ShopHairline = Color.White.copy(alpha = 0.10f)
-val ShopBoxBorder = Color.White.copy(alpha = 0.35f)
+// Shop mode used to paint onto a dark ground with white alphas rather than ramp steps, and had
+// five colours of its own for it. It is on the same cream as everything else now, so it uses the
+// same Surface, Neutral and Accent roles and those five are gone.

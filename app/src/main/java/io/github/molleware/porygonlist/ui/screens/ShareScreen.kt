@@ -1,7 +1,9 @@
 package io.github.molleware.porygonlist.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,6 +91,10 @@ fun ShareScreen(
   onStartNamingNetwork: (ApprovedNetwork) -> Unit,
   onSaveNetworkName: () -> Unit,
   onCancelNamingNetwork: () -> Unit,
+  confirmingNetworkRemoval: NetworkFingerprint?,
+  onAskForgetNetwork: (NetworkFingerprint) -> Unit,
+  onCancelForgetNetwork: () -> Unit,
+  onForgetNetwork: (NetworkFingerprint) -> Unit,
   pairablePeers: List<TrustedPeer>,
   onAddPerson: (DeviceId) -> Unit,
   onGoPair: () -> Unit,
@@ -111,9 +117,10 @@ fun ShareScreen(
   ) {
     BackLink("All lists", onBack, tint = Accent700)
     // Names the list rather than saying "Sharing", because this screen acts on one list and which
-    // one is not guessable from a heading that does not say.
+    // one is not guessable from a heading that does not say. With no list at all there is no name
+    // to give, and the bare word is honest rather than trailing an empty space.
     Text(
-      "Sharing ${list.name}",
+      if (list.name.isBlank()) "Sharing" else "Sharing ${list.name}",
       style = PorygonType.ScreenTitle,
       color = TextInk,
       modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
@@ -142,17 +149,21 @@ fun ShareScreen(
           network = entry,
           isCurrent = entry.fingerprint == network.fingerprint,
           naming = namingNetwork == entry.fingerprint,
+          confirmingForget = confirmingNetworkRemoval == entry.fingerprint,
           nameDraft = networkNameDraft,
           onNameDraftChange = onNetworkNameDraftChange,
           onStartNaming = { onStartNamingNetwork(entry) },
           onSaveName = onSaveNetworkName,
           onCancelNaming = onCancelNamingNetwork,
+          onAskForget = { onAskForgetNetwork(entry.fingerprint) },
+          onCancelForget = onCancelForgetNetwork,
+          onConfirmForget = { onForgetNetwork(entry.fingerprint) },
           onToggle = { onToggleNetwork(entry.fingerprint) },
         )
       }
     }
     Text(
-      "Tap a name to rename it.",
+      "Tap a name to rename it. Press and hold to forget one.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.55),
       color = Neutral700,
       modifier = Modifier.padding(top = 14.dp, bottom = if (canAskForWifiName) 10.dp else 26.dp),
@@ -186,7 +197,7 @@ fun ShareScreen(
         .padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 20.dp)
     ) {
       Text(
-        "Send ${list.name} as a text",
+        if (list.name.isBlank()) "Send a list as a text" else "Send ${list.name} as a text",
         style = PorygonType.CardHeading,
         color = TextInk,
         modifier = Modifier.padding(bottom = 4.dp),
@@ -223,7 +234,10 @@ fun ShareScreen(
     // the phone, which is what makes a list you keep to yourself possible. But "give this list to
     // somebody" is one intention, so it is one section — an already-paired person is one tap, and
     // somebody new goes through pairing and lands on this list at the end of it.
-    SectionLabel("Give ${list.name} to someone", Modifier.padding(top = 26.dp, bottom = 10.dp))
+    SectionLabel(
+      if (list.name.isBlank()) "Give a list to someone" else "Give ${list.name} to someone",
+      Modifier.padding(top = 26.dp, bottom = 10.dp),
+    )
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
       pairablePeers.forEach { peer ->
         Row(
@@ -259,13 +273,14 @@ fun ShareScreen(
       ) {
         Text("Somebody new", style = PorygonType.CardHeading, color = TextInk, modifier = Modifier.padding(bottom = 4.dp))
         Text(
-          "Swap codes once, and they're on ${list.name}.",
+          if (list.name.isBlank()) "Swap codes once, and they're on your lists."
+          else "Swap codes once, and they're on ${list.name}.",
           style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
           color = Neutral700,
           modifier = Modifier.padding(bottom = 14.dp),
         )
         PrimaryButton(
-          "Share ${list.name}",
+          if (list.name.isBlank()) "Share" else "Share ${list.name}",
           onGoPair,
           modifier = Modifier.heightIn(min = 44.dp),
           style = PorygonType.BodyLarge,
@@ -398,70 +413,111 @@ private fun CurrentNetworkPill(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NetworkRow(
   network: ApprovedNetwork,
   isCurrent: Boolean,
   naming: Boolean,
+  confirmingForget: Boolean,
   nameDraft: String,
   onNameDraftChange: (String) -> Unit,
   onStartNaming: () -> Unit,
   onSaveName: () -> Unit,
   onCancelNaming: () -> Unit,
+  onAskForget: () -> Unit,
+  onCancelForget: () -> Unit,
+  onConfirmForget: () -> Unit,
   onToggle: () -> Unit,
 ) {
-  Row(
-    Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 13.dp),
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(12.dp),
+  Column(
+    Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 13.dp)
   ) {
-    // The network you are on right now is filled solid; other approved ones sit in a tint.
-    val iconBg =
-      when {
-        network.approved && isCurrent -> Accent2
-        network.approved -> Accent2300
-        else -> Neutral300
+    Row(
+      Modifier.fillMaxWidth(),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+      // The network you are on right now is filled solid; other approved ones sit in a tint.
+      val iconBg =
+        when {
+          network.approved && isCurrent -> Accent2
+          network.approved -> Accent2300
+          else -> Neutral300
+        }
+      Box(Modifier.size(34.dp).clip(CircleShape).background(iconBg), contentAlignment = Alignment.Center) {
+        StrokeIcon(
+          IconPaths.WIFI,
+          contentDescription = null,
+          size = 17.dp,
+          tint = if (network.approved && isCurrent) Accent2100 else Accent2800,
+        )
       }
-    Box(Modifier.size(34.dp).clip(CircleShape).background(iconBg), contentAlignment = Alignment.Center) {
-      StrokeIcon(
-        IconPaths.WIFI,
-        contentDescription = null,
-        size = 17.dp,
-        tint = if (network.approved && isCurrent) Accent2100 else Accent2800,
-      )
+      if (naming) {
+        PorygonTextField(
+          value = nameDraft,
+          onValueChange = onNameDraftChange,
+          placeholder = "Call it something",
+          modifier = Modifier.weight(1f),
+          minHeight = 40.dp,
+          textStyle = PorygonType.RowName,
+          imeAction = ImeAction.Done,
+          onSubmit = onSaveName,
+        )
+        Text(
+          "Save",
+          style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
+          color = Accent100,
+          modifier =
+            Modifier.clip(Shapes.Pill).background(Accent).clickable(onClick = onSaveName).padding(horizontal = 12.dp, vertical = 7.dp),
+        )
+        Text(
+          "Cancel",
+          style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
+          color = Neutral700,
+          modifier = Modifier.clip(Shapes.Pill).clickable(onClick = onCancelNaming).padding(horizontal = 8.dp, vertical = 7.dp),
+        )
+      } else {
+        // No clip here. Shapes.Row is a generous corner radius, and clipping a column this short
+        // with it bites the first character off both lines — which is what "Home" rendering as
+        // "dome" was.
+        Column(Modifier.weight(1f).combinedClickable(onClick = onStartNaming, onLongClick = onAskForget)) {
+          Text(network.label, style = PorygonType.RowName, color = TextInk)
+          Text(network.detail, style = PorygonType.Fine, color = Neutral700, modifier = Modifier.padding(top = 1.dp))
+        }
+        NetworkSwitch(network.approved, onToggle, contentDescription = "Approve ${network.label}")
+      }
     }
-    if (naming) {
-      PorygonTextField(
-        value = nameDraft,
-        onValueChange = onNameDraftChange,
-        placeholder = "Call it something",
-        modifier = Modifier.weight(1f),
-        minHeight = 40.dp,
-        textStyle = PorygonType.RowName,
-        imeAction = ImeAction.Done,
-        onSubmit = onSaveName,
+
+    if (confirmingForget) {
+      Text(
+        "Forget ${network.label}?",
+        style = PorygonType.Meta,
+        color = TextInk,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
       )
       Text(
-        "Save",
-        style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
-        color = Accent100,
-        modifier =
-          Modifier.clip(Shapes.Pill).background(Accent).clickable(onClick = onSaveName).padding(horizontal = 12.dp, vertical = 7.dp),
-      )
-      Text(
-        "Cancel",
-        style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
+        // The reassuring half: a network says where these phones may look for each other, never
+        // which phones are trusted. Forgetting one unpairs nobody.
+        "Nothing moves here until you approve it again. Nobody is unpaired.",
+        style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
         color = Neutral700,
-        modifier = Modifier.clip(Shapes.Pill).clickable(onClick = onCancelNaming).padding(horizontal = 8.dp, vertical = 7.dp),
+        modifier = Modifier.padding(bottom = 12.dp),
       )
-    } else {
-      // No clip here. Shapes.Row is a generous corner radius, and clipping a column this short with
-      // it bites the first character off both lines — which is what "Home" rendering as "dome" was.
-      Column(Modifier.weight(1f).clickable(onClick = onStartNaming)) {
-        Text(network.label, style = PorygonType.RowName, color = TextInk)
-        Text(network.detail, style = PorygonType.Fine, color = Neutral700, modifier = Modifier.padding(top = 1.dp))
+      Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        PrimaryButton(
+          "Forget",
+          onConfirmForget,
+          style = PorygonType.Meta,
+          contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        )
+        SecondaryButton(
+          "Keep it",
+          onCancelForget,
+          style = PorygonType.Meta,
+          contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        )
       }
-      NetworkSwitch(network.approved, onToggle, contentDescription = "Approve ${network.label}")
     }
   }
 }

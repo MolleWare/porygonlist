@@ -1,12 +1,19 @@
 package io.github.molleware.porygonlist.ui
 
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.GroceryItem
+import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListRepository
 import io.github.molleware.porygonlist.data.LocalNode
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Staple
+import io.github.molleware.porygonlist.data.WordTrie
+import io.github.molleware.porygonlist.data.seed
 import io.github.molleware.porygonlist.data.crypto.InMemoryIdentityStore
 import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PairingCodec
@@ -80,6 +87,18 @@ class PorygonViewModelTest {
 
   private val dispatcher = StandardTestDispatcher()
   private val store = InMemoryIdentityStore()
+
+  /**
+   * Holds the view model so the teardown can actually end it.
+   *
+   * `viewModelScope` is cancelled by the framework clearing the view model, and nothing else. Left
+   * running, its flows outlive the test that made them and resume on a `Dispatchers.Main` that has
+   * already been reset — which surfaces as an exception on a worker thread, attributed to whatever
+   * test happened to be running at the time. Going through a store is the supported way to do this
+   * without reaching into the view model.
+   */
+  private val viewModels = ViewModelStore()
+
   private lateinit var repo: FakeRepository
   private lateinit var vm: PorygonViewModel
 
@@ -87,11 +106,20 @@ class PorygonViewModelTest {
   fun setUp() {
     Dispatchers.setMain(dispatcher)
     repo = FakeRepository(store::identity)
-    vm = PorygonViewModel(repo, OfflineMonitor, store::identity, store::forget)
+    vm =
+      ViewModelProvider(
+        viewModels,
+        viewModelFactory { initializer { PorygonViewModel(repo, OfflineMonitor, store::identity, store::forget) } },
+      )[PorygonViewModel::class.java]
   }
 
   @After
-  fun tearDown() = Dispatchers.resetMain()
+  fun tearDown() {
+    // Order matters: clear while Main is still the test dispatcher, so the cancellation itself
+    // has somewhere to run.
+    viewModels.clear()
+    Dispatchers.resetMain()
+  }
 
   private fun state() = repo.state.value!!
 
@@ -150,13 +178,15 @@ class PorygonViewModelTest {
   }
 
   @Test
-  fun `the last list is never deleted`() = runTest(dispatcher) {
+  fun `the last list can be deleted, leaving nothing open`() = runTest(dispatcher) {
     repo.load()
     while (state().lists.size > 1) vm.deleteList(state().lists.first().id)
 
     vm.deleteList(state().lists.single().id)
 
-    assertEquals("there is no state that shows no list at all", 1, state().lists.size)
+    // Where a new install already starts, so nothing here is a state the app cannot show.
+    assertEquals(emptyList<GroceryList>(), state().lists)
+    assertTrue("nothing is open", state().lists.none { it.id == state().activeListId })
   }
 
   @Test
@@ -189,6 +219,58 @@ class PorygonViewModelTest {
   }
 
   @Test
+  fun `using a staple twice asks for two, rather than listing it twice`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.useStaple("Eggs")
+    vm.useStaple("Eggs")
+
+    val eggs = state().activeList.liveItems.filter { it.name.value == "Eggs" }
+    assertEquals("one line, not two", 1, eggs.size)
+    assertEquals(2, eggs.single().qty.value)
+    assertEquals("both taps counted", 2, state().staples.single { it.name == "Eggs" }.uses)
+  }
+
+  @Test
+  fun `a staple matches what is on the list however it was capitalised`() = runTest(dispatcher) {
+    repo.load()
+    vm.addItem("eggs")
+
+    vm.useStaple("Eggs")
+
+    assertEquals(1, state().activeList.liveItems.count { WordTrie.fold(it.name.value) == "eggs" })
+    assertEquals(2, state().activeList.liveItems.single { WordTrie.fold(it.name.value) == "eggs" }.qty.value)
+  }
+
+  @Test
+  fun `a staple already ticked off starts a new line rather than a hidden count`() = runTest(dispatcher) {
+    repo.load()
+    vm.useStaple("Eggs")
+    val ticked = state().activeList.liveItems.single { it.name.value == "Eggs" }
+    vm.toggleChecked(ticked.id)
+
+    vm.useStaple("Eggs")
+
+    val eggs = state().activeList.liveItems.filter { it.name.value == "Eggs" }
+    assertEquals("the done one is not quietly reused", 2, eggs.size)
+    assertEquals(1, eggs.count { it.checked })
+    assertEquals(1, eggs.count { !it.checked })
+  }
+
+  @Test
+  fun `a bump is stamped, so it can merge rather than overwrite`() = runTest(dispatcher) {
+    repo.load()
+    vm.useStaple("Eggs")
+    val before = state().activeList.liveItems.single { it.name.value == "Eggs" }.qty
+
+    vm.useStaple("Eggs")
+
+    val after = state().activeList.liveItems.single { it.name.value == "Eggs" }.qty
+    assertNotEquals("a new write carries a new stamp", before.at, after.at)
+    assertEquals("and records what it was written against", before.at, after.basedOn)
+  }
+
+  @Test
   fun `adding a staple that is already there changes nothing`() = runTest(dispatcher) {
     repo.load()
     val before = state().staples
@@ -209,6 +291,156 @@ class PorygonViewModelTest {
 
     vm.removeStaple("Tofu")
     assertFalse(state().staples.any { it.name == "Tofu" })
+  }
+
+  // ── Finishing a list ──────────────────────────────────────────────────────
+
+  /** Ticks everything but the last thing, and hands back the one still outstanding. */
+  private fun allButOne(): GroceryItem {
+    val outstanding = state().activeList.liveItems.filterNot { it.checked }
+    outstanding.dropLast(1).forEach { vm.toggleChecked(it.id) }
+    return outstanding.last()
+  }
+
+  @Test
+  fun `the tick that finishes a list celebrates`() = runTest(dispatcher) {
+    repo.load()
+    val last = allButOne()
+    assertFalse("nothing yet, with one still to go", vm.celebrating)
+
+    vm.toggleChecked(last.id)
+
+    assertTrue(vm.celebrating)
+  }
+
+  @Test
+  fun `ticking something that does not finish the list stays quiet`() = runTest(dispatcher) {
+    repo.load()
+    val first = state().activeList.liveItems.first { !it.checked }
+
+    vm.toggleChecked(first.id)
+
+    assertFalse(vm.celebrating)
+  }
+
+  @Test
+  fun `unticking never celebrates, and nor does re-ticking a finished list`() = runTest(dispatcher) {
+    repo.load()
+    val last = allButOne()
+    vm.toggleChecked(last.id)
+    vm.celebrationShown()
+
+    // Take one back off, then put it on again: the list finishes a second time, which is a real
+    // completion and does celebrate. The untick itself must not.
+    vm.toggleChecked(last.id)
+    assertFalse("taking something out of the trolley is not an achievement", vm.celebrating)
+
+    vm.toggleChecked(last.id)
+    assertTrue("finishing it again is still finishing it", vm.celebrating)
+  }
+
+  @Test
+  fun `a list of one counts, and clearing the trolley afterwards does not`() = runTest(dispatcher) {
+    repo.load()
+    vm.onListDraftChange("Just milk")
+    vm.createList()
+    vm.addItem("Milk")
+    val only = state().activeList.liveItems.single()
+
+    vm.toggleChecked(only.id)
+    assertTrue("one item, ticked, is finished", vm.celebrating)
+    vm.celebrationShown()
+
+    vm.clearChecked()
+
+    assertTrue("the list is now empty", state().activeList.liveItems.isEmpty())
+    assertFalse("emptying a list is not finishing it", vm.celebrating)
+  }
+
+  @Test
+  fun `the burst is shown once and then done`() = runTest(dispatcher) {
+    repo.load()
+    val last = allButOne()
+    vm.toggleChecked(last.id)
+
+    vm.celebrationShown()
+
+    assertFalse("nothing replays it", vm.celebrating)
+  }
+
+  // ── Networks ──────────────────────────────────────────────────────────────
+
+  @Test
+  fun `forgetting a network drops it, and leaves the others alone`() = runTest(dispatcher) {
+    repo.load()
+    val victim = state().networks.first()
+    val survivors = state().networks.drop(1)
+
+    vm.forgetNetwork(victim.fingerprint)
+
+    assertTrue(state().networks.none { it.fingerprint == victim.fingerprint })
+    assertEquals(survivors, state().networks)
+  }
+
+  @Test
+  fun `a forgotten network no longer opens the discovery gate`() = runTest(dispatcher) {
+    repo.load()
+    val approved = state().networks.first { it.approved }
+    assertTrue(approved.fingerprint in state().approvedFingerprints)
+
+    vm.forgetNetwork(approved.fingerprint)
+
+    assertFalse("nothing may be looked for there any more", approved.fingerprint in state().approvedFingerprints)
+  }
+
+  @Test
+  fun `switching a network off is not the same as forgetting it`() = runTest(dispatcher) {
+    repo.load()
+    val entry = state().networks.first { it.approved }
+
+    vm.toggleNetwork(entry.fingerprint)
+
+    val after = state().networks.single { it.fingerprint == entry.fingerprint }
+    assertFalse("it stops gating discovery", after.approved)
+    assertEquals("but it is still listed, under the name it was given", entry.name, after.name)
+  }
+
+  @Test
+  fun `forgetting asks first, and cancelling changes nothing`() = runTest(dispatcher) {
+    repo.load()
+    val before = state().networks
+    val entry = before.first()
+
+    vm.askForgetNetwork(entry.fingerprint)
+    assertEquals(entry.fingerprint, vm.confirmingNetworkRemoval)
+
+    vm.cancelForgetNetwork()
+
+    assertNull(vm.confirmingNetworkRemoval)
+    assertEquals(before, state().networks)
+  }
+
+  @Test
+  fun `the question closes once it is answered`() = runTest(dispatcher) {
+    repo.load()
+    val entry = state().networks.first()
+    vm.askForgetNetwork(entry.fingerprint)
+
+    vm.forgetNetwork(entry.fingerprint)
+
+    assertNull("nothing is left asking about a row that has gone", vm.confirmingNetworkRemoval)
+  }
+
+  @Test
+  fun `forgetting the row being renamed closes the rename form`() = runTest(dispatcher) {
+    repo.load()
+    val entry = state().networks.first()
+    vm.startNamingNetwork(entry)
+
+    vm.forgetNetwork(entry.fingerprint)
+
+    assertNull("no form left open over a row that no longer exists", vm.namingNetwork)
+    assertEquals("", vm.networkNameDraft)
   }
 
   // ── Suggestions ───────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import io.github.molleware.porygonlist.data.sync.DeviceId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,10 +35,33 @@ class FirstRunTest {
 
   @Test
   fun `a fresh install is unnamed`() {
-    val state = seeded()
+    val state = AppState.empty(localDevice = ME)
 
-    assertFalse("a seeded state has nobody's name in it", state.named)
+    assertFalse("a new install has nobody's name in it", state.named)
     assertEquals("", state.displayName)
+  }
+
+  @Test
+  fun `a fresh install holds nothing anyone did not put there`() {
+    val state = AppState.empty(localDevice = ME)
+
+    assertEquals("no lists", emptyList<GroceryList>(), state.lists)
+    assertEquals("no staples", emptyList<Staple>(), state.staples)
+    assertEquals("no approved networks", emptyList<ApprovedNetwork>(), state.networks)
+    assertEquals("nobody paired", emptyList<TrustedPeer>(), state.peers)
+    assertNull("no conflict to resolve", state.conflict)
+    assertFalse("nothing is active", state.lists.any { it.id == state.activeListId })
+  }
+
+  @Test
+  fun `an empty state survives a round trip`() {
+    // The state with nothing in it is the one every install starts from, so it has to encode and
+    // decode like any other — an empty list section is not a corrupt file.
+    val restored = StateCodec.decode(StateCodec.encode(AppState.empty(localDevice = ME)))
+
+    assertNotNull(restored)
+    assertEquals(emptyList<GroceryList>(), restored!!.lists)
+    assertEquals(ME, restored.localDevice)
   }
 
   @Test

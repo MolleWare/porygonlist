@@ -186,6 +186,14 @@ data class GroceryList(
     if (peers.isEmpty()) return copy(items = liveItems)
     return copy(items = items.filterNot { it.removed.value && log.deliveredToAll(it.removed.at, peers) })
   }
+
+  companion object {
+    /**
+     * Stands in when there is no list to show, so a screen reached with none renders empty instead
+     * of throwing. Id 0 is never handed out, so this can never collide with a real list.
+     */
+    val none = GroceryList(id = 0, name = "", accent = ListAccent.NEUTRAL, items = emptyList(), people = emptyList())
+  }
 }
 
 /**
@@ -252,12 +260,11 @@ data class Staple(val name: String, val uses: Int = 0) {
 
   companion object {
     /**
-     * What the grid starts out holding, so the screen opens onto something usable rather than an
-     * empty shell. Every one of them can be removed.
+     * The grid starts empty. A shortlist of things you buy over and over is only worth anything if
+     * it is yours; a shipped one is a guess about a stranger's kitchen, and the screen already says
+     * what it is for while it is empty.
      */
-    val defaults: List<Staple> =
-      listOf("Oat milk", "Eggs", "Sourdough", "Coffee beans", "Olive oil", "Rice", "Bin bags", "Yoghurt", "Tinned beans")
-        .map { Staple(it) }
+    val defaults: List<Staple> = emptyList()
   }
 }
 
@@ -306,8 +313,13 @@ data class AppState(
   val staples: List<Staple> = Staple.defaults,
   val conflict: Conflict?,
 ) {
+  /**
+   * With no lists at all — a fresh install, or the last one deleted — this is [GroceryList.none]: a
+   * nameless empty list that renders as nothing rather than throwing. Screens reached by opening a
+   * list cannot be reached in that state; the tabs can, and they show an empty shop.
+   */
   val activeList: GroceryList
-    get() = lists.firstOrNull { it.id == activeListId } ?: lists.first()
+    get() = lists.firstOrNull { it.id == activeListId } ?: lists.firstOrNull() ?: GroceryList.none
 
   /** The fingerprints discovery is allowed to run on. */
   val approvedFingerprints: Set<NetworkFingerprint>
@@ -395,125 +407,30 @@ data class AppState(
 
   companion object {
     /**
-     * The content the design ships with. Seeded on first launch so the app opens onto something,
-     * exactly as the mockup does, rather than an empty shell.
+     * What a phone holds before anyone has done anything with it: no lists, nobody to sync with, no
+     * approved networks, no conflict.
      *
-     * [partner] stands in for the second phone until real pairing exists — the design is drawn with
-     * Ava already there.
-     *
-     * The owner is seeded nameless on purpose. First run asks before any of this is reachable, and
+     * The owner is left nameless on purpose. First run asks before any of this is reachable, and
      * shipping a placeholder name would mean the app addressing someone as a person they are not.
+     * The same reasoning applies to everything else here — an invented list, a staged clash or a
+     * network nobody approved would all be the app claiming something happened that did not.
      */
-    fun seed(
-      localDevice: DeviceId,
-      partner: DeviceId = DeviceId("avademo01"),
-      now: Long = System.currentTimeMillis(),
-    ): AppState {
-      val you = Person(localDevice, "", "")
-      val ava = Person(partner, "Ava", "A")
-      val minute = 60_000L
-
-      var counter = 0L
-      var tick = 0
-      fun id() = ItemId("${localDevice.value}:${++counter}")
-      fun stamp(device: DeviceId, at: Long) = Hlc(at, tick++, device)
-
-      fun item(name: String, writer: DeviceId, at: Long, qty: Int = 1, checked: Boolean = false, editing: Boolean = false) =
-        GroceryItem(
-          id = id(),
-          name = Field(name, stamp(writer, at)),
-          qty = Field(qty, stamp(writer, at)),
-          checked = checked,
-          checkedAt = stamp(writer, at),
-          removed = Field(false, stamp(writer, at)),
-          editing = editing,
-        )
-
-      val weekly =
-        GroceryList(
-          id = 1,
-          name = "Weekly shop",
-          accent = ListAccent.ACCENT,
-          people = listOf(you, ava),
-          items =
-            listOf(
-              item("Sourdough", localDevice, now - 40 * minute),
-              item("Oat milk", partner, now - 38 * minute, qty = 2),
-              item("Tomatoes", localDevice, now - 26 * 60 * minute, checked = true),
-              item("Coffee beans", partner, now - 35 * minute, editing = true),
-              item("Butter", localDevice, now - 37 * minute),
-              item("Dish soap", partner, now - 72 * minute),
-            ),
-        )
-
-      val corner =
-        listOf("Stamps", "Milk", "Newspaper").mapIndexed { i, n ->
-          item(n, localDevice, now - (i + 1) * 3_600_000L)
-        }
-
-      val party =
-        listOf(
-            "Crisps",
-            "Olives",
-            "Sparkling water",
-            "Paper cups",
-            "Napkins",
-            "Ice",
-            "Lemons",
-            "Cheese",
-            "Crackers",
-            "Grapes",
-            "Candles",
-          )
-          .mapIndexed { i, n -> item(n, if (i % 3 == 0) partner else localDevice, now - (i + 1) * 900_000L) }
-
-      // The clash the design opens on: both phones added eggs a minute apart, neither having seen
-      // the other. Both stamps carry no `basedOn`, which is exactly what makes them concurrent.
-      val clashAt = now - 5 * 60 * minute
-      val conflict =
-        Conflict(
-          yours =
-            GroceryItem(
-              id = id(),
-              name = Field("Eggs", Hlc(clashAt, 0, localDevice)),
-              qty = Field(1, Hlc(clashAt, 0, localDevice)),
-              checkedAt = Hlc(clashAt, 0, localDevice),
-              removed = Field(false, Hlc(clashAt, 0, localDevice)),
-            ),
-          theirs =
-            GroceryItem(
-              id = ItemId("${partner.value}:1"),
-              name = Field("Eggs", Hlc(clashAt + 60_000, 0, partner)),
-              qty = Field(1, Hlc(clashAt + 60_000, 0, partner)),
-              checkedAt = Hlc(clashAt + 60_000, 0, partner),
-              removed = Field(false, Hlc(clashAt + 60_000, 0, partner)),
-            ),
-        )
-
-      return AppState(
+    fun empty(localDevice: DeviceId, now: Long = System.currentTimeMillis()): AppState =
+      AppState(
         localDevice = localDevice,
-        idCounter = counter,
-        clockHead = Hlc(now, tick, localDevice),
+        idCounter = 0,
+        clockHead = Hlc(now, 0, localDevice),
         // Nothing has been handed over yet, so nothing is collectable yet.
         deliveredTo = DeliveryLog(),
-        lists =
-          listOf(
-            weekly,
-            GroceryList(2, "Corner shop", ListAccent.ACCENT_2, corner, listOf(you)),
-            GroceryList(3, "Party, Saturday", ListAccent.NEUTRAL, party, listOf(you, ava)),
-          ),
-        activeListId = 1,
+        lists = emptyList(),
+        // No list to be active. Id 0 is never handed out, so this matches nothing until the owner
+        // makes a list, and [activeList] falls back to [GroceryList.none] until they do.
+        activeListId = 0,
         online = true,
-        // Seeded so the screen has something to show. Real entries arrive when the owner approves
-        // a network they are actually standing on, and carry its real fingerprint.
-        networks =
-          listOf(
-            ApprovedNetwork(NetworkFingerprint("seed01"), "Home", "Ava is approved here too", approved = true),
-            ApprovedNetwork(NetworkFingerprint("seed02"), "Ava's hotspot", "Used in the car", approved = true),
-            ApprovedNetwork(NetworkFingerprint("seed03"), "Mum-and-Dad", "Approved, seen in June", approved = false),
-          ),
-        conflict = conflict,
+        // A network becomes approved when the owner approves it while standing on it, and carries
+        // that network's real fingerprint. There is nothing honest to put here in advance.
+        networks = emptyList(),
+        conflict = null,
       )
-    }
   }
 }

@@ -17,9 +17,16 @@ class StaplesTest {
   private fun seeded() = AppState.seed(localDevice = PHONE, now = 1_700_000_000_000)
 
   @Test
-  fun `a fresh install opens onto a usable grid`() {
-    assertEquals(Staple.defaults, seeded().staples)
-    assertTrue("defaults start unused", seeded().staples.all { it.uses == 0 })
+  fun `a fresh install opens onto an empty grid`() {
+    // A shortlist of what you buy over and over is only meaningful if you put it there. The screen
+    // says what the grid is for while it is empty, so there is nothing to prefill.
+    assertEquals(emptyList<Staple>(), AppState.empty(localDevice = PHONE).staples)
+  }
+
+  @Test
+  fun `a staple starts unused`() {
+    assertTrue(seeded().staples.isNotEmpty())
+    assertTrue("nothing claims a use it has not had", seeded().staples.all { it.uses == 0 })
   }
 
   @Test
@@ -40,8 +47,6 @@ class StaplesTest {
 
   @Test
   fun `an emptied grid stays empty across a restart`() {
-    // The distinction that matters: nothing to show because the owner cleared it, as against
-    // nothing to show because the file predates staples. Only the second is refilled.
     val restored = StateCodec.decode(StateCodec.encode(seeded().copy(staples = emptyList())))
 
     assertNotNull(restored)
@@ -49,7 +54,7 @@ class StaplesTest {
   }
 
   @Test
-  fun `a file written before staples existed comes back with the defaults`() {
+  fun `a file written before staples existed comes back with an empty grid`() {
     val older =
       StateCodec.encode(seeded())
         .lineSequence()
@@ -57,7 +62,9 @@ class StaplesTest {
         .mapIndexed { index, line -> if (index == 0) "PLSTATE7" else line }
         .joinToString("\n")
 
-    assertEquals(Staple.defaults, StateCodec.decode(older)?.staples)
+    // There is nothing to restore and nothing to invent: a file that never stored staples is
+    // indistinguishable from one whose owner cleared them, and both mean an empty grid.
+    assertEquals(emptyList<Staple>(), StateCodec.decode(older)?.staples)
   }
 
   @Test

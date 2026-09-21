@@ -85,7 +85,7 @@ class FileListRepository(
     // keystore entry was cleared — the old items are unattributable, so start clean rather than
     // claim authorship of them.
     if (restored != null && restored.localDevice != me) {
-      val fresh = AppState.seed(localDevice = me)
+      val fresh = AppState.empty(localDevice = me)
       node = fresh.toNode()
       _state.value = fresh
       schedulePersist(fresh)
@@ -104,10 +104,10 @@ class FileListRepository(
     // A missing or unreadable file is a first run, not an error worth surfacing. The identity is
     // not minted here any more: it comes from the keystore, which is what keeps it stable across
     // reinstalls of this file and makes it something a peer can verify rather than merely believe.
-    val seeded = AppState.seed(localDevice = me)
-    node = seeded.toNode()
-    _state.value = seeded
-    schedulePersist(seeded)
+    val blank = AppState.empty(localDevice = me)
+    node = blank.toNode()
+    _state.value = blank
+    schedulePersist(blank)
   }
 
   override suspend fun reset() {
@@ -116,7 +116,7 @@ class FileListRepository(
     pendingWrite?.cancel()
     withContext(io) { writeLock.withLock { runCatching { file.delete() } } }
 
-    val fresh = AppState.seed(localDevice = identity().deviceId)
+    val fresh = AppState.empty(localDevice = identity().deviceId)
     node = fresh.toNode()
     _state.value = fresh
     schedulePersist(fresh)

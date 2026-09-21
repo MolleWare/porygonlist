@@ -68,6 +68,9 @@ fun StaplesScreen(
     Text("Staples", style = PorygonType.ScreenTitle, color = TextInk, modifier = Modifier.padding(bottom = 5.dp))
     Text(
       if (staples.isEmpty()) "The things you buy over and over."
+      // With no list open there is nowhere for a tap to add to, so it would be a promise the
+      // screen cannot keep.
+      else if (activeListName.isBlank()) "Make a list to add these to. Hold to remove."
       else "Tap to add to $activeListName. Hold to remove.",
       style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.5),
       color = Neutral700,

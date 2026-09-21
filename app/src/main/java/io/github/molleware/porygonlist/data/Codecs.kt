@@ -255,7 +255,9 @@ object StateCodec {
     // resume ordering safely; treat the file as unreadable rather than guessing.
     val device = localDevice ?: return null
     val head = clockHead ?: return null
-    if (listOrder.isEmpty()) return null
+    // No check on the lists: a file holding none is a real state, not a truncated one. Every install
+    // starts there and stays there until someone makes a list, and rejecting it would throw away the
+    // identity and clock in the `meta` record and start the phone over as if it were new.
 
     val lists =
       listOrder.map { id ->
@@ -289,13 +291,15 @@ object StateCodec {
       idCounter = maxOf(idCounter, highestLocal),
       clockHead = if (newestStamp != null && newestStamp > head) newestStamp else head,
       lists = lists,
-      activeListId = if (lists.any { it.id == activeListId }) activeListId else lists.first().id,
+      // A file can legitimately hold no lists at all, in which case nothing is active and id 0 —
+      // never handed out — says so.
+      activeListId = if (lists.any { it.id == activeListId }) activeListId else lists.firstOrNull()?.id ?: 0,
       online = online,
       networks = networks,
       // A peer whose key does not hash to its id is not that peer; drop it rather than trust it.
       peers = peers.filter { DeviceIdentity.matches(it.deviceId, it.publicKey) },
-      // An empty grid is a real state someone can reach by removing every tile, so it is only
-      // refilled for a file written before staples were storable at all.
+      // An empty grid is a real state someone can reach by removing every tile, so a stored one is
+      // taken at its word. A file written before staples were storable has none to restore.
       staples = if (version in WITH_STAPLES) staples else Staple.defaults,
       conflict = conflict,
     )

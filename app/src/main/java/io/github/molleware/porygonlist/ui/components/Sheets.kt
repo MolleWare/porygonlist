@@ -251,7 +251,11 @@ fun ImportSheet(
       modifier = Modifier.fillMaxWidth().heightIn(min = 17.dp).padding(top = 8.dp, bottom = 14.dp),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-      PrimaryButton("Add to $listName", onAdd, modifier = Modifier.weight(1f).heightIn(min = 46.dp))
+      PrimaryButton(
+        if (listName.isBlank()) "Add" else "Add to $listName",
+        onAdd,
+        modifier = Modifier.weight(1f).heightIn(min = 46.dp),
+      )
       SecondaryButton("Cancel", onDismiss, modifier = Modifier.heightIn(min = 46.dp))
     }
   }

@@ -38,9 +38,9 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import io.github.molleware.porygonlist.theme.Bg
-import io.github.molleware.porygonlist.theme.Neutral900
 import io.github.molleware.porygonlist.ui.PorygonViewModel
 import io.github.molleware.porygonlist.ui.Sheet
+import io.github.molleware.porygonlist.ui.components.Confetti
 import io.github.molleware.porygonlist.ui.components.EditItemSheet
 import io.github.molleware.porygonlist.ui.components.ExportSheet
 import io.github.molleware.porygonlist.ui.components.ImportSheet
@@ -48,6 +48,7 @@ import io.github.molleware.porygonlist.ui.components.Tab
 import io.github.molleware.porygonlist.ui.components.TabBar
 import io.github.molleware.porygonlist.ui.itemSubLabel
 import io.github.molleware.porygonlist.ui.networkLabel
+import io.github.molleware.porygonlist.ui.others
 import io.github.molleware.porygonlist.ui.partnerName
 import io.github.molleware.porygonlist.ui.screens.ListDetailScreen
 import io.github.molleware.porygonlist.ui.screens.ListsScreen
@@ -68,6 +69,8 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
         monitor = Graph.networkMonitor(context),
         identity = Graph::identity,
         deleteIdentity = Graph::deleteIdentity,
+        peerDiscovery = Graph.peerDiscovery(context),
+        endpoint = Graph.syncEndpoint(),
       )
     }
   val state by viewModel.state.collectAsStateWithLifecycle()
@@ -86,11 +89,10 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
 
   val backStack = rememberNavBackStack(Lists)
   val current = backStack.lastOrNull() ?: Lists
-  val shopping = current is Shop
 
   // Null until the stored state has been read. Painting the ground colour straight away means the
   // first frame is the app's own background rather than a white flash.
-  Box(Modifier.fillMaxSize().background(if (shopping) Neutral900 else Bg)) {
+  Box(Modifier.fillMaxSize().background(Bg)) {
     val appState = state ?: return@Box
 
     // First run. Deliberately not a destination: there is no back stack entry, no tab bar and
@@ -208,6 +210,12 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                 ShopScreen(
                   state = appState,
                   onToggleChecked = viewModel::toggleChecked,
+                  // The same four as the list screen, deliberately: clearing the trolley is one
+                  // act with one piece of state, reachable from either place it makes sense.
+                  confirmingClear = viewModel.confirmingClear,
+                  onAskClear = viewModel::askClearChecked,
+                  onCancelClear = viewModel::cancelClearChecked,
+                  onClearChecked = viewModel::clearChecked,
                   onLeave = { backStack.goTo(ListDetail) },
                   modifier = Modifier.fillMaxSize(),
                 )
@@ -250,15 +258,26 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
               entry<PairPhone> {
                 PairScreen(
                   invite = viewModel.invite(),
+                  textInvite = viewModel.textInvite(),
                   code = viewModel.pairCode,
                   onCodeChange = viewModel::onPairCodeChange,
                   note = viewModel.pairNote,
                   sharingList = viewModel.pairingForList?.let { id -> appState.lists.firstOrNull { it.id == id }?.name },
                   pendingName = viewModel.pendingInvite?.displayName,
+                  justPairedName = viewModel.justPaired?.displayName,
+                  onUndoJustPaired = viewModel::undoJustPaired,
+                  onJustPairedIsReplacementFor = viewModel::justPairedIsReplacementFor,
+                  listening = viewModel.reachableForPairing,
+                  handingBack = viewModel.handingBack,
                   replaceCandidates = viewModel.replaceCandidates(appState),
                   onPairAsNew = viewModel::pairAsNew,
                   onReplace = viewModel::pairAsReplacementFor,
-                  onBack = { if (backStack.size > 1) backStack.removeLastOrNull() else backStack.goTo(Settings) },
+                  onBack = {
+                    // Closes the socket and burns the token. Leaving by the back gesture goes
+                    // through here too, so there is no way off this screen that leaves it open.
+                    viewModel.stopPairing()
+                    if (backStack.size > 1) backStack.removeLastOrNull() else backStack.goTo(Settings)
+                  },
                   modifier = Modifier.fillMaxSize(),
                 )
               }
@@ -292,6 +311,10 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   networkNameDraft = viewModel.networkNameDraft,
                   onNetworkNameDraftChange = viewModel::onNetworkNameDraftChange,
                   onStartNamingNetwork = viewModel::startNamingNetwork,
+                  confirmingNetworkRemoval = viewModel.confirmingNetworkRemoval,
+                  onAskForgetNetwork = viewModel::askForgetNetwork,
+                  onCancelForgetNetwork = viewModel::cancelForgetNetwork,
+                  onForgetNetwork = viewModel::forgetNetwork,
                   onSaveNetworkName = viewModel::saveNetworkName,
                   onCancelNamingNetwork = viewModel::cancelNamingNetwork,
                   pairablePeers = viewModel.peersNotOnActiveList(appState),
@@ -313,11 +336,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
       }
 
       if (!keyboardUp) {
-        TabBar(
-          current = current.toTab(),
-          onSelect = { tab -> backStack.goTo(tab.toKey()) },
-          dark = shopping,
-        )
+        TabBar(current = current.toTab(), onSelect = { tab -> backStack.goTo(tab.toKey()) })
       }
     }
 
@@ -329,7 +348,9 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
             EditItemSheet(
               draft = draft,
               syncNote =
-                if (appState.online) "${appState.activeList.partnerName(appState.localDevice)} sees this the moment you save."
+                // Nobody on the list means nobody to see it, whatever the network is doing.
+                if (appState.activeList.others(appState.localDevice).isEmpty()) "Saved on this phone."
+                else if (appState.online) "${appState.activeList.partnerName(appState.localDevice)} sees this the moment you save."
                 else "Saved here now, handed over next time you share a network.",
               onNameChange = viewModel::onSheetNameChange,
               onQtyUp = viewModel::qtyUp,
@@ -361,6 +382,13 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
           )
         null -> Unit
       }
+    }
+
+    // Above everything, including an open sheet, and not inside any one screen: the list can be
+    // finished from the list itself or from shopping mode, and the burst should not be clipped to
+    // whichever one happened to be on top.
+    if (viewModel.celebrating) {
+      Confetti(onFinished = viewModel::celebrationShown, modifier = Modifier.fillMaxSize())
     }
   }
 }
