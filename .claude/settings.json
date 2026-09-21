@@ -1,15 +1,34 @@
 {
   "permissions": {
     "allow": [
+      "Bash(./scripts/build.sh)",
       "Bash(./scripts/build.sh *)",
+      "Bash(./scripts/device.sh)",
       "Bash(./scripts/device.sh *)",
-      "Bash(./scripts/startup.sh *)",
+      "Bash(./scripts/install.sh)",
       "Bash(./scripts/install.sh *)",
+      "Bash(./scripts/logs.sh)",
       "Bash(./scripts/logs.sh *)",
+      "Bash(./scripts/test.sh)",
       "Bash(./scripts/test.sh *)",
+      "Bash(./scripts/startup.sh)",
+      "Bash(./scripts/startup.sh *)",
+      "Bash(./scripts/benchmark.sh)",
+      "Bash(./scripts/benchmark.sh *)",
+      "Bash(./scripts/icon.sh)",
+      "Bash(./scripts/icon.sh *)",
+
+      "Bash(./gradlew :app:assembleDebug)",
       "Bash(./gradlew :app:assembleDebug *)",
+      "Bash(./gradlew :app:compileDebugKotlin)",
       "Bash(./gradlew :app:compileDebugKotlin *)",
-      "Bash(./gradlew :app:testDebugUnitTest *)"
+      "Bash(./gradlew :app:testDebugUnitTest)",
+      "Bash(./gradlew :app:testDebugUnitTest *)",
+      "Bash(./gradlew :app:installBenchmarkRelease)",
+      "Bash(./gradlew :app:installBenchmarkRelease *)",
+
+      "Bash(adb devices)",
+      "Bash(adb devices *)"
     ]
   }
 }

@@ -23,17 +23,25 @@ Committed on the `app-flow` branch.
 | Duplicates | **Done.** Two phones adding the same thing are paired by name, not id. |
 | Suggestions | **Done.** Dependency-free trie over the owner's words and a built-in list. |
 | Sync protocol | **Done.** Payload, receive, receipt, tombstone collection. |
-| **Transport** | **Not started.** No discovery, no socket, no TLS. |
+| Discovery | **Done, seen on the wire.** `NsdManager` over `_porygonlist._tcp`, behind the approval gate. |
+| Pairing handshake | **Working on hardware.** One scan pairs both phones: pinned TLS, one-time token. Pixel 6, TLSv1.3. |
+| **Transport** | **In progress.** Peers are found, TLS stands up, pairing crosses it. Lists do not yet. |
 | Fonts | **Not fetched.** `./scripts/fetch-fonts.sh` needs a machine with network. |
 
-274 unit tests, all passing. Debug and release both assemble; lint is clean of
-anything this work introduced.
+312 unit tests and 5 instrumented tests, all passing. The instrumented suite is
+new: `testInstrumentationRunner` had never been set, so `connectedDebugAndroidTest`
+had always reported an empty suite rather than a missing one. Debug and release
+both assemble; lint is clean of anything this work introduced.
 
-The app declares two permissions. `ACCESS_NETWORK_STATE` is normal-level, granted
+The app declares three permissions. `ACCESS_NETWORK_STATE` is normal-level, granted
 at install, and everything load-bearing runs on it. `ACCESS_FINE_LOCATION` is
 optional, asked for at the moment it pays off, and buys exactly one thing: the
 wifi's own name instead of `Network a3f91c`. **It decides nothing** — decline it
-and the app behaves as it did before it existed. No Play Services, no Google
+and the app behaves as it did before it existed. `INTERNET` is normal-level too,
+and is what Android requires for any socket at all; there is no narrower one
+meaning "the local network only", so the limit is in the code rather than in the
+manifest — mDNS on the local subnet, addresses the responder gave, and the whole
+of it held shut off an approved network. No Play Services, no Google
 dependencies of any kind.
 
 ---
@@ -83,8 +91,11 @@ It carries **no secret** either. A public key is safe on a screen or in a text
 message. What makes pairing trustworthy is the channel — a phone held up in front
 of you — not confidentiality of the payload.
 
-Pairing is one-directional per scan. Both phones scan each other, or one scans
-and the other is scanned; there is no automatic reciprocation.
+Pairing is one-directional per scan, and each phone must end up holding the
+other's key. It no longer takes two scans to get there: while the pairing screen
+is open the phone listens, and the scanner hands its own key back over a
+connection pinned to the key it just read. Off that path — a code that arrived as
+a text, no wifi between them — both phones still scan. See §7.2.
 
 ### Key facts
 
@@ -358,15 +369,117 @@ Versions before 6 lacked identity and are still refused.
 Everything a person can do in the app is now reachable. What is left is the
 transport, in dependency order.
 
-1. **Discovery.** `NsdManager`, framework-provided, advertising `_porygonlist._tcp`,
-   started and stopped by the existing `discoveryDecision` gate.
-2. **Authenticated channel.** TLS pinned to `TrustedPeer.publicKey`. The blocker
+1. **Discovery.** **Done.** `NsdManager` advertising and browsing `_porygonlist._tcp`,
+   started and stopped by the `discoveryDecision` gate, in `data/net/`.
+
+   The device id travels in a TXT record rather than only in the service name,
+   because Android renames a service on collision and an id parsed out of
+   `AVAPHONE (2)` is wrong exactly when it matters. Resolves are queued one at a
+   time: below API 34 the platform answers overlapping ones with
+   `FAILURE_ALREADY_ACTIVE`, so a resolve per `onServiceFound` loses most of them
+   on the networks with the most to find.
+
+   **An advertisement is a claim, not an identity.** Anything on the LAN can
+   advertise any id. `reachablePeers` — pure, and the only part of this worth
+   testing — drops this phone's own record and every id we hold no key for; what
+   settles who is on the other end is still the pinned key, in step 2.
+
+   `SyncEndpoint` holds the advertised port open so the address is real, and now
+   serves the pairing handshake over TLS on it.
+
+   **Confirmed from a laptop on the same wifi, not just from the app's own
+   tests.** `avahi-browse -rt _porygonlist._tcp` finds the service, resolves it,
+   and shows the device id in both the service name and the TXT record, on an
+   ephemeral port. The port accepts TCP from another host, so this wifi has no
+   client isolation. And `openssl s_client` against it completes a **TLSv1.3**
+   handshake — `TLS_AES_256_GCM_SHA384`, signature type
+   `ecdsa_secp256r1_sha256` — proving the keystore key really does sign the
+   handshake over a network rather than only over loopback.
+
+   Two details that fell out of that and are worth keeping: the certificate the
+   keystore mints is `CN=Fake`, valid 1970 to 2048, which is exactly why nothing
+   reads its subject or dates; and the public key `openssl` printed matches the
+   invite on the phone's screen byte for byte, which is the pin working.
+2. **One scan, not two.** **Working; verified against an independent machine, not yet phone to phone.** While the pairing
+   screen is open the phone listens, and the QR — not the written code — carries
+   where to call back and a one-time token. The phone that scans pins the key it
+   just read, connects, and hands its own key over that connection. So the person
+   showing the code never scans anything.
+
+   **The two ends are sure of different things, and the asymmetry is the design.**
+   The scanner knows who it is calling: it pins the key from the code, so an
+   impostor on the wifi cannot be the far end. The phone being called cannot know
+   that the same way — a phone it has never met is exactly what it is waiting for
+   — so it gets the token instead: a fresh random value that was only ever on its
+   own screen, said back inside a channel already encrypted to its own key. A
+   caller that merely found the open port cannot produce it and is refused before
+   its invite is parsed.
+
+   What the token does *not* prove is that the right person looked; a photograph
+   of the screen is as good as standing in front of it. It is minted per screen
+   and spent once, so the window is a minute and a race is visible.
+
+   **The phone being called does not ask.** It pairs, and says so, with Undo
+   beside it. Consent was opening the screen and holding the code out; asking
+   again — about a phone that just proved it read that very screen — is the
+   ceremony this change exists to delete. The two corrections that used to live in
+   a question are offered after the fact instead: Undo, and "this is X's new
+   phone". A wrong name appearing is visible immediately, which is the property
+   that makes acting first safe.
+
+   Two consequences worth stating plainly. The **written code is unchanged** — no
+   address, no token — because that is the form that goes in a message and
+   outlives the screen; only the QR is live, which is why the copy button and the
+   QR no longer carry the same string. And the listening socket is **deliberately
+   not behind the approval gate**: the first time two people pair they are almost
+   certainly on a wifi neither has approved, and nothing is announced anyway — the
+   address goes out in a code held up to one person.
+   **The keystore key needs `DIGEST_NONE`, and that was not obvious.** Conscrypt
+   hashes the handshake transcript itself and hands the key a raw digest to
+   sign, so a key authorised only for `DIGEST_SHA256` refuses and the server
+   hangs up *before sending a certificate* — with both ends reporting only that
+   the other closed the connection, and no certificate error anywhere. Adding
+   `DIGEST_NONE` to `KeyGenParameterSpec` fixes it; measured on a Pixel 6,
+   negotiating TLSv1.3 / TLS_AES_128_GCM_SHA256.
+
+   **Authorised digests are fixed when a key is generated.** An identity minted
+   before this cannot do TLS and cannot be upgraded, because a new key is a new
+   `DeviceId`. Phones carrying an older identity have to recreate it.
+
+   Two smaller traps found the same way. `X509ExtendedKeyManager` has `Engine`
+   variants of the alias choosers that default to returning null, and
+   Conscrypt's socket runs the handshake through an `SSLEngine` — implementing
+   only the `Socket` overloads leaves the server with no certificate to offer.
+   And `PairingHandshake` reported *every* `SSLException` as "that address
+   answered with a different phone's key", which sends the reader hunting for an
+   impostor when the connection simply broke; only a `CertificateException` in
+   the cause chain means the pin actually rejected someone.
+3. **Authenticated channel.** TLS pinned to `TrustedPeer.publicKey`. The blocker
    here is already solved: **the Android Keystore generates a self-signed X.509
    certificate alongside the key**, returned by `keyStore.getCertificate(alias)`, so
    no certificate-building library is needed. Pin in a custom `X509TrustManager`.
-3. **Wire it up.** `payloadFor` / `receive` / `confirmDelivery` are the seams and
-   are already tested; the transport only has to move bytes between them.
-4. **The QR handshake.** Done, and done without a camera. `data/crypto/QrCode.kt`
+4. **Global list identity.** **Not started, and the real blocker.**
+   `GroceryList.id` is a `Long` assigned in `createList` as `max(existing) + 1`.
+   It is local and sequential, so both phones call their first list `1`. The
+   `ListId` value class (`deviceId:counter`) and `IdFactory.nextList()` already
+   exist in `data/sync/Identity.kt` and are **never used** — the sync model and
+   the UI model disagree about what names a list.
+
+   This is not tidiness. Two unrelated lists sharing an id across phones would
+   merge into each other, so it is a latent corruption path as well as the reason
+   nothing can arrive. Fixing it changes the persisted format, so it is a
+   version 7 and a migration.
+5. **A list has to be able to arrive.** `receive` merges only lists whose id
+   already exists locally and deliberately refuses to let a peer introduce one —
+   "joining a list happens by invitation, not by assertion" — and no code path
+   anywhere creates a list from a peer. The invitation half of that sentence was
+   never built. Adding somebody to a list currently adds a `Person` to *your*
+   copy and nothing else, which is precisely why sharing a list appeared to do
+   nothing.
+6. **Wire it up.** `payloadFor` / `receive` / `confirmDelivery` are the seams and
+   are already tested; the transport only has to move bytes between them. This is
+   the smallest of the three, and it is the one that looks like the whole job.
+7. **The QR encoder.** Done, and done without a camera. `data/crypto/QrCode.kt`
    encodes the invite, `ui/components/QrCodeImage.kt` draws it, and the invite is
    a `porygonlist://pair?c=…` link rather than a bare code.
 
@@ -399,11 +512,11 @@ transport, in dependency order.
    widths and every multi-block interleaving layout, plus a decode straight off a
    screenshot of the phone. Re-run that sweep if the encoder is ever touched.
 
-   **The one thing not verified on hardware**: that a given camera app offers to
-   open a custom scheme. Firing the intent works, and the flow was driven end to
-   end from both a cold start and a running app, but "point a real camera at it"
-   needs two devices.
-5. **Fonts.** Run `./scripts/fetch-fonts.sh`, commit the TTFs, swap the two
+   **Verified on hardware.** A stock camera app pointed at the QR offers to open
+   the custom scheme, and it lands on the pairing screen — which was the one part
+   of this shape that could only be settled with a real camera. The scanner-free
+   design holds.
+8. **Fonts.** Run `./scripts/fetch-fonts.sh`, commit the TTFs, swap the two
    families in `theme/Type.kt`.
 
 ### Smaller loose ends
