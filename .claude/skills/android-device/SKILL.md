@@ -72,9 +72,15 @@ does not exist and should not be added. A stack trace is what these are for.
 **Do not paste log output anywhere public.** A crash inside sync can carry an
 item id, and an item id begins with a device id.
 
-**There are no instrumented tests.** `./scripts/test.sh instrumented` exists but
-the suite is empty. Verification on device is visual: screenshot, look, compare.
-Logic belongs in the unit suite (`./scripts/test.sh`), which needs no phone.
+**The instrumented suite covers pairing, and only pairing.**
+`./scripts/test.sh instrumented` runs the five tests in `PairingHandshakeTest` —
+the things that need a real Android Keystore key and a real socket. Everything
+else is verified visually: screenshot, look, compare. Logic that needs neither
+belongs in the unit suite (`./scripts/test.sh`), which needs no phone.
+
+The suite reported empty until 2026-09-20 because no `testInstrumentationRunner`
+was configured, not because there was nothing to run. If it ever reports zero
+tests again, check that first.
 
 ## Which phone can measure what
 

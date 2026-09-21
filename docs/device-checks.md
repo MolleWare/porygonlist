@@ -1,13 +1,14 @@
 # Device checks
 
-The things that can only be confirmed on a phone. There are no instrumented
-tests — `./scripts/test.sh instrumented` exists but its suite is empty — so
-verification on hardware is visual: install, drive, screenshot, look.
+The things that can only be confirmed on a phone. Most of them are visual —
+install, drive, screenshot, look — because the one thing that could be asserted
+automatically already is: `./scripts/test.sh instrumented` runs the five tests in
+`PairingHandshakeTest`, which need a real keystore key and a real socket.
 
-Run the JVM suite first (`./scripts/test.sh`). It needs no phone and it catches
-everything these checks would only catch slowly. What follows is the residue:
-behaviour that depends on a real install, a real keystore, a real network, or a
-real screen.
+Run the JVM suite first (`./scripts/test.sh`), then the instrumented one if a
+phone is attached. Between them they catch everything these checks would only
+catch slowly. What follows is the residue: behaviour that depends on a real
+install, a real network, or a real screen.
 
 ## Before you start
 
@@ -81,7 +82,7 @@ Make one list, then press and hold it and delete it.
 *Why:* this used to be refused, on the grounds that the app had no state showing
 no list at all. It has one now — it is where every install starts.
 
-## 5. A staple tapped twice asks for two — **not yet run on hardware**
+## 5. A staple tapped twice asks for two — *verified 2026-09-21*
 
 Make a list, add a staple, open the list, tap the staple tile twice.
 
@@ -92,10 +93,12 @@ Make a list, add a staple, open the list, tap the staple tile twice.
   starts a **new** line rather than raising the count on a done row.
 
 *Why:* every add path appended unconditionally; the suggestion dropdown only
-hid duplicates from the list it offered. Fixed 2026-09-19 with unit cover, but
-never seen on a screen.
+hid duplicates from the list it offered. Fixed 2026-09-19 with unit cover, seen
+on a screen 2026-09-21: two taps gave one `Milk ×2` line, typing `milk` into the
+field made it `×3` and kept the original capitalisation, and tapping the staple
+again with the row ticked started a second, separate `Milk`.
 
-## 6. Forgetting an approved network — **not yet run on hardware**
+## 6. Forgetting an approved network — *verified 2026-09-21*
 
 On the Share tab, with at least one network listed, **press and hold** its name.
 
@@ -112,7 +115,11 @@ accumulated every café ever approved. The gesture matches lists and staples —
 hold to remove — but a long-press is invisible until tried, so the hint line
 under the section has to say so.
 
-## 7. Confetti on finishing a list — **not yet run on hardware**
+All four clauses held on 2026-09-21. Note that forgetting the network you are
+standing on takes its **name** with it: the banner comes back offering
+`Network <fingerprint>`, not the label you gave it.
+
+## 7. Confetti on finishing a list — *verified 2026-09-21*
 
 Make a list with two or three things on it, then tick them off.
 
@@ -130,6 +137,20 @@ cover; what needs a pair of eyes is whether it reads as a flourish or as a
 glitch, and whether it obscures the list underneath at the moment you want to
 check your work.
 
+Seen on 2026-09-21, and it reads as a flourish: the burst rises from the row you
+just ticked, the pieces are small enough that the item text stays readable
+through them, and it is gone before you would look away. Every clause held.
+
+To exercise the last one without touching Settings:
+
+```bash
+adb shell settings put global animator_duration_scale 0    # then 1.0 to restore
+```
+
+`Confetti` reads `ANIMATOR_DURATION_SCALE` once per burst, not per frame, so the
+change takes effect on the next tick without reinstalling — but put the value
+back, because it slows every animation on the phone, not just this one.
+
 ## 8. Identity survives an ordinary reinstall
 
 `./scripts/install.sh debug` **without** `--fresh`, after check 1.
@@ -141,13 +162,32 @@ reinstall keeps both. Verified working on GrapheneOS. If this ever fails, the
 keystore entry was cleared, and `ListRepository.load` will deliberately discard
 the old state rather than claim authorship of items it cannot attribute.
 
-## 9. Pairing over the network — **never run on hardware**
+## 9. Pairing over the network — **one phone only**
 
-Needs both phones on the same wifi, both approving that network.
+`./scripts/test.sh instrumented` covers the handshake against a real keystore
+key and a real socket: the happy path, an unpinned key, a missing token, a spent
+token and a closed screen. It passes on the Pixel, and it is the check to run
+first — a failure there makes everything below moot.
 
-This is the largest untested surface in the app. The handshake, the discovery
-gate and the keystore-backed TLS digest have unit cover and have never met a
-real network. Treat a first run of this as exploratory, not as a check.
+What it cannot cover is a second device. **Two-phone pairing has never been
+run.** Needs both phones on the same wifi, both approving that network, and
+treat the first attempt as exploratory rather than as a check.
+
+Two things to know before trying it:
+
+- **Identities minted before 2026-09-20 cannot do TLS.** The key must authorise
+  `DIGEST_NONE`, because Conscrypt hashes the handshake transcript itself and
+  hands the key a raw digest. Authorised digests are fixed at generation and
+  there is no migration, so both phones need a fresh identity — and a new key is
+  a new `DeviceId`.
+- **A list still cannot arrive from a peer.** `GroceryList.id` is a local
+  `max+1`, and `AppState.receive` refuses to let a peer introduce a list at all.
+  Pairing succeeding does not mean a shared list will appear; that needs global
+  list identity and an invitation step first.
+
+*Why:* the failure mode here is silent on both ends. When the digest was wrong,
+the server hung up before sending a certificate and each side reported only that
+the other had closed.
 
 ## 10. Startup timing — Samsung only
 
@@ -180,6 +220,11 @@ identity with it. Anything paired before a benchmark run is unpaired after.
   screen is all-black; a real capture is 150 KB+. Confirm against
   `uiautomator dump` before concluding the app renders black. This was
   misdiagnosed once as a real rendering bug.
+- **The instrumented suite uninstalls the app when it finishes**, exactly as the
+  benchmark does, and takes the keystore identity and all state with it. Run
+  `./scripts/test.sh instrumented` *before* anything you set up by hand, not
+  after. The upside is that the next launch is a genuine first run, so checks 1
+  to 3 come free.
 - **`./scripts/install.sh release` fails silently.** There is no release signing
   config, so `adb install` rejects the unsigned APK and the script still exits 0
   — leaving whatever was already installed in place. Use
