@@ -61,15 +61,39 @@ fun AppState.payloadFor(peer: DeviceId, clock: HybridClock): SyncPayload? {
  * Folding the peer's stamp into this phone's clock is the step that keeps a device with a fast
  * clock from winning every future merge: afterwards this clock is ahead of everything it has seen,
  * so the next local edit outranks what just arrived.
+ *
+ * Two kinds of list arrive here and they are handled differently: one both phones already hold,
+ * which merges, and one this phone is being invited onto, which is taken whole. See the comment on
+ * `invitations` below for what makes an invitation recognisable and what it still does not permit.
  */
 fun AppState.receive(payload: SyncPayload, clock: HybridClock): SyncResult {
   if (payload.from == localDevice) return SyncResult.Rejected(RejectReason.SELF)
   if (peers.none { it.deviceId == payload.from }) return SyncResult.Rejected(RejectReason.UNKNOWN_PEER)
 
-  // Only lists this phone already shares with the sender. A peer cannot introduce a list, or add
-  // itself to one, by sending it — joining a list happens by invitation, not by assertion.
-  val applicable = payload.lists.filter { incoming -> lists.any { it.id == incoming.id } }
-  if (applicable.isEmpty()) return SyncResult.Rejected(RejectReason.NOTHING_SHARED)
+  val known = lists.mapTo(mutableSetOf()) { it.id }
+
+  // Lists both phones hold. These merge field by field.
+  val applicable = payload.lists.filter { it.id in known }
+
+  /*
+   * Lists this phone has never seen, which it is being invited onto.
+   *
+   * Joining still happens by invitation rather than by assertion — what changed is that the
+   * invitation is now something the receiver can recognise. It is a list from a phone this one has
+   * paired with, naming this phone among its people. Both halves matter: pairing is the owner
+   * saying yes to the sender, and being named is that sender saying this list is meant for them.
+   *
+   * What a peer still cannot do is hand over a list that has nothing to do with this phone. A
+   * bundle naming only other people is dropped rather than quietly stored, which is what stops a
+   * paired phone using this as somewhere to put its own lists.
+   *
+   * There is no second question on arrival, deliberately. The weight sits at the moment of pairing,
+   * where somebody held a phone up and someone else agreed to it; asking again here would be
+   * ceremony about a decision already made.
+   */
+  val invitations = payload.lists.filter { it.id !in known && it.people.any { who -> who.wasEver(localDevice) } }
+
+  if (applicable.isEmpty() && invitations.isEmpty()) return SyncResult.Rejected(RejectReason.NOTHING_SHARED)
 
   val clashes = mutableListOf<ItemMerge>()
   val duplicates = mutableListOf<Conflict>()
@@ -81,7 +105,7 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock): SyncResult {
       clashes += result.clashes
       duplicates += result.duplicates
       result.list
-    }
+    } + invitations
 
   clock.observe(payload.at)
   mergedLists.mapNotNull { it.newestStamp() }.maxOrNull()?.let { clock.observe(it) }

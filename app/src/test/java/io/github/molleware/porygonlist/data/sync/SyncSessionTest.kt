@@ -188,16 +188,54 @@ class SyncSessionTest {
   }
 
   @Test
-  fun `a peer cannot introduce a list by sending one`() {
-    // Joining a list happens by invitation, not by assertion.
+  fun `a peer cannot introduce a list this phone is not on`() {
+    // Joining happens by invitation, not by assertion. A list naming only other people is not an
+    // invitation, and a paired phone does not get to use this one as somewhere to keep its lists.
     val ava = Phone(AVA, 1_000, emptyList(), pair)
-    val smuggled = GroceryList(ListId("list:99"), "Not yours", ListAccent.NEUTRAL, emptyList(), pair)
-    val payload = SyncPayload(from = HUGO, at = Hlc(9_000, 0, HUGO), lists = listOf(smuggled))
+    val notHers =
+      GroceryList(ListId("list:99"), "Not yours", ListAccent.NEUTRAL, emptyList(), listOf(Person(HUGO, "Hugo", "H")))
+    val payload = SyncPayload(from = HUGO, at = Hlc(9_000, 0, HUGO), lists = listOf(notHers))
 
     val result = ava.state.receive(payload, ava.clock)
 
     assertEquals(SyncResult.Rejected(RejectReason.NOTHING_SHARED), result)
     assertEquals(listOf(ListId("list:1")), ava.state.lists.map { it.id })
+  }
+
+  @Test
+  fun `a list naming this phone arrives whole`() {
+    // The invitation case: a paired phone sends a list this one has never seen, with this one on
+    // it. That is someone sharing a list, and it is the whole point of the exchange.
+    val ava = Phone(AVA, 1_000, emptyList(), pair)
+    val invited =
+      GroceryList(
+        ListId("${HUGO.value}:4"),
+        "Party, Saturday",
+        ListAccent.NEUTRAL,
+        listOf(item("${HUGO.value}:9", "Ice", Hlc(2_000, 0, HUGO))),
+        pair,
+      )
+    val payload = SyncPayload(from = HUGO, at = Hlc(9_000, 0, HUGO), lists = listOf(invited))
+
+    val result = ava.state.receive(payload, ava.clock)
+
+    assertTrue("an invitation should be accepted", result is SyncResult.Merged)
+    val after = (result as SyncResult.Merged).state
+    assertEquals(listOf(ListId("list:1"), ListId("${HUGO.value}:4")), after.lists.map { it.id })
+    // Taken whole: there was no local copy to merge against, so the items come across as sent.
+    assertEquals(listOf("Ice"), after.lists.last().items.map { it.name.value })
+  }
+
+  @Test
+  fun `an invitation from a phone that is not paired is refused`() {
+    // The pairing check comes first, so being named on a list buys a stranger nothing.
+    val ava = Phone(AVA, 1_000, emptyList(), pair)
+    val stranger = DeviceId("STRANGERSTRANGER")
+    val invited =
+      GroceryList(ListId("${stranger.value}:1"), "Free money", ListAccent.NEUTRAL, emptyList(), pair)
+    val payload = SyncPayload(from = stranger, at = Hlc(9_000, 0, stranger), lists = listOf(invited))
+
+    assertEquals(SyncResult.Rejected(RejectReason.UNKNOWN_PEER), ava.state.receive(payload, ava.clock))
   }
 
   @Test
