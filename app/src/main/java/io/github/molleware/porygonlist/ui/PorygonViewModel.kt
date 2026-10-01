@@ -41,6 +41,7 @@ import io.github.molleware.porygonlist.data.net.reachablePeers
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
+import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.ItemId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -270,7 +271,7 @@ class PorygonViewModel(
     )
   }
 
-  fun openList(id: Long) = repo.update { s, _ -> s.copy(activeListId = id) }
+  fun openList(id: ListId) = repo.update { s, _ -> s.copy(activeListId = id) }
 
   /**
    * What this phone should send a peer: everything it knows, and the point in its own clock that
@@ -467,7 +468,7 @@ class PorygonViewModel(
    * as two unrelated steps — pair here, then find the list and add them — is how a feature ends up
    * looking absent. Set on the way in, honoured once, cleared.
    */
-  var pairingForList by mutableStateOf<Long?>(null)
+  var pairingForList by mutableStateOf<ListId?>(null)
     private set
 
   /**
@@ -478,7 +479,7 @@ class PorygonViewModel(
    * Both die in [stopPairing]. Nothing here depends on the network being an approved one — see
    * [ListenReason.PAIRING] for why that is deliberate rather than a gap.
    */
-  fun startPairing(forListId: Long? = null) {
+  fun startPairing(forListId: ListId? = null) {
     pairingForList = forListId
     pairCode = ""
     pairNote = ""
@@ -646,7 +647,7 @@ class PorygonViewModel(
     clearPairDraft()
   }
 
-  private fun listName(id: Long): String = state.value?.lists?.firstOrNull { it.id == id }?.name.orEmpty()
+  private fun listName(id: ListId): String = state.value?.lists?.firstOrNull { it.id == id }?.name.orEmpty()
 
   private fun clearPairDraft() {
     pairCode = ""
@@ -717,7 +718,7 @@ class PorygonViewModel(
   }
 
   /** Puts a paired phone's owner on one list, by id rather than by whichever is open. */
-  fun addPersonToList(listId: Long, device: DeviceId) = repo.update { s, _ ->
+  fun addPersonToList(listId: ListId, device: DeviceId) = repo.update { s, _ ->
     val peer = s.peerFor(device) ?: return@update s
     s.copy(
       lists =
@@ -746,8 +747,10 @@ class PorygonViewModel(
   fun createList() {
     val name = listDraft.trim()
     if (name.isEmpty()) return
-    repo.update { s, _ ->
-      val id = (s.lists.maxOfOrNull { it.id } ?: 0L) + 1
+    repo.update { s, node ->
+      // Minted, never derived from what is already here. A local `max + 1` meant both phones called
+      // their first list `1`, so two unrelated lists could not be told apart once they met.
+      val id = node.ids.nextList()
       val accent = ListAccent.entries[s.lists.size % ListAccent.entries.size]
       val you = Person(s.localDevice, s.displayName, initialOf(s.displayName))
       s.copy(lists = s.lists + GroceryList(id, name, accent, items = emptyList(), people = listOf(you)), activeListId = id)
@@ -755,7 +758,7 @@ class PorygonViewModel(
     listDraft = ""
   }
 
-  var renamingList by mutableStateOf<Long?>(null)
+  var renamingList by mutableStateOf<ListId?>(null)
     private set
 
   var renameDraft by mutableStateOf("")
@@ -791,10 +794,10 @@ class PorygonViewModel(
     cancelRename()
   }
 
-  var confirmingListDelete by mutableStateOf<Long?>(null)
+  var confirmingListDelete by mutableStateOf<ListId?>(null)
     private set
 
-  fun askDeleteList(id: Long) {
+  fun askDeleteList(id: ListId) {
     confirmingListDelete = id
   }
 
@@ -813,11 +816,14 @@ class PorygonViewModel(
    * has to show; refusing to delete the only one would make the bin stop working for no reason the
    * owner can see.
    */
-  fun deleteList(id: Long) {
+  fun deleteList(id: ListId) {
     repo.update { s, _ ->
       val remaining = s.lists.filterNot { it.id == id }
-      // Id 0 is never handed out, so this leaves nothing active, which is what no lists means.
-      s.copy(lists = remaining, activeListId = if (s.activeListId == id) remaining.firstOrNull()?.id ?: 0 else s.activeListId)
+      // An empty id is never minted, so this leaves nothing active, which is what no lists means.
+      s.copy(
+        lists = remaining,
+        activeListId = if (s.activeListId == id) remaining.firstOrNull()?.id ?: ListId("") else s.activeListId,
+      )
     }
     confirmingListDelete = null
   }

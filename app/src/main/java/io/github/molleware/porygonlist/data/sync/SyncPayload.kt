@@ -29,19 +29,27 @@ data class SyncPayload(val from: DeviceId, val at: Hlc, val lists: List<GroceryL
  */
 object SyncCodec {
 
-  private const val VERSION = "PLSYNC1"
+  /**
+   * Bumped from `PLSYNC1` when list ids became global.
+   *
+   * A build still speaking 1 would send a local `max + 1` where this expects `deviceId:counter`,
+   * and the ids would parse happily as strings while meaning something entirely different — two
+   * phones' list `1` are not the same list. Refusing the older version outright is the only safe
+   * reading; [decode] returns null and the exchange is simply dropped.
+   */
+  private const val VERSION = "PLSYNC2"
 
   fun encode(payload: SyncPayload): String = buildString {
     appendLine(VERSION)
     appendLine(Records.line("from", payload.from.value, payload.at.encode()))
 
     payload.lists.forEach { list ->
-      appendLine(Records.line("list", list.id.toString(), list.name, list.accent.name))
+      appendLine(Records.line("list", list.id.value, list.name, list.accent.name))
       list.people.forEach {
         appendLine(
           Records.line(
             "person",
-            list.id.toString(),
+            list.id.value,
             it.device.value,
             it.name,
             it.initial,
@@ -49,7 +57,7 @@ object SyncCodec {
           )
         )
       }
-      list.items.forEach { appendLine(Records.line(listOf("item", list.id.toString()) + Records.itemFields(it))) }
+      list.items.forEach { appendLine(Records.line(listOf("item", list.id.value) + Records.itemFields(it))) }
     }
   }
 
@@ -61,11 +69,11 @@ object SyncCodec {
     var from: DeviceId? = null
     var at: Hlc? = null
 
-    val order = mutableListOf<Long>()
-    val names = mutableMapOf<Long, String>()
-    val accents = mutableMapOf<Long, ListAccent>()
-    val people = mutableMapOf<Long, MutableList<Person>>()
-    val items = mutableMapOf<Long, MutableList<GroceryItem>>()
+    val order = mutableListOf<ListId>()
+    val names = mutableMapOf<ListId, String>()
+    val accents = mutableMapOf<ListId, ListAccent>()
+    val people = mutableMapOf<ListId, MutableList<Person>>()
+    val items = mutableMapOf<ListId, MutableList<GroceryItem>>()
 
     for (line in lines.drop(1)) {
       val f = Records.split(line)
@@ -76,13 +84,13 @@ object SyncCodec {
               at = Hlc.decode(f[2])
             }
             "list" -> {
-              val id = f[1].toLong()
+              val id = ListId(f[1])
               order += id
               names[id] = f[2]
               accents[id] = ListAccent.valueOf(f[3])
             }
             "person" ->
-              people.getOrPut(f[1].toLong()) { mutableListOf() } +=
+              people.getOrPut(ListId(f[1])) { mutableListOf() } +=
                 Person(
                   device = DeviceId(f[2]),
                   name = f[3],
@@ -91,7 +99,7 @@ object SyncCodec {
                     f.getOrNull(5).orEmpty().split(',').filter { it.isNotBlank() }.map { DeviceId(it) }.toSet(),
                 )
             "item" ->
-              items.getOrPut(f[1].toLong()) { mutableListOf() } +=
+              items.getOrPut(ListId(f[1])) { mutableListOf() } +=
                 (Records.parseItem(f, from = 2) ?: return@runCatching)
           }
         }

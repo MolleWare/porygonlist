@@ -1,6 +1,7 @@
 package io.github.molleware.porygonlist.data
 
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
+import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
@@ -42,8 +43,8 @@ class ReplacedPhoneTest {
       localDevice = ava,
       idCounter = 1,
       clockHead = at(9_000),
-      lists = listOf(GroceryList(1, "Weekly shop", ListAccent.ACCENT, items.toList(), people)),
-      activeListId = 1,
+      lists = listOf(GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, items.toList(), people)),
+      activeListId = ListId("list:1"),
       online = true,
       networks = emptyList(),
       conflict = null,
@@ -103,7 +104,9 @@ class ReplacedPhoneTest {
 
   @Test
   fun `a retired phone is not waited on but is still recognised`() {
-    val list = GroceryList(1, "Weekly shop", ListAccent.ACCENT, emptyList(), pair).replaceDevice(hugoOld, hugoNew)
+    val list =
+      GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, emptyList(), pair)
+        .replaceDevice(hugoOld, hugoNew)
 
     assertFalse("a dead handset must never be waited on", hugoOld in list.peersOf(ava))
     assertTrue(list.people.single { it.name == "Hugo" }.wasEver(hugoOld))
@@ -141,7 +144,7 @@ class ReplacedPhoneTest {
   fun `replacing twice keeps the whole chain`() {
     val hugoThird = DeviceId("HUGO3RDAAAAAAAAA")
     val list =
-      GroceryList(1, "Weekly shop", ListAccent.ACCENT, emptyList(), pair)
+      GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, emptyList(), pair)
         .replaceDevice(hugoOld, hugoNew)
         .replaceDevice(hugoNew, hugoThird)
 

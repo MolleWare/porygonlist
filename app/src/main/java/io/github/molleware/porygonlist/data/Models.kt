@@ -6,6 +6,7 @@ import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ItemId
+import io.github.molleware.porygonlist.data.sync.ListId
 
 /** The device that minted an id, read back out of it. Ids are `deviceId:counter`. */
 val ItemId.device: DeviceId
@@ -120,7 +121,15 @@ data class GroceryItem(
 }
 
 data class GroceryList(
-  val id: Long,
+  /**
+   * Globally unique, because a list crosses phones.
+   *
+   * `deviceId:counter`, minted by [io.github.molleware.porygonlist.data.sync.IdFactory]. It used to
+   * be a local `max + 1`, which meant both phones called their first list `1` — so two unrelated
+   * lists could not be told apart on the wire, and merging them into each other was a data loss
+   * waiting for the transport to land. Derived from a key the way every other id here is.
+   */
+  val id: ListId,
   val name: String,
   val accent: ListAccent,
   val items: List<GroceryItem>,
@@ -192,7 +201,8 @@ data class GroceryList(
      * Stands in when there is no list to show, so a screen reached with none renders empty instead
      * of throwing. Id 0 is never handed out, so this can never collide with a real list.
      */
-    val none = GroceryList(id = 0, name = "", accent = ListAccent.NEUTRAL, items = emptyList(), people = emptyList())
+    val none =
+      GroceryList(id = ListId(""), name = "", accent = ListAccent.NEUTRAL, items = emptyList(), people = emptyList())
   }
 }
 
@@ -304,7 +314,7 @@ data class AppState(
   /** Proof of what each peer has received from here. Governs when tombstones can be collected. */
   val deliveredTo: DeliveryLog = DeliveryLog(),
   val lists: List<GroceryList>,
-  val activeListId: Long,
+  val activeListId: ListId,
   val online: Boolean,
   val networks: List<ApprovedNetwork>,
   /** Phones paired with this one, by key. Empty until someone scans a code. */
@@ -382,7 +392,7 @@ data class AppState(
    * handover — but once they are off the list there is no next handover. Nothing to wait for, and
    * nothing that can come back.
    */
-  fun removePersonFrom(listId: Long, device: DeviceId): AppState =
+  fun removePersonFrom(listId: ListId, device: DeviceId): AppState =
     copy(lists = lists.map { if (it.id == listId) it.withoutPerson(device) else it })
       .let { next -> next.copy(deliveredTo = next.deliveredTo.retaining(next.knownPeers())) }
       .pruneDeliveredTombstones()
@@ -423,9 +433,9 @@ data class AppState(
         // Nothing has been handed over yet, so nothing is collectable yet.
         deliveredTo = DeliveryLog(),
         lists = emptyList(),
-        // No list to be active. Id 0 is never handed out, so this matches nothing until the owner
-        // makes a list, and [activeList] falls back to [GroceryList.none] until they do.
-        activeListId = 0,
+        // No list to be active. An empty id is never minted, so this matches nothing until the
+        // owner makes a list, and [activeList] falls back to [GroceryList.none] until they do.
+        activeListId = ListId(""),
         online = true,
         // A network becomes approved when the owner approves it while standing on it, and carries
         // that network's real fingerprint. There is nothing honest to put here in advance.

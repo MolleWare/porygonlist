@@ -30,7 +30,7 @@ private fun item(
   )
 
 private fun list(vararg items: GroceryItem, people: List<Person> = pair) =
-  GroceryList(1, "Weekly shop", ListAccent.ACCENT, items.toList(), people)
+  GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, items.toList(), people)
 
 private val pair = listOf(Person(AVA, "Ava", "A"), Person(HUGO, "Hugo", "H"))
 

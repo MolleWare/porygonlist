@@ -5,6 +5,7 @@ import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
+import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.ItemId
 
 /**
@@ -30,6 +31,10 @@ fun AppState.Companion.seed(
   val ava = Person(partner, "Ava", "A")
   val minute = 60_000L
 
+  // The shape IdFactory mints, so a fixture list is indistinguishable from a real one. Tests that
+  // care about two phones disagreeing need ids that carry the phone they came from.
+  fun listId(n: Int) = ListId("${localDevice.value}:$n")
+
   var counter = 0L
   var tick = 0
   fun id() = ItemId("${localDevice.value}:${++counter}")
@@ -48,7 +53,7 @@ fun AppState.Companion.seed(
 
   val weekly =
     GroceryList(
-      id = 1,
+      id = listId(1),
       name = "Weekly shop",
       accent = ListAccent.ACCENT,
       people = listOf(you, ava),
@@ -116,10 +121,10 @@ fun AppState.Companion.seed(
     lists =
       listOf(
         weekly,
-        GroceryList(2, "Corner shop", ListAccent.ACCENT_2, corner, listOf(you)),
-        GroceryList(3, "Party, Saturday", ListAccent.NEUTRAL, party, listOf(you, ava)),
+        GroceryList(listId(2), "Corner shop", ListAccent.ACCENT_2, corner, listOf(you)),
+        GroceryList(listId(3), "Party, Saturday", ListAccent.NEUTRAL, party, listOf(you, ava)),
       ),
-    activeListId = 1,
+    activeListId = listId(1),
     online = true,
     networks =
       listOf(

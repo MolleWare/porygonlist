@@ -1,6 +1,7 @@
 package io.github.molleware.porygonlist.data
 
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ItemId
@@ -36,7 +37,7 @@ private fun item(
 class ShareCodecTest {
 
   private fun list(vararg items: GroceryItem) =
-    GroceryList(1, "Weekly shop", ListAccent.ACCENT, items.toList(), listOf(Person(ME, "Ava", "A")))
+    GroceryList(ListId("${ME.value}:1"), "Weekly shop", ListAccent.ACCENT, items.toList(), listOf(Person(ME, "Ava", "A")))
 
   @Test
   fun `encode matches the format the design specifies`() {
@@ -254,8 +255,17 @@ class StateCodecTest {
       localDevice = ME,
       idCounter = items.filter { it.createdBy == ME }.mapNotNull { it.id.value.substringAfter(':').toLongOrNull() }.maxOrNull() ?: 0L,
       clockHead = Hlc(1_700_000_000_000, 0, ME),
-      lists = listOf(GroceryList(1, "Weekly shop", ListAccent.ACCENT, items.toList(), listOf(Person(ME, "Ava", "A")))),
-      activeListId = 1,
+      lists =
+        listOf(
+          GroceryList(
+            ListId("${ME.value}:1"),
+            "Weekly shop",
+            ListAccent.ACCENT,
+            items.toList(),
+            listOf(Person(ME, "Ava", "A")),
+          )
+        ),
+      activeListId = ListId("${ME.value}:1"),
       online = true,
       networks = emptyList(),
       conflict = null,

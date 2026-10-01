@@ -26,7 +26,7 @@ private fun item(id: String, name: String, qty: Int = 1, at: Hlc = stamp(1_000, 
 private val people = listOf(Person(AVA, "Ava", "A"), Person(HUGO, "Hugo", "H"))
 
 private fun list(vararg items: GroceryItem) =
-  GroceryList(1, "Weekly shop", ListAccent.ACCENT, items.toList(), people)
+  GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, items.toList(), people)
 
 /**
  * Two phones adding the same thing while apart.

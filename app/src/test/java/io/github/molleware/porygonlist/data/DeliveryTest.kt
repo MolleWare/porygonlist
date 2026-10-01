@@ -1,6 +1,7 @@
 package io.github.molleware.porygonlist.data
 
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
+import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
@@ -38,7 +39,7 @@ class DeliveryTest {
   }
 
   private fun list(vararg items: GroceryItem, people: List<Person> = listOf(Person(ava, "Ava", "A"), Person(hugo, "Hugo", "H"))) =
-    GroceryList(1, "Weekly shop", ListAccent.ACCENT, items.toList(), people)
+    GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, items.toList(), people)
 
   // ── The log ────────────────────────────────────────────────────────────────
 
@@ -180,7 +181,7 @@ class DeliveryTest {
       idCounter = 9,
       clockHead = at(9_000),
       lists = lists.toList(),
-      activeListId = 1,
+      activeListId = ListId("list:1"),
       online = true,
       networks = emptyList(),
       conflict = null,

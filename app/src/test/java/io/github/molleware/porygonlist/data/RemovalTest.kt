@@ -1,6 +1,7 @@
 package io.github.molleware.porygonlist.data
 
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ItemId
@@ -36,7 +37,7 @@ class RemovalTest {
   }
 
   private fun list(vararg items: GroceryItem) =
-    GroceryList(1, "Weekly shop", ListAccent.ACCENT, items.toList(), pair)
+    GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, items.toList(), pair)
 
   @Test
   fun `a removed item is off the list for everyone`() {
@@ -112,7 +113,7 @@ class RemovalTest {
         idCounter = 1,
         clockHead = Hlc(5_000, 0, ava),
         lists = listOf(list(item("Oat milk", removedAt = removal))),
-        activeListId = 1,
+        activeListId = ListId("list:1"),
         online = true,
         networks = emptyList(),
           conflict = null,

@@ -31,6 +31,7 @@ import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent100
 import io.github.molleware.porygonlist.theme.Accent2
@@ -63,7 +64,7 @@ import io.github.molleware.porygonlist.ui.listCardMeta
 fun ListsScreen(
   state: AppState,
   networkLabel: String,
-  onOpenList: (Long) -> Unit,
+  onOpenList: (ListId) -> Unit,
   onToggleOnline: () -> Unit,
   onGoShare: () -> Unit,
   onOpenSettings: () -> Unit,
@@ -71,17 +72,17 @@ fun ListsScreen(
   onDraftChange: (String) -> Unit,
   onCreateList: () -> Unit,
   /** Opens sharing for one list, without having to open the list first. */
-  onShareList: (Long) -> Unit,
-  renamingList: Long?,
+  onShareList: (ListId) -> Unit,
+  renamingList: ListId?,
   renameDraft: String,
   onStartRename: (GroceryList) -> Unit,
   onRenameDraftChange: (String) -> Unit,
   onSaveRename: () -> Unit,
   onCancelRename: () -> Unit,
-  confirmingDelete: Long?,
-  onAskDelete: (Long) -> Unit,
+  confirmingDelete: ListId?,
+  onAskDelete: (ListId) -> Unit,
   onCancelDelete: () -> Unit,
-  onDelete: (Long) -> Unit,
+  onDelete: (ListId) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Column(

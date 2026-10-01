@@ -8,7 +8,9 @@ import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
+import io.github.molleware.porygonlist.data.sync.IdFactory
 import io.github.molleware.porygonlist.data.sync.ItemId
+import io.github.molleware.porygonlist.data.sync.ListId
 
 /**
  * The shareable text format, as the design defines it:
@@ -87,7 +89,7 @@ object ShareCodec {
  * Version 7 adds the owner's name to the `meta` record. Version 6 is still read; see [READABLE].
  */
 object StateCodec {
-  private const val VERSION = "PLSTATE9"
+  private const val VERSION = "PLSTATE10"
 
   /**
    * Formats this build can read.
@@ -98,10 +100,19 @@ object StateCodec {
    * once, the staples come back as the default set, and the clash sentences are written afresh from
    * the items. Everything they carry — authorship, stamps, tombstones — is read as before.
    */
-  private val READABLE = setOf("PLSTATE6", "PLSTATE7", "PLSTATE8", VERSION)
+  private val READABLE = setOf("PLSTATE6", "PLSTATE7", "PLSTATE8", "PLSTATE9", VERSION)
 
   /** Versions that write a staples record, so an older file can be given the defaults instead. */
-  private val WITH_STAPLES = setOf("PLSTATE8", VERSION)
+  private val WITH_STAPLES = setOf("PLSTATE8", "PLSTATE9", VERSION)
+
+  /**
+   * Versions whose list ids are already global.
+   *
+   * Before this, a list id was a local `max + 1`, so both phones called their first list `1`. Those
+   * files are migrated on read: see [migrateListIds]. Nothing is invented and nothing is lost — the
+   * ids are internal, never shown, and every reference to them is rewritten in the same pass.
+   */
+  private val WITH_GLOBAL_LIST_IDS = setOf(VERSION)
 
   fun encode(state: AppState): String = buildString {
     appendLine(VERSION)
@@ -111,7 +122,7 @@ object StateCodec {
         state.localDevice.value,
         state.idCounter.toString(),
         state.clockHead.encode(),
-        state.activeListId.toString(),
+        state.activeListId.value,
         state.online.bool(),
         state.displayName,
       )
@@ -149,12 +160,12 @@ object StateCodec {
     state.staples.forEach { appendLine(record("staple", it.name, it.uses.toString())) }
 
     state.lists.forEach { list ->
-      appendLine(record("list", list.id.toString(), list.name, list.accent.name))
+      appendLine(record("list", list.id.value, list.name, list.accent.name))
       list.people.forEach {
         appendLine(
           record(
             "person",
-            list.id.toString(),
+            list.id.value,
             it.device.value,
             it.name,
             it.initial,
@@ -165,7 +176,7 @@ object StateCodec {
       }
       list.items.forEach { item ->
         // `editing` is presence, not state — it is never written.
-        appendLine(record(*(listOf("item", list.id.toString()) + itemFields(item)).toTypedArray()))
+        appendLine(record(*(listOf("item", list.id.value) + itemFields(item)).toTypedArray()))
       }
     }
   }
@@ -179,7 +190,9 @@ object StateCodec {
     var localDevice: DeviceId? = null
     var idCounter = 0L
     var clockHead: Hlc? = null
-    var activeListId = 1L
+    // Raw, as written. Old files hold a number and new ones hold `deviceId:counter`; which it is
+    // only matters once, in migrateListIds, so everything up to there treats it as opaque text.
+    var activeListId = ""
     var online = true
     var displayName = ""
     var sawConflict = false
@@ -191,11 +204,11 @@ object StateCodec {
     val receipts = mutableMapOf<DeviceId, Hlc>()
 
     // Lists are rebuilt in file order; their people and items arrive on following lines.
-    val listOrder = mutableListOf<Long>()
-    val names = mutableMapOf<Long, String>()
-    val accents = mutableMapOf<Long, ListAccent>()
-    val people = mutableMapOf<Long, MutableList<Person>>()
-    val items = mutableMapOf<Long, MutableList<GroceryItem>>()
+    val listOrder = mutableListOf<String>()
+    val names = mutableMapOf<String, String>()
+    val accents = mutableMapOf<String, ListAccent>()
+    val people = mutableMapOf<String, MutableList<Person>>()
+    val items = mutableMapOf<String, MutableList<GroceryItem>>()
 
     for (line in lines.drop(1)) {
       val f = split(line)
@@ -205,7 +218,7 @@ object StateCodec {
               localDevice = DeviceId(f[1])
               idCounter = f[2].toLong()
               clockHead = Hlc.decode(f[3])
-              activeListId = f[4].toLong()
+              activeListId = f[4]
               online = f[5] == "1"
               // Absent in a version 6 file, which simply means this phone has yet to be told.
               displayName = f.getOrNull(6).orEmpty()
@@ -229,13 +242,13 @@ object StateCodec {
             "net" -> networks += ApprovedNetwork(NetworkFingerprint(f[1]), f[2], f[3], f[4] == "1")
             "staple" -> staples += Staple(f[1], f[2].toIntOrNull() ?: 0)
             "list" -> {
-              val id = f[1].toLong()
+              val id = f[1]
               listOrder += id
               names[id] = f[2]
               accents[id] = ListAccent.valueOf(f[3])
             }
             "person" ->
-              people.getOrPut(f[1].toLong()) { mutableListOf() } +=
+              people.getOrPut(f[1]) { mutableListOf() } +=
                 Person(
                   device = DeviceId(f[2]),
                   name = f[3],
@@ -244,7 +257,7 @@ object StateCodec {
                     f.getOrNull(5).orEmpty().split(',').filter { it.isNotBlank() }.map { DeviceId(it) }.toSet(),
                 )
             "item" ->
-              items.getOrPut(f[1].toLong()) { mutableListOf() } += (parseItem(f, from = 2) ?: return@runCatching)
+              items.getOrPut(f[1]) { mutableListOf() } += (parseItem(f, from = 2) ?: return@runCatching)
           }
         }
         // One malformed line should not cost the whole file — skip it and keep the rest.
@@ -259,14 +272,26 @@ object StateCodec {
     // starts there and stays there until someone makes a list, and rejecting it would throw away the
     // identity and clock in the `meta` record and start the phone over as if it were new.
 
+    // Everything below refers to lists by their new ids, so the rename happens before the lists are
+    // built rather than being threaded through afterwards.
+    val everyItemByRawList = items.values.flatten()
+    val highestBefore =
+      (everyItemByRawList + listOfNotNull(conflictYours, conflictTheirs))
+        .filter { it.id.device == device }
+        .mapNotNull { it.id.value.substringAfter(':').toLongOrNull() }
+        .maxOrNull() ?: 0L
+
+    val renamed = migrateListIds(version, listOrder, device = device, from = maxOf(idCounter, highestBefore))
+
     val lists =
-      listOrder.map { id ->
+      listOrder.map { raw ->
+        val id = renamed.ids.getValue(raw)
         GroceryList(
           id = id,
-          name = names[id].orEmpty(),
-          accent = accents[id] ?: ListAccent.ACCENT,
-          items = items[id].orEmpty(),
-          people = people[id].orEmpty(),
+          name = names[raw].orEmpty(),
+          accent = accents[raw] ?: ListAccent.ACCENT,
+          items = items[raw].orEmpty(),
+          people = people[raw].orEmpty(),
         )
       }
 
@@ -288,12 +313,18 @@ object StateCodec {
       localDevice = device,
       displayName = displayName,
       deliveredTo = DeliveryLog(receipts),
-      idCounter = maxOf(idCounter, highestLocal),
+      // renamed.counter already covers the file's highest, and is ahead of it when a migration
+      // minted new list ids.
+      idCounter = maxOf(renamed.counter, highestLocal),
       clockHead = if (newestStamp != null && newestStamp > head) newestStamp else head,
       lists = lists,
-      // A file can legitimately hold no lists at all, in which case nothing is active and id 0 —
-      // never handed out — says so.
-      activeListId = if (lists.any { it.id == activeListId }) activeListId else lists.firstOrNull()?.id ?: 0,
+      // Through the rename, so a migrated file still opens on the list its owner left open. A file
+      // can legitimately hold no lists at all, in which case nothing is active and an empty id —
+      // never minted — says so.
+      activeListId =
+        renamed.ids[activeListId]?.takeIf { active -> lists.any { it.id == active } }
+          ?: lists.firstOrNull()?.id
+          ?: ListId(""),
       online = online,
       networks = networks,
       // A peer whose key does not hash to its id is not that peer; drop it rather than trust it.
@@ -303,6 +334,32 @@ object StateCodec {
       staples = if (version in WITH_STAPLES) staples else Staple.defaults,
       conflict = conflict,
     )
+  }
+
+  /** What a file's raw list ids became, and where the id counter ended up. */
+  private class Renamed(val ids: Map<String, ListId>, val counter: Long)
+
+  /**
+   * Turns the list ids in a file into global ones.
+   *
+   * A current file already holds `deviceId:counter` and is passed through untouched. An older one
+   * holds a local `max + 1`, and those are **re-minted rather than rewritten in place**. The
+   * tempting shortcut — `<device>:<old number>` — would collide with the item namespace, because
+   * [IdFactory] runs a single counter for items and lists alike, so list `1` could be handed a
+   * string an item already holds. Minting keeps that invariant intact.
+   *
+   * [from] must already account for the highest counter seen in the file, or a migrated list could
+   * take an id an existing item is using.
+   */
+  private fun migrateListIds(version: String?, order: List<String>, device: DeviceId, from: Long): Renamed {
+    if (version in WITH_GLOBAL_LIST_IDS) {
+      return Renamed(ids = order.associateWith { ListId(it) }, counter = from)
+    }
+
+    val factory = IdFactory(device, start = from)
+    // In file order, so a migrated phone's lists keep the order their owner put them in.
+    val ids = order.associateWith { factory.nextList() }
+    return Renamed(ids = ids, counter = factory.peek())
   }
 
   // The record shape lives in Records, shared with the sync payload, so an item on disk and an

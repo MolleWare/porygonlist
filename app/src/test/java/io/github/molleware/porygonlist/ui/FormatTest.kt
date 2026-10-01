@@ -6,6 +6,7 @@ import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ItemId
@@ -24,7 +25,7 @@ class FormatTest {
 
   private val list =
     GroceryList(
-      id = 1,
+      id = ListId("list:1"),
       name = "Weekly shop",
       accent = ListAccent.ACCENT,
       items = emptyList(),

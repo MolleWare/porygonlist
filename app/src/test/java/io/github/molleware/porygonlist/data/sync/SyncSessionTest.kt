@@ -30,8 +30,8 @@ private class Phone(val device: DeviceId, wall: Long, items: List<GroceryItem>, 
       localDevice = device,
       idCounter = 100,
       clockHead = Hlc(wall, 0, device),
-      lists = listOf(GroceryList(1, "Weekly shop", ListAccent.ACCENT, items, people)),
-      activeListId = 1,
+      lists = listOf(GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, items, people)),
+      activeListId = ListId("list:1"),
       online = true,
       networks = emptyList(),
       peers = people.filterNot { it.device == device }.map { TrustedPeer(it.device, byteArrayOf(1), it.name, 0) },
@@ -76,7 +76,13 @@ class SyncPayloadTest {
         at = Hlc(5_000, 2, AVA),
         lists =
           listOf(
-            GroceryList(1, "Weekly shop", ListAccent.ACCENT, listOf(item("${AVA.value}:1", "Butter", Hlc(1_000, 0, AVA))), pair)
+            GroceryList(
+              ListId("list:1"),
+              "Weekly shop",
+              ListAccent.ACCENT,
+              listOf(item("${AVA.value}:1", "Butter", Hlc(1_000, 0, AVA))),
+              pair,
+            )
           ),
       )
 
@@ -116,12 +122,12 @@ class SyncPayloadTest {
       phone.state.copy(
         lists =
           phone.state.lists +
-            GroceryList(2, "Private", ListAccent.NEUTRAL, emptyList(), listOf(Person(AVA, "Ava", "A")))
+            GroceryList(ListId("list:2"), "Private", ListAccent.NEUTRAL, emptyList(), listOf(Person(AVA, "Ava", "A")))
       )
 
     val payload = phone.state.payloadFor(HUGO, phone.clock)!!
 
-    assertEquals(listOf(1L), payload.lists.map { it.id })
+    assertEquals(listOf(ListId("list:1")), payload.lists.map { it.id })
   }
 
   @Test
@@ -185,13 +191,13 @@ class SyncSessionTest {
   fun `a peer cannot introduce a list by sending one`() {
     // Joining a list happens by invitation, not by assertion.
     val ava = Phone(AVA, 1_000, emptyList(), pair)
-    val smuggled = GroceryList(99, "Not yours", ListAccent.NEUTRAL, emptyList(), pair)
+    val smuggled = GroceryList(ListId("list:99"), "Not yours", ListAccent.NEUTRAL, emptyList(), pair)
     val payload = SyncPayload(from = HUGO, at = Hlc(9_000, 0, HUGO), lists = listOf(smuggled))
 
     val result = ava.state.receive(payload, ava.clock)
 
     assertEquals(SyncResult.Rejected(RejectReason.NOTHING_SHARED), result)
-    assertEquals(listOf(1L), ava.state.lists.map { it.id })
+    assertEquals(listOf(ListId("list:1")), ava.state.lists.map { it.id })
   }
 
   @Test
