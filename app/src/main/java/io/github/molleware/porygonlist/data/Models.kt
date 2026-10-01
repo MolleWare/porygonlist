@@ -45,8 +45,23 @@ data class Person(
   val initial: String,
   /** Phones this person used to hold. Never waited on; only used to attribute what they wrote. */
   val formerDevices: Set<DeviceId> = emptySet(),
+  /**
+   * Whether they have left the list, and when that was decided.
+   *
+   * Stamped for the same reason an item's removal is: the two phones merge by unioning their
+   * people, so without a stamp a peer whose copy still lists someone would add them straight back
+   * on the next exchange and leaving would never stick. With one, the later decision wins.
+   *
+   * A left person stays on the list as a tombstone rather than vanishing, so the news can reach
+   * everyone. The default stamp is the beginning of time, so any real decision outranks it.
+   */
+  val removed: Field<Boolean> = Field(false, Hlc(0, 0, device)),
 ) {
   fun wasEver(candidate: DeviceId): Boolean = candidate == device || candidate in formerDevices
+
+  /** On the list now, as opposed to remembered only so their leaving can be passed on. */
+  val present: Boolean
+    get() = !removed.value
 }
 
 /**
@@ -157,7 +172,8 @@ data class GroceryList(
    * Retired handsets are deliberately absent: a device that will never confirm another thing would
    * otherwise hold every tombstone on this list open for ever.
    */
-  fun peersOf(localDevice: DeviceId): List<DeviceId> = people.map { it.device }.filterNot { it == localDevice }
+  fun peersOf(localDevice: DeviceId): List<DeviceId> =
+    people.filter { it.present }.map { it.device }.filterNot { it == localDevice }
 
   /**
    * Records that [person] moved to a new phone.
@@ -183,6 +199,20 @@ data class GroceryList(
   fun withoutPerson(device: DeviceId): GroceryList = copy(people = people.filterNot { it.wasEver(device) })
 
   /**
+   * Marks someone as having left, rather than forgetting them.
+   *
+   * The difference from [withoutPerson] is who decided. Taking someone off a list is this phone's
+   * business and theirs alone — see [AppState.removePersonFrom]. *Leaving* is news the others need,
+   * so the person stays as a stamped tombstone until every remaining peer has confirmed hearing it,
+   * at which point [pruneDelivered] collects it.
+   *
+   * Without the stamp this would not survive a single exchange: the other phone's copy still lists
+   * the leaver, and [mergePeople] unions, so they would be added straight back.
+   */
+  fun withPersonLeft(device: DeviceId, at: Hlc): GroceryList =
+    copy(people = people.map { if (it.wasEver(device)) it.copy(removed = it.removed.set(true, at)) else it })
+
+  /**
    * Drops tombstones every peer has confirmed receiving.
    *
    * Once the removal has reached all of them, no phone still holds the live item, so there is
@@ -192,8 +222,13 @@ data class GroceryList(
   fun pruneDelivered(log: DeliveryLog, localDevice: DeviceId): GroceryList {
     val peers = peersOf(localDevice)
     // With nobody to deliver to there is nothing to wait for, and a solo list keeps no tombstones.
-    if (peers.isEmpty()) return copy(items = liveItems)
-    return copy(items = items.filterNot { it.removed.value && log.deliveredToAll(it.removed.at, peers) })
+    if (peers.isEmpty()) return copy(items = liveItems, people = people.filter { it.present })
+    return copy(
+      items = items.filterNot { it.removed.value && log.deliveredToAll(it.removed.at, peers) },
+      // Someone who has left is collected on the same terms as a removed item: once everyone still
+      // on the list has confirmed hearing it, nobody is left holding a copy that says otherwise.
+      people = people.filterNot { it.removed.value && log.deliveredToAll(it.removed.at, peers) },
+    )
   }
 
   companion object {
@@ -329,7 +364,17 @@ data class AppState(
    * list cannot be reached in that state; the tabs can, and they show an empty shop.
    */
   val activeList: GroceryList
-    get() = lists.firstOrNull { it.id == activeListId } ?: lists.firstOrNull() ?: GroceryList.none
+    get() = visibleLists.firstOrNull { it.id == activeListId } ?: visibleLists.firstOrNull() ?: GroceryList.none
+
+  /**
+   * The lists this phone is on, which is everything anyone should ever see.
+   *
+   * [lists] can additionally hold one this phone has left, kept only until the other people on it
+   * have heard — the same arrangement items use for their tombstones. Showing it would mean a list
+   * the owner deleted sitting there until a sync that may be days away.
+   */
+  val visibleLists: List<GroceryList>
+    get() = lists.filter { it.personFor(localDevice)?.present == true }
 
   /** The fingerprints discovery is allowed to run on. */
   val approvedFingerprints: Set<NetworkFingerprint>
@@ -411,7 +456,18 @@ data class AppState(
    */
   fun pruneDeliveredTombstones(): AppState =
     copy(
-      lists = lists.map { it.pruneDelivered(deliveredTo, localDevice) },
+      lists =
+        lists
+          .map { it.pruneDelivered(deliveredTo, localDevice) }
+          // A list this phone has left is kept, and kept being sent, for exactly as long as its own
+          // leaving tombstone survives — that is what carries the news. Once the tombstone has been
+          // collected above, everyone has heard, and the list can finally go. Dropping it any
+          // earlier would leave the others waiting on a phone that had quietly stopped answering.
+          //
+          // Guarded on there being somebody else named, because this runs on every load and a list
+          // nobody is on at all is a state nothing should produce. If one ever appears, keeping it
+          // is recoverable and deleting somebody's groceries is not.
+          .filterNot { list -> list.people.isNotEmpty() && list.people.none { it.wasEver(localDevice) } },
       deliveredTo = deliveredTo.retaining(knownPeers()),
     )
 

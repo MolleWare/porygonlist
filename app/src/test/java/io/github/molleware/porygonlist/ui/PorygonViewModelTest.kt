@@ -173,20 +173,27 @@ class PorygonViewModelTest {
 
     vm.deleteList(victim)
 
-    assertTrue(state().lists.none { it.id == victim })
-    assertTrue("the app is never left with no open list", state().lists.any { it.id == state().activeListId })
+    assertTrue("the deleted list is out of sight", state().visibleLists.none { it.id == victim })
+    assertTrue(
+      "the app is never left with no open list",
+      state().visibleLists.any { it.id == state().activeListId },
+    )
   }
 
   @Test
   fun `the last list can be deleted, leaving nothing open`() = runTest(dispatcher) {
     repo.load()
-    while (state().lists.size > 1) vm.deleteList(state().lists.first().id)
+    while (state().visibleLists.size > 1) vm.deleteList(state().visibleLists.first().id)
 
-    vm.deleteList(state().lists.single().id)
+    vm.deleteList(state().visibleLists.single().id)
 
     // Where a new install already starts, so nothing here is a state the app cannot show.
-    assertEquals(emptyList<GroceryList>(), state().lists)
-    assertTrue("nothing is open", state().lists.none { it.id == state().activeListId })
+    //
+    // visibleLists rather than lists: deleting a list somebody else is on is leaving it, and the
+    // list stays out of sight as a tombstone until they have heard. What the owner sees is empty
+    // either way, which is what this is about.
+    assertEquals(emptyList<GroceryList>(), state().visibleLists)
+    assertTrue("nothing is open", state().visibleLists.none { it.id == state().activeListId })
   }
 
   @Test

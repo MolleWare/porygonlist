@@ -171,6 +171,10 @@ object StateCodec {
             it.initial,
             // Base32 ids carry no commas, so a plain join is unambiguous.
             it.formerDevices.joinToString(",") { former -> former.value },
+            // Whether they have left, and when it was decided. Both are needed: the stamp is what
+            // lets a later decision at either end win, and without it a leaving never sticks.
+            it.removed.value.bool(),
+            it.removed.at.encode(),
           )
         )
       }
@@ -247,15 +251,24 @@ object StateCodec {
               names[id] = f[2]
               accents[id] = ListAccent.valueOf(f[3])
             }
-            "person" ->
+            "person" -> {
+              val device = DeviceId(f[2])
               people.getOrPut(f[1]) { mutableListOf() } +=
                 Person(
-                  device = DeviceId(f[2]),
+                  device = device,
                   name = f[3],
                   initial = f[4],
                   formerDevices =
                     f.getOrNull(5).orEmpty().split(',').filter { it.isNotBlank() }.map { DeviceId(it) }.toSet(),
+                  // Absent in a file written before leaving was expressible, which simply means
+                  // nobody has left: everyone recorded there is still on the list.
+                  removed =
+                    Field(
+                      f.getOrNull(6) == "1",
+                      f.getOrNull(7)?.let { Hlc.decode(it) } ?: Hlc(0, 0, device),
+                    ),
                 )
+            }
             "item" ->
               items.getOrPut(f[1]) { mutableListOf() } += (parseItem(f, from = 2) ?: return@runCatching)
           }

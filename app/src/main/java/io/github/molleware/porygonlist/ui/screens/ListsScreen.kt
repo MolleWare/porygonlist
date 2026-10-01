@@ -110,14 +110,14 @@ fun ListsScreen(
     SectionLabel("Lists", Modifier.padding(top = 24.dp, bottom = 10.dp))
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      state.lists.forEach { list ->
+      state.visibleLists.forEach { list ->
         if (renamingList == list.id) {
           ListEditCard(
             name = renameDraft,
             onNameChange = onRenameDraftChange,
             onSave = onSaveRename,
             onCancel = onCancelRename,
-            canDelete = state.lists.size > 1,
+            canDelete = state.visibleLists.size > 1,
             confirmingDelete = confirmingDelete == list.id,
             sharedWith = list.people.count { it.device != state.localDevice },
             onShare = { onShareList(list.id) },
@@ -240,8 +240,9 @@ private fun ListEditCard(
 private fun SyncPill(state: AppState, networkLabel: String, onToggle: () -> Unit) {
   // Null, not "them", when nobody else is on any list. "In step with them" beside a card reading
   // "just you" is the app claiming to have synced with somebody who does not exist.
-  val partner = state.lists.flatMap { it.people }.firstOrNull { it.device != state.localDevice }?.name
-  val waiting = state.lists.sumOf { list -> list.items.count { it.pending } }
+  val partner =
+    state.visibleLists.flatMap { it.people }.firstOrNull { it.present && it.device != state.localDevice }?.name
+  val waiting = state.visibleLists.sumOf { list -> list.items.count { it.pending } }
 
   Row(
     Modifier.fillMaxWidth()

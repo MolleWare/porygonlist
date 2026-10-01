@@ -74,7 +74,11 @@ fun SettingsScreen(
       )
       Column(Modifier.weight(1f)) {
         Text(state.displayName, style = PorygonType.CardHeading, color = TextInk)
-        Text("On ${state.lists.size} ${if (state.lists.size == 1) "list" else "lists"}", style = PorygonType.Fine, color = Neutral700)
+        Text(
+          "On ${state.visibleLists.size} ${if (state.visibleLists.size == 1) "list" else "lists"}",
+          style = PorygonType.Fine,
+          color = Neutral700,
+        )
       }
     }
 

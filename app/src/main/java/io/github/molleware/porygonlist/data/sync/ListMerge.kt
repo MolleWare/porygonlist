@@ -156,6 +156,10 @@ internal fun duplicatesBetween(mine: GroceryList, theirs: GroceryList): List<Con
  * Matching is by any device someone has ever held, not just their current one. Without that, a
  * peer who replaced their handset would arrive as a second, unrelated person — and the retired id
  * would keep being waited on for delivery receipts it can never send.
+ *
+ * Membership itself is last-writer-wins on [Person.removed]. A plain union would mean leaving a
+ * list never stuck: the other phone's copy still lists you, so the next exchange would put you
+ * back. Comparing the stamps makes the later decision the one that holds, whichever end made it.
  */
 private fun mergePeople(mine: List<Person>, theirs: List<Person>): List<Person> {
   val people = mine.toMutableList()
@@ -168,7 +172,7 @@ private fun mergePeople(mine: List<Person>, theirs: List<Person>): List<Person> 
     }
 
     val here = people[index]
-    people[index] =
+    val reconciled =
       when {
         // The peer knows about a phone this one had already retired: nothing new.
         here.formerDevices.contains(incoming.device) -> here.copy(formerDevices = here.formerDevices + incoming.formerDevices)
@@ -178,6 +182,10 @@ private fun mergePeople(mine: List<Person>, theirs: List<Person>): List<Person> 
         // Same current device on both sides; just pool what each knows of their past.
         else -> here.copy(formerDevices = here.formerDevices + incoming.formerDevices - here.device)
       }
+
+    // Whichever end decided most recently owns whether they are still on the list. Taken after the
+    // handset reconciliation above so that adopting a newer phone cannot quietly drop a leaving.
+    people[index] = reconciled.copy(removed = here.removed.latest(incoming.removed))
   }
 
   return people

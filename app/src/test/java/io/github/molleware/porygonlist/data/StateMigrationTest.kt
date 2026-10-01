@@ -84,8 +84,10 @@ class StateMigrationTest {
           "PLSTATE10" -> "PLSTATE9"
           // meta's fifth field is the open list.
           "meta" -> f.toMutableList().also { it[4] = legacy.getValue(it[4]) }.joinToString("|")
+          // A version 9 person record stopped at formerDevices: it had no way to say somebody had
+          // left. Truncating here keeps the fixture honest, so the defaulting is really exercised.
+          "person" -> f.toMutableList().also { it[1] = legacy.getValue(it[1]) }.take(6).joinToString("|")
           "list",
-          "person",
           "item" -> f.toMutableList().also { it[1] = legacy.getValue(it[1]) }.joinToString("|")
           else -> line
         }
@@ -141,6 +143,16 @@ class StateMigrationTest {
     // Items were already `device:counter`. Rewriting list ids must not touch them.
     assertEquals(listOf("${me.value}:5"), lists[0].items.map { it.id.value })
     assertEquals(listOf("${me.value}:6", "${me.value}:7"), lists[1].items.map { it.id.value })
+  }
+
+  @Test
+  fun `everyone in a version 9 file is still on their lists`() {
+    val decoded = StateCodec.decode(asLegacy(StateCodec.encode(current())))!!
+
+    // A version 9 file has no record of anyone leaving, so nobody has: reading one must not quietly
+    // hide a list from its owner, which is what a wrong default here would do.
+    decoded.lists.flatMap { it.people }.forEach { assertTrue("${it.name} should still be on the list", it.present) }
+    assertEquals(2, decoded.visibleLists.size)
   }
 
   @Test

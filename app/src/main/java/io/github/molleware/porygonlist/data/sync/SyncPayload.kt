@@ -54,6 +54,9 @@ object SyncCodec {
             it.name,
             it.initial,
             it.formerDevices.joinToString(",") { former -> former.value },
+            // Leaving is the one piece of membership a peer has to be told about, so it travels.
+            if (it.removed.value) "1" else "0",
+            it.removed.at.encode(),
           )
         )
       }
@@ -89,15 +92,22 @@ object SyncCodec {
               names[id] = f[2]
               accents[id] = ListAccent.valueOf(f[3])
             }
-            "person" ->
+            "person" -> {
+              val device = DeviceId(f[2])
               people.getOrPut(ListId(f[1])) { mutableListOf() } +=
                 Person(
-                  device = DeviceId(f[2]),
+                  device = device,
                   name = f[3],
                   initial = f[4],
                   formerDevices =
                     f.getOrNull(5).orEmpty().split(',').filter { it.isNotBlank() }.map { DeviceId(it) }.toSet(),
+                  removed =
+                    Field(
+                      f.getOrNull(6) == "1",
+                      f.getOrNull(7)?.let { Hlc.decode(it) } ?: Hlc(0, 0, device),
+                    ),
                 )
+            }
             "item" ->
               items.getOrPut(ListId(f[1])) { mutableListOf() } +=
                 (Records.parseItem(f, from = 2) ?: return@runCatching)

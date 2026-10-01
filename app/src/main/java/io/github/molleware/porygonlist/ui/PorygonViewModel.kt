@@ -817,12 +817,25 @@ class PorygonViewModel(
    * owner can see.
    */
   fun deleteList(id: ListId) {
-    repo.update { s, _ ->
-      val remaining = s.lists.filterNot { it.id == id }
+    repo.update { s, node ->
+      val going = s.lists.firstOrNull { it.id == id }
+      val shared = going != null && going.peersOf(s.localDevice).isNotEmpty()
+
+      val lists =
+        if (shared) {
+          // Someone else is on it, so this is leaving rather than deleting. The list stays, hidden,
+          // until every one of them has heard — see AppState.pruneDeliveredTombstones. Dropping it
+          // outright would leave them waiting for ever on a phone that had simply stopped caring.
+          s.lists.map { if (it.id == id) it.withPersonLeft(s.localDevice, node.clock.tick()) else it }
+        } else {
+          s.lists.filterNot { it.id == id }
+        }
+
       // An empty id is never minted, so this leaves nothing active, which is what no lists means.
+      val visible = lists.filter { it.personFor(s.localDevice)?.present == true }
       s.copy(
-        lists = remaining,
-        activeListId = if (s.activeListId == id) remaining.firstOrNull()?.id ?: ListId("") else s.activeListId,
+        lists = lists,
+        activeListId = if (s.activeListId == id) visible.firstOrNull()?.id ?: ListId("") else s.activeListId,
       )
     }
     confirmingListDelete = null
