@@ -71,6 +71,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
         deleteIdentity = Graph::deleteIdentity,
         peerDiscovery = Graph.peerDiscovery(context),
         endpoint = Graph.syncEndpoint(),
+        syncCoordinator = Graph.syncCoordinator(context),
       )
     }
   val state by viewModel.state.collectAsStateWithLifecycle()

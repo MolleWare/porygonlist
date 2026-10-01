@@ -8,6 +8,7 @@ import io.github.molleware.porygonlist.data.net.AndroidNetworkMonitor
 import io.github.molleware.porygonlist.data.net.NetworkMonitor
 import io.github.molleware.porygonlist.data.net.NsdPeerDiscovery
 import io.github.molleware.porygonlist.data.net.PeerDiscovery
+import io.github.molleware.porygonlist.data.net.SyncCoordinator
 import io.github.molleware.porygonlist.data.net.SyncEndpoint
 import io.github.molleware.porygonlist.data.ListRepository
 import java.io.File
@@ -34,6 +35,8 @@ object Graph {
   @Volatile private var discovery: PeerDiscovery? = null
 
   @Volatile private var endpoint: SyncEndpoint? = null
+
+  @Volatile private var coordinator: SyncCoordinator? = null
 
   private val identityStore = AndroidKeystoreIdentityStore()
 
@@ -65,6 +68,9 @@ object Graph {
       // next caller gets one built around the new key.
       discovery?.stop()
       discovery = null
+      // The coordinator was listening to that discovery and answering as that key, so it goes too.
+      coordinator?.stop()
+      coordinator = null
       endpoint?.stopAll()
       endpoint = null
 
@@ -91,6 +97,29 @@ object Graph {
   /** The socket peers connect back on. Binds nothing until `start`. */
   fun syncEndpoint(): SyncEndpoint =
     endpoint ?: synchronized(this) { endpoint ?: SyncEndpoint(networkScope, ::identity).also { endpoint = it } }
+
+  /**
+   * What decides when paired phones exchange lists, and answers when they call.
+   *
+   * Building it does no I/O and starts nothing — it only connects the pieces, including telling the
+   * endpoint who answers a sync call. [SyncCoordinator.start] is called once the state has loaded,
+   * which keeps all of this behind the first frame.
+   */
+  fun syncCoordinator(context: Context): SyncCoordinator =
+    coordinator
+      ?: synchronized(this) {
+        coordinator
+          ?: SyncCoordinator(
+              repo = listRepository(context),
+              identity = ::identity,
+              found = peerDiscovery(context).found,
+              scope = networkScope,
+            )
+            .also {
+              syncEndpoint().syncHandler = it
+              coordinator = it
+            }
+      }
 
   fun listRepository(context: Context): ListRepository =
     repository

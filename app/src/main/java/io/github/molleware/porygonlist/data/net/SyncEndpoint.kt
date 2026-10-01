@@ -5,6 +5,7 @@ import io.github.molleware.porygonlist.data.crypto.PairingInvite
 import io.github.molleware.porygonlist.data.crypto.PairingToken
 import io.github.molleware.porygonlist.data.crypto.PinnedTls
 import java.net.ServerSocket
+import java.security.cert.X509Certificate
 import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
 import kotlinx.coroutines.CoroutineScope
@@ -15,6 +16,17 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+/**
+ * Whoever answers a sync call once [SyncEndpoint] has established who is calling.
+ *
+ * Handed the key the caller presented rather than a verdict, because deciding whether that key is a
+ * paired phone needs the current state, and the endpoint deliberately holds none.
+ */
+fun interface SyncAnswerer {
+  /** Blocking, on an IO thread. The socket is closed by the caller of this, not by it. */
+  fun answer(peerKey: ByteArray, socket: SSLSocket)
+}
 
 /** Why the socket is open. It stays open while any of these hold. */
 enum class ListenReason {
@@ -43,10 +55,10 @@ enum class ListenReason {
  * this network announcing "this phone runs PorygonList" to anyone scanning, and would collide
  * with a second copy of the app on the same device.
  *
- * Every connection is TLS presenting this phone's keystore key. On this listening end the peer is
- * *not* authenticated, because the only thing it is currently able to do is introduce itself —
- * see [PairingHandshake]. When list exchange lands it will pin the peer's key before a byte of
- * anyone's groceries moves, and that check belongs on the connection, not here.
+ * Every connection is TLS presenting this phone's keystore key, and two kinds of caller share it.
+ * One that presents no certificate is introducing itself, and gets the pairing path — see
+ * [PairingHandshake]. One that presents a key is asking to sync, and is handed to [syncHandler],
+ * which checks that key against the paired phones before a byte of anyone's groceries moves.
  */
 class SyncEndpoint(
   private val scope: CoroutineScope,
@@ -78,6 +90,15 @@ class SyncEndpoint(
    * though the socket stays open for discovery.
    */
   @Volatile private var pairingToken: PairingToken? = null
+
+  /**
+   * Answers callers that present a key.
+   *
+   * Set once the rest of the app exists, rather than passed in, because this endpoint is built
+   * before the repository is and the two would otherwise have to know about each other. Null means
+   * a sync call is simply closed — the safe answer while nothing is ready to take one.
+   */
+  @Volatile var syncHandler: SyncAnswerer? = null
 
   /** The port in use, or null when not listening. */
   val port: Int?
@@ -126,7 +147,9 @@ class SyncEndpoint(
     // Port 0 asks the system for a free one, on every interface: the peer arrives over wifi and
     // which local address that is depends on the link.
     val bound = runCatching { factory.createServerSocket(0) as SSLServerSocket }.getOrNull() ?: return null
-    runCatching { bound.needClientAuth = false }
+    // Asked for, not required: a pairing caller has no certificate yet, and a sync caller must
+    // present one. Which kind arrived is decided per connection, in [handle].
+    runCatching { bound.wantClientAuth = true }
     socket = bound
 
     loop =
@@ -151,6 +174,23 @@ class SyncEndpoint(
   private suspend fun handle(client: SSLSocket) {
     try {
       PinnedTls.harden(client)
+      client.soTimeout = PairingHandshake.TIMEOUT_MS
+      // Explicit, so the presented certificate is known before deciding which conversation this is.
+      client.startHandshake()
+
+      val presented =
+        runCatching { (client.session.peerCertificates.firstOrNull() as? X509Certificate)?.publicKey?.encoded }
+          .getOrNull()
+
+      if (presented != null) {
+        // Sync happens only where the owner has approved the network. The socket may be open just
+        // because a pairing code is on screen, on a wifi nobody approved, and a paired phone being
+        // able to exchange lists there would walk straight round the gate.
+        val discovering = synchronized(lock) { ListenReason.DISCOVERY in reasons }
+        if (discovering) syncHandler?.answer(presented, client)
+        return
+      }
+
       val expecting = pairingToken ?: return
 
       val invite = PairingHandshake.serve(client, expecting) ?: return

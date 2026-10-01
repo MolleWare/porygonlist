@@ -35,6 +35,7 @@ import io.github.molleware.porygonlist.data.net.NetworkMonitor
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
 import io.github.molleware.porygonlist.data.net.PeerDiscovery
 import io.github.molleware.porygonlist.data.net.ReachablePeer
+import io.github.molleware.porygonlist.data.net.SyncCoordinator
 import io.github.molleware.porygonlist.data.net.SyncEndpoint
 import io.github.molleware.porygonlist.data.net.discoveryDecision
 import io.github.molleware.porygonlist.data.net.reachablePeers
@@ -87,6 +88,8 @@ class PorygonViewModel(
   private val peerDiscovery: PeerDiscovery? = null,
   /** The socket peers connect back on. Null alongside [peerDiscovery], for the same reason. */
   private val endpoint: SyncEndpoint? = null,
+  /** Decides when to exchange lists with paired phones. Null alongside the two above. */
+  private val syncCoordinator: SyncCoordinator? = null,
 ) : ViewModel() {
 
   val state: StateFlow<AppState?> = repo.state
@@ -190,6 +193,10 @@ class PorygonViewModel(
       // finishes after it, and no network decision could have been acted on before it anyway,
       // because the approved list is in the file being read.
       repo.state.filterNotNull().first()
+
+      // After the load, for the same reason. It has nothing to do until discovery finds a paired
+      // phone, and discovery has nothing to find until the gate below opens.
+      syncCoordinator?.start()
 
       discovery.collect { decision ->
         if (decision is DiscoveryDecision.Discover) {

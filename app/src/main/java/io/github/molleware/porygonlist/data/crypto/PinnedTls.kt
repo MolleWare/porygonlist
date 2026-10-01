@@ -44,10 +44,12 @@ object PinnedTls {
   /**
    * Accepts connections, presenting this phone's key.
    *
-   * Client certificates are neither required nor asked for. The phone connecting is, by
-   * definition, one this phone has never met — it is about to introduce itself — so there is
-   * nothing to check it against. That is precisely why the introduction it sends has to be put in
-   * front of a person before it means anything.
+   * Client certificates are asked for but never required, because two kinds of caller share this
+   * socket. A pairing caller is by definition a phone this one has never met, about to introduce
+   * itself, so it has nothing to present — which is why its introduction has to be put in front of
+   * a person before it means anything. A sync caller presents its key, and [SyncEndpoint] checks it
+   * against the paired phones. Whatever comes in is accepted here and judged there, because who
+   * counts as paired changes at runtime and a trust manager is fixed when the socket is made.
    *
    * Null when the phone has no key entry to present, which leaves the caller to stay silent rather
    * than accept connections it cannot authenticate itself on.
@@ -69,6 +71,23 @@ object PinnedTls {
    */
   fun clientFactory(expecting: ByteArray): SSLSocketFactory? =
     context(entry = null, trust = Pinned(expecting))?.socketFactory
+
+  /**
+   * Connects to a phone this one is already paired with, and proves who is calling.
+   *
+   * The difference from [clientFactory] is the certificate this end presents. A pairing caller has
+   * nothing the far end could check — it is about to introduce itself. A sync caller has already
+   * been introduced, so it presents [identity]'s key and the listener checks it against the phones
+   * it has paired with before a byte of anyone's groceries moves. Both ends are pinned: this one to
+   * [expecting], the far end to the key it holds for us.
+   *
+   * Null when the keystore has no entry to present, which leaves the caller unable to sync and is
+   * the honest outcome — calling without a certificate would just be refused.
+   */
+  fun syncClientFactory(identity: LocalIdentity, expecting: ByteArray): SSLSocketFactory? {
+    val entry = identity.keyEntry() ?: return null
+    return context(entry, trust = Pinned(expecting))?.socketFactory
+  }
 
   /** Restricts a socket to the protocols above. Call before the handshake, on both ends. */
   fun harden(socket: SSLSocket) {

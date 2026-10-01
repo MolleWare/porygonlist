@@ -123,6 +123,42 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock): SyncResult {
 }
 
 /**
+ * Applies everything one exchange with [peer] produced.
+ *
+ * [peer] is who the connection **authenticated** as — the key TLS pinned — not who the payload
+ * claims to be from. They have to agree. A paired phone that sent a payload naming a different
+ * paired phone would otherwise be able to speak for it, and [receive]'s own check would not catch
+ * that, because the name it was given is one it trusts.
+ *
+ * The ack is honoured only if it echoes exactly the stamp that went out. Anything else is not a
+ * confirmation of what was sent — and a peer able to confirm an arbitrary stamp could get this phone
+ * to collect tombstones it has never actually delivered.
+ *
+ * [theirs] with no lists is how the other end says "nothing for you", and applying it would only
+ * fold an empty stamp into the clock, so it is skipped.
+ */
+fun AppState.afterExchange(
+  peer: DeviceId,
+  theirs: SyncPayload?,
+  ackOfMine: Hlc?,
+  sent: SyncPayload?,
+  clock: HybridClock,
+): AppState {
+  var next = this
+
+  if (theirs != null && theirs.from == peer && theirs.lists.isNotEmpty()) {
+    val result = next.receive(theirs, clock)
+    if (result is SyncResult.Merged) next = result.state
+  }
+
+  if (sent != null && ackOfMine != null && ackOfMine == sent.at) {
+    next = next.confirmDelivery(peer, ackOfMine)
+  }
+
+  return next
+}
+
+/**
  * Records a peer's echo of the stamp we sent, then collects whatever that makes collectable.
  *
  * [receipt] must be the stamp from the payload that peer is confirming — never a fresh reading.
