@@ -4,6 +4,7 @@ import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PairingInvite
 import io.github.molleware.porygonlist.data.crypto.PairingToken
 import io.github.molleware.porygonlist.data.crypto.PinnedTls
+import java.io.IOException
 import java.net.ServerSocket
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLServerSocket
@@ -176,7 +177,16 @@ class SyncEndpoint(
       PinnedTls.harden(client)
       client.soTimeout = PairingHandshake.TIMEOUT_MS
       // Explicit, so the presented certificate is known before deciding which conversation this is.
-      client.startHandshake()
+      //
+      // And therefore guarded: a caller that walks away mid-handshake is ordinary — a scanner, a
+      // stale peer, a phone that pinned a different key and said so with an alert. Before this was
+      // explicit, the handshake ran inside PairingHandshake.serve and its catch; out here, one bad
+      // caller's exception escaped the coroutine and took the whole process down with it.
+      try {
+        client.startHandshake()
+      } catch (e: IOException) {
+        return
+      }
 
       val presented =
         runCatching { (client.session.peerCertificates.firstOrNull() as? X509Certificate)?.publicKey?.encoded }
@@ -187,7 +197,9 @@ class SyncEndpoint(
         // because a pairing code is on screen, on a wifi nobody approved, and a paired phone being
         // able to exchange lists there would walk straight round the gate.
         val discovering = synchronized(lock) { ListenReason.DISCOVERY in reasons }
-        if (discovering) syncHandler?.answer(presented, client)
+        // Same reasoning as the handshake above: whatever goes wrong answering one peer is that
+        // connection's problem, never the process's.
+        if (discovering) runCatching { syncHandler?.answer(presented, client) }
         return
       }
 
