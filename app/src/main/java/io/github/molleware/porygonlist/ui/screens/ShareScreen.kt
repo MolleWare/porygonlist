@@ -98,6 +98,8 @@ fun ShareScreen(
   pairablePeers: List<TrustedPeer>,
   onAddPerson: (DeviceId) -> Unit,
   onGoPair: () -> Unit,
+  /** Opens the one screen that unpairs a phone. See the section at the foot of this one. */
+  onOpenPairedPhones: () -> Unit,
   confirmingRemovalOf: DeviceId?,
   onAskRemovePerson: (DeviceId) -> Unit,
   onCancelRemovePerson: () -> Unit,
@@ -282,6 +284,44 @@ fun ShareScreen(
         PrimaryButton(
           if (list.name.isBlank()) "Share" else "Share ${list.name}",
           onGoPair,
+          modifier = Modifier.heightIn(min = 44.dp),
+          style = PorygonType.BodyLarge,
+        )
+      }
+    }
+
+    // The counterpart to everything above it, and the reason it is here rather than only on the
+    // "You" screen: this is the screen somebody arrives at wanting to stop sharing with a phone,
+    // and until now every control on it added. Unpairing stays in one place — it is about the
+    // phone, not this list, and a second copy of the list would be two places to get right — so
+    // this is a signpost that says what the other screen does and what this one cannot.
+    if (state.peers.isNotEmpty()) {
+      SectionLabel("Paired phones", Modifier.padding(top = 26.dp, bottom = 10.dp))
+      Column(
+        Modifier.fillMaxWidth()
+          .clip(Shapes.Card)
+          .background(Surface)
+          .clickable(onClick = onOpenPairedPhones)
+          .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 18.dp)
+      ) {
+        Text(
+          if (state.peers.size == 1) "One phone paired with this one"
+          else "${state.peers.size} phones paired with this one",
+          style = PorygonType.CardHeading,
+          color = TextInk,
+          modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Text(
+          // Says the distinction out loud, because it is the one that makes the removal above look
+          // like it did nothing: taking Ava off this list does not take her phone off the others.
+          "Taking someone off a list leaves their phone paired. Unpairing drops the phone, and takes them off every list.",
+          style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
+          color = Neutral700,
+          modifier = Modifier.padding(bottom = 14.dp),
+        )
+        SecondaryButton(
+          "Unpair a phone",
+          onOpenPairedPhones,
           modifier = Modifier.heightIn(min = 44.dp),
           style = PorygonType.BodyLarge,
         )

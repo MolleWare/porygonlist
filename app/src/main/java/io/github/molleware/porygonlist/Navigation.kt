@@ -324,6 +324,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                     viewModel.startPairing(forListId = appState.activeListId)
                     backStack.add(PairPhone)
                   },
+                  onOpenPairedPhones = { backStack.add(Settings) },
                   confirmingRemovalOf = viewModel.confirmingRemovalOf,
                   onAskRemovePerson = viewModel::askRemovePerson,
                   onCancelRemovePerson = viewModel::cancelRemovePerson,
