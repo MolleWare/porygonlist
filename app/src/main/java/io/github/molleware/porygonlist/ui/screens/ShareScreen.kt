@@ -36,6 +36,7 @@ import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.NetworkFingerprint
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent100
@@ -51,6 +52,7 @@ import io.github.molleware.porygonlist.theme.PorygonType
 import io.github.molleware.porygonlist.theme.Shapes
 import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
+import io.github.molleware.porygonlist.ui.handoverLabel
 import io.github.molleware.porygonlist.ui.networkLabel
 import io.github.molleware.porygonlist.ui.components.Avatar
 import io.github.molleware.porygonlist.ui.components.BackLink
@@ -218,11 +220,14 @@ fun ShareScreen(
 
     SectionLabel("People", Modifier.padding(top = 26.dp, bottom = 10.dp))
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-      list.people.forEach { person ->
+      // Present people only. Someone who has left stays on the list as a tombstone until everyone has
+      // heard, and listing them under People would show them as still sharing it.
+      list.people.filter { it.present }.forEach { person ->
         PersonRow(
           person = person,
           isYou = person.device == state.localDevice,
           discovering = discovering,
+          lastHandover = state.deliveredTo.confirmedBy(person.device),
           networkLabel = networkLabel(here, network, wifiName),
           confirming = confirmingRemovalOf == person.device,
           onAskRemove = { onAskRemovePerson(person.device) },
@@ -567,6 +572,7 @@ private fun PersonRow(
   person: Person,
   isYou: Boolean,
   discovering: Boolean,
+  lastHandover: Hlc?,
   networkLabel: String,
   confirming: Boolean,
   onAskRemove: () -> Unit,
@@ -590,7 +596,7 @@ private fun PersonRow(
           when {
             isYou -> "This phone"
             discovering -> "Looked for on $networkLabel"
-            else -> "Last handover this morning"
+            else -> handoverLabel(lastHandover)
           },
           style = PorygonType.Fine,
           color = Neutral700,

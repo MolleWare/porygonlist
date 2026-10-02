@@ -6,6 +6,7 @@ import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.Hlc
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -42,6 +43,18 @@ private fun whenPhrase(epochMillis: Long, now: Long, zone: ZoneId): String {
     Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate() == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
   return if (sameDay) "at $label" else "on $label"
 }
+
+/**
+ * When a paired phone last confirmed a handover, in words — or that it never has.
+ *
+ * Replaces a line the design shipped as a fixed string, "Last handover this morning", which said
+ * that at any hour of any day and whether or not anything had ever been handed over. [confirmed] is
+ * the peer's delivery receipt: the stamp of the newest payload of ours it has acknowledged. So this
+ * is when this phone's changes last reached them, which is the half of a handover this phone can
+ * actually vouch for.
+ */
+fun handoverLabel(confirmed: Hlc?, now: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): String =
+  if (confirmed == null) "Nothing handed over yet" else "Last handover ${whenPhrase(confirmed.wall, now, zone)}"
 
 /**
  * One side of a clash, in words: "you added it at 9:02".

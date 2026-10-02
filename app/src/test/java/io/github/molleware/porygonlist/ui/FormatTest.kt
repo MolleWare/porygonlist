@@ -198,4 +198,19 @@ class FormatTest {
   }
 
   private fun hoursAgo(hours: Int) = now - hours * 3_600_000L
+
+  // The line the design shipped as a fixed "Last handover this morning", read at 22:30 on hardware.
+
+  @Test
+  fun `a phone nothing has been handed to says so`() {
+    assertEquals("Nothing handed over yet", handoverLabel(null, now, utc))
+  }
+
+  @Test
+  fun `a handover is dated from the receipt, not invented`() {
+    assertEquals("Last handover just now", handoverLabel(Hlc(now - 10_000, 0, hugo), now, utc))
+    assertEquals("Last handover at 12:30", handoverLabel(Hlc(hoursAgo(2), 0, hugo), now, utc))
+    assertEquals("Last handover yesterday", handoverLabel(Hlc(hoursAgo(24), 0, hugo), now, utc))
+    assertEquals("Last handover on 10 Sep", handoverLabel(Hlc(hoursAgo(24 * 7), 0, hugo), now, utc))
+  }
 }
