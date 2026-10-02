@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -257,6 +258,11 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                 )
               }
               entry<PairPhone> {
+                // The door closes when the screen does, however it is left. onBack below covered
+                // the back gesture, but a tab tap replaces the stack without going through it, and
+                // that left the socket open and the token live indefinitely — a photo of the code
+                // could pair hours later, on any network. Disposal is the one exit every route takes.
+                DisposableEffect(Unit) { onDispose { viewModel.stopPairing() } }
                 PairScreen(
                   invite = viewModel.invite(),
                   textInvite = viewModel.textInvite(),
@@ -274,8 +280,8 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onPairAsNew = viewModel::pairAsNew,
                   onReplace = viewModel::pairAsReplacementFor,
                   onBack = {
-                    // Closes the socket and burns the token. Leaving by the back gesture goes
-                    // through here too, so there is no way off this screen that leaves it open.
+                    // Closes the socket and burns the token straight away rather than waiting for
+                    // the screen to be disposed. The DisposableEffect above covers every other exit.
                     viewModel.stopPairing()
                     if (backStack.size > 1) backStack.removeLastOrNull() else backStack.goTo(Settings)
                   },
