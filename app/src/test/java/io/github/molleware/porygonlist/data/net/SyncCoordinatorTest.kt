@@ -108,6 +108,9 @@ class SyncCoordinatorTest {
 
   private val calls = AtomicInteger()
 
+  /** The coordinators' notion of now, moved by hand so absences can be timed exactly. */
+  private var clockMs = 0L
+
   /**
    * Ava with no lists, and Hugo with one list naming them both — the moment just after he added her.
    */
@@ -160,6 +163,7 @@ class SyncCoordinatorTest {
         answered.get(5, TimeUnit.SECONDS)
         result
       },
+      now = { clockMs },
     )
 
   private fun reach(id: DeviceId, key: ByteArray, name: String) = ReachablePeer(TrustedPeer(id, key, name, 0), "10.0.0.1", 1)
@@ -217,6 +221,58 @@ class SyncCoordinatorTest {
     val expected = setOf("Ice", "Lemons", "Cups")
     assertEquals(expected, ava.repo.now.visibleLists.single().liveItems.map { it.name.value }.toSet())
     assertEquals(expected, hugo.repo.now.visibleLists.single().liveItems.map { it.name.value }.toSet())
+  }
+
+  @Test
+  fun `a peer that blinks off the network is not pushed to again`() {
+    // Seen on hardware: mDNS loses and finds a phone within seconds, and each blip cost an exchange.
+    val (_, hugo) = pair()
+    val ava = reach(avaId, avaKey, "Ava")
+    hugo.coordinator.noteReachable(listOf(ava))
+    hugo.coordinator.pushIfOwed(ava, hugo.repo.now)
+    val before = calls.get()
+
+    clockMs = 1_000
+    hugo.coordinator.noteReachable(emptyList())
+    clockMs = 6_000
+    hugo.coordinator.noteReachable(listOf(ava))
+    hugo.coordinator.pushIfOwed(ava, hugo.repo.now)
+
+    assertEquals("five seconds away changes nothing", before, calls.get())
+  }
+
+  @Test
+  fun `a peer that was really away is pushed to again`() {
+    // It may have been reinstalled or restored meanwhile; an old ack says nothing about it now.
+    val (_, hugo) = pair()
+    val ava = reach(avaId, avaKey, "Ava")
+    hugo.coordinator.noteReachable(listOf(ava))
+    hugo.coordinator.pushIfOwed(ava, hugo.repo.now)
+    val before = calls.get()
+
+    clockMs = 1_000
+    hugo.coordinator.noteReachable(emptyList())
+    clockMs = 120_000
+    hugo.coordinator.noteReachable(listOf(ava))
+    hugo.coordinator.pushIfOwed(ava, hugo.repo.now)
+
+    assertEquals("two minutes away earns a fresh push", before + 1, calls.get())
+  }
+
+  @Test
+  fun `a peer that never left is not forgotten between quiet looks`() {
+    // Looks can be a minute apart when nothing happens. Time since last looked is not absence.
+    val (_, hugo) = pair()
+    val ava = reach(avaId, avaKey, "Ava")
+    hugo.coordinator.noteReachable(listOf(ava))
+    hugo.coordinator.pushIfOwed(ava, hugo.repo.now)
+    val before = calls.get()
+
+    clockMs = 90_000
+    hugo.coordinator.noteReachable(listOf(ava))
+    hugo.coordinator.pushIfOwed(ava, hugo.repo.now)
+
+    assertEquals(before, calls.get())
   }
 
   @Test

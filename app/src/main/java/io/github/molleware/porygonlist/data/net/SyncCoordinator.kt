@@ -55,12 +55,15 @@ class SyncCoordinator(
   private val scope: CoroutineScope,
   /** How a call is placed. Swapped out in tests, which have no sockets. */
   private val dial: ((ReachablePeer, SyncPayload) -> SyncExchange.Exchange?)? = null,
+  private val now: () -> Long = System::currentTimeMillis,
 ) : SyncAnswerer {
 
   /** What each peer last acknowledged, by content. In memory only: a restart simply pushes again. */
   private val acknowledged = ConcurrentHashMap<DeviceId, String>()
 
-  private val visible = ConcurrentHashMap.newKeySet<DeviceId>()
+  /** Peers on the network as of the last look, and when each absent one was first missed. */
+  private val present = ConcurrentHashMap.newKeySet<DeviceId>()
+  private val goneSince = ConcurrentHashMap<DeviceId, Long>()
 
   @Volatile private var job: Job? = null
 
@@ -81,7 +84,7 @@ class SyncCoordinator(
               state to reachablePeers(records, state.peers, state.localDevice)
             }
             .collect { (state, reachable) ->
-              forgetThoseWhoLeft(reachable)
+              noteReachable(reachable)
               reachable.forEach { peer -> pushIfOwed(peer, state) }
             }
         }
@@ -96,18 +99,34 @@ class SyncCoordinator(
   }
 
   /**
-   * A peer that drops off the network and comes back is pushed to again, whatever it last acked.
+   * A peer that has been away a while is pushed to again, whatever it last acked.
    *
    * It may have been reinstalled, restored, or simply lost a save in between, and an ack from before
    * it went away says nothing reliable about what it holds now. One extra exchange is the price.
+   *
+   * **A while, not a blip.** Seen on hardware: mDNS on wifi loses and finds a phone again within
+   * seconds — two address families, a resolve that times out, a screen going off — and forgetting
+   * at the first gap turned each of those into a redundant exchange. Nothing about a phone that was
+   * gone for five seconds has changed, so only an absence longer than [FORGET_AFTER_MS] counts.
+   *
+   * What is measured is the absence itself: from the first look that misses a peer to the look that
+   * finds it again. Not time since it was last *seen* — looks can be a minute apart when nothing is
+   * happening, and that would read a phone that never left as one that had been gone a minute.
    */
-  private fun forgetThoseWhoLeft(reachable: List<ReachablePeer>) {
-    val now = reachable.mapTo(mutableSetOf()) { it.peer.deviceId }
-    visible.filterNot { it in now }.forEach { gone ->
-      visible.remove(gone)
-      acknowledged.remove(gone)
+  internal fun noteReachable(reachable: List<ReachablePeer>) {
+    val t = now()
+    val here = reachable.mapTo(mutableSetOf()) { it.peer.deviceId }
+
+    present.filterNot { it in here }.forEach { gone ->
+      present.remove(gone)
+      goneSince.putIfAbsent(gone, t)
     }
-    visible.addAll(now)
+
+    here.forEach { id ->
+      val since = goneSince.remove(id)
+      if (since != null && t - since > FORGET_AFTER_MS) acknowledged.remove(id)
+      present.add(id)
+    }
   }
 
   /** Pushes to [peer] if it is owed something. Internal so the tests can drive it without timing. */
@@ -197,5 +216,6 @@ class SyncCoordinator(
     const val TIMEOUT_MS = 8_000
     const val SETTLE_MS = 1_500L
     const val RETRY_MS = 60_000L
+    const val FORGET_AFTER_MS = 30_000L
   }
 }
