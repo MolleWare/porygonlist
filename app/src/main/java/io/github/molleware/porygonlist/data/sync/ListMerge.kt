@@ -107,8 +107,18 @@ fun merge(mine: GroceryList, theirs: GroceryList): ListMerge {
     }
   }
 
+  // The later rename wins. Two people renaming at once settle silently by the total order; a
+  // title is not worth stopping somebody to ask about, unlike two different things to buy.
+  val named = if (theirs.nameAt > mine.nameAt) theirs else mine
+
   return ListMerge(
-    list = mine.copy(items = merged.values.toList(), people = mergePeople(mine.people, theirs.people)),
+    list =
+      mine.copy(
+        name = named.name,
+        nameAt = named.nameAt,
+        items = merged.values.toList(),
+        people = mergePeople(mine.people, theirs.people),
+      ),
     clashes = clashes,
     duplicates = duplicatesBetween(mine, theirs),
   )

@@ -149,6 +149,16 @@ data class GroceryList(
   val accent: ListAccent,
   val items: List<GroceryItem>,
   val people: List<Person>,
+  /**
+   * When [name] was last set.
+   *
+   * Without it a rename travelled but never landed: the merge has no way to tell whose name is
+   * newer, so it kept its own and the other phone's rename was silently discarded. Kept beside the
+   * name rather than wrapping it, because the name is read all over the interface and only the
+   * merge cares when it was chosen. The default is the beginning of time, so a list nobody has
+   * renamed loses to any rename at all.
+   */
+  val nameAt: Hlc = Hlc(0, 0, DeviceId("")),
 ) {
   /**
    * Items still on the list — everything anyone sees, counts or sends.

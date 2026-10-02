@@ -44,7 +44,8 @@ object SyncCodec {
     appendLine(Records.line("from", payload.from.value, payload.at.encode()))
 
     payload.lists.forEach { list ->
-      appendLine(Records.line("list", list.id.value, list.name, list.accent.name))
+      // The rename stamp travels, or the receiver cannot tell whose name is newer and keeps its own.
+      appendLine(Records.line("list", list.id.value, list.name, list.accent.name, list.nameAt.encode()))
       list.people.forEach {
         appendLine(
           Records.line(
@@ -75,6 +76,7 @@ object SyncCodec {
     val order = mutableListOf<ListId>()
     val names = mutableMapOf<ListId, String>()
     val accents = mutableMapOf<ListId, ListAccent>()
+    val nameStamps = mutableMapOf<ListId, Hlc>()
     val people = mutableMapOf<ListId, MutableList<Person>>()
     val items = mutableMapOf<ListId, MutableList<GroceryItem>>()
 
@@ -91,6 +93,7 @@ object SyncCodec {
               order += id
               names[id] = f[2]
               accents[id] = ListAccent.valueOf(f[3])
+              f.getOrNull(4)?.let { Hlc.decode(it) }?.let { nameStamps[id] = it }
             }
             "person" -> {
               val device = DeviceId(f[2])
@@ -131,6 +134,7 @@ object SyncCodec {
             accent = accents[id] ?: ListAccent.ACCENT,
             items = items[id].orEmpty(),
             people = people[id].orEmpty(),
+            nameAt = nameStamps[id] ?: GroceryList.none.nameAt,
           )
         },
     )

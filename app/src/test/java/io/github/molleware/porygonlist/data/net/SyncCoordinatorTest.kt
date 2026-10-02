@@ -220,6 +220,42 @@ class SyncCoordinatorTest {
   }
 
   @Test
+  fun `a rename on one phone lands on the other`() {
+    // Found on hardware: the rename was sent, and the receiver kept its own name anyway, because
+    // nothing said which of the two was newer.
+    val (ava, hugo) = pair()
+    hugo.pushTo(avaId, avaKey, "Ava")
+
+    ava.repo.update { s, node ->
+      s.copy(lists = s.lists.map { it.copy(name = "Party, Sunday", nameAt = node.clock.tick()) })
+    }
+    repeat(2) {
+      ava.pushTo(hugoId, hugoKey, "Hugo")
+      hugo.pushTo(avaId, avaKey, "Ava")
+    }
+
+    assertEquals("Party, Sunday", hugo.repo.now.visibleLists.single().name)
+    assertEquals("Party, Sunday", ava.repo.now.visibleLists.single().name)
+  }
+
+  @Test
+  fun `an older rename does not undo a newer one`() {
+    val (ava, hugo) = pair()
+    hugo.pushTo(avaId, avaKey, "Ava")
+
+    // Hugo renames first, Ava after; whichever order the exchanges happen in, Ava's name stands.
+    hugo.repo.update { s, _ -> s.copy(lists = s.lists.map { it.copy(name = "Older", nameAt = Hlc(5_000, 0, hugoId)) }) }
+    ava.repo.update { s, _ -> s.copy(lists = s.lists.map { it.copy(name = "Newer", nameAt = Hlc(6_000, 0, avaId)) }) }
+    repeat(2) {
+      hugo.pushTo(avaId, avaKey, "Ava")
+      ava.pushTo(hugoId, hugoKey, "Hugo")
+    }
+
+    assertEquals("Newer", ava.repo.now.visibleLists.single().name)
+    assertEquals("Newer", hugo.repo.now.visibleLists.single().name)
+  }
+
+  @Test
   fun `leaving reaches the other phone and then the list is gone`() {
     val (ava, hugo) = pair()
     hugo.pushTo(avaId, avaKey, "Ava")

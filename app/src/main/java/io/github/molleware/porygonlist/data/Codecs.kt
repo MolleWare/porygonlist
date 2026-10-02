@@ -160,7 +160,7 @@ object StateCodec {
     state.staples.forEach { appendLine(record("staple", it.name, it.uses.toString())) }
 
     state.lists.forEach { list ->
-      appendLine(record("list", list.id.value, list.name, list.accent.name))
+      appendLine(record("list", list.id.value, list.name, list.accent.name, list.nameAt.encode()))
       list.people.forEach {
         appendLine(
           record(
@@ -211,6 +211,7 @@ object StateCodec {
     val listOrder = mutableListOf<String>()
     val names = mutableMapOf<String, String>()
     val accents = mutableMapOf<String, ListAccent>()
+    val nameStamps = mutableMapOf<String, Hlc>()
     val people = mutableMapOf<String, MutableList<Person>>()
     val items = mutableMapOf<String, MutableList<GroceryItem>>()
 
@@ -250,6 +251,9 @@ object StateCodec {
               listOrder += id
               names[id] = f[2]
               accents[id] = ListAccent.valueOf(f[3])
+              // Absent before renames were stamped — including in version 10 files already on a
+              // phone — which reads as never renamed: any rename from elsewhere then wins.
+              f.getOrNull(4)?.let { Hlc.decode(it) }?.let { nameStamps[id] = it }
             }
             "person" -> {
               val device = DeviceId(f[2])
@@ -305,6 +309,7 @@ object StateCodec {
           accent = accents[raw] ?: ListAccent.ACCENT,
           items = items[raw].orEmpty(),
           people = people[raw].orEmpty(),
+          nameAt = nameStamps[raw] ?: GroceryList.none.nameAt,
         )
       }
 

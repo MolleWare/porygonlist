@@ -176,6 +176,31 @@ class StateMigrationTest {
   }
 
   @Test
+  fun `a rename's stamp survives a save`() {
+    val renamed = current().let { s -> s.copy(lists = s.lists.map { it.copy(nameAt = Hlc(7_000, 3, me)) }) }
+
+    val after = StateCodec.decode(StateCodec.encode(renamed))!!
+
+    assertEquals(listOf(Hlc(7_000, 3, me), Hlc(7_000, 3, me)), after.lists.map { it.nameAt })
+  }
+
+  @Test
+  fun `a file from before renames were stamped reads as never renamed`() {
+    // A version 10 file already on a phone has no stamp on its list records. Reading one as the
+    // beginning of time means any real rename from elsewhere wins, which is the right default.
+    val unstamped =
+      StateCodec.encode(current())
+        .lineSequence()
+        .map { if (it.startsWith("list|")) it.split('|').take(4).joinToString("|") else it }
+        .joinToString("\n")
+
+    val after = StateCodec.decode(unstamped)!!
+
+    after.lists.forEach { assertEquals(GroceryList.none.nameAt, it.nameAt) }
+    assertEquals(listOf("groceries", "to do"), after.lists.map { it.name })
+  }
+
+  @Test
   fun `a current file is passed through untouched`() {
     val before = current()
     val after = StateCodec.decode(StateCodec.encode(before))!!

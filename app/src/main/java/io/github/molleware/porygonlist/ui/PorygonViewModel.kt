@@ -796,7 +796,10 @@ class PorygonViewModel(
     val id = renamingList ?: return
     val name = renameDraft.trim()
     if (name.isNotEmpty()) {
-      repo.update { s, _ -> s.copy(lists = s.lists.map { if (it.id == id) it.copy(name = name) else it }) }
+      repo.update { s, node ->
+        // Stamped, so the rename can win against the other phone's copy rather than lose to it.
+        s.copy(lists = s.lists.map { if (it.id == id) it.copy(name = name, nameAt = node.clock.tick()) else it })
+      }
     }
     cancelRename()
   }
