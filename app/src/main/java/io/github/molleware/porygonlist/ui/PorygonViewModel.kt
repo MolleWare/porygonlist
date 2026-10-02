@@ -714,7 +714,8 @@ class PorygonViewModel(
    * act — which is what makes a private list possible at all.
    */
   fun peersNotOnActiveList(state: AppState): List<TrustedPeer> {
-    val already = state.activeList.people.map { it.device }.toSet()
+    // Only people on it now: someone who left is exactly who might be added back.
+    val already = state.activeList.people.filter { it.present }.map { it.device }.toSet()
     return state.peers.filterNot { it.deviceId in already }
   }
 
@@ -725,13 +726,13 @@ class PorygonViewModel(
   }
 
   /** Puts a paired phone's owner on one list, by id rather than by whichever is open. */
-  fun addPersonToList(listId: ListId, device: DeviceId) = repo.update { s, _ ->
+  fun addPersonToList(listId: ListId, device: DeviceId) = repo.update { s, node ->
     val peer = s.peerFor(device) ?: return@update s
     s.copy(
       lists =
         s.lists.map { list ->
-          if (list.id != listId || list.people.any { it.device == device }) list
-          else list.copy(people = list.people + Person(device, peer.name, initialOf(peer.name)))
+          if (list.id != listId || list.personFor(device)?.present == true) list
+          else list.withPersonAdded(device, peer.name, node.clock.tick())
         }
     )
   }

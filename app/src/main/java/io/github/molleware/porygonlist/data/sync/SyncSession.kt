@@ -91,7 +91,9 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock): SyncResult {
    * where somebody held a phone up and someone else agreed to it; asking again here would be
    * ceremony about a decision already made.
    */
-  val invitations = payload.lists.filter { it.id !in known && it.people.any { who -> who.wasEver(localDevice) } }
+  // Named as on it now: a list that only remembers this phone having left is not an invitation.
+  val invitations =
+    payload.lists.filter { it.id !in known && it.people.any { who -> who.wasEver(localDevice) && who.present } }
 
   if (applicable.isEmpty() && invitations.isEmpty()) return SyncResult.Rejected(RejectReason.NOTHING_SHARED)
 

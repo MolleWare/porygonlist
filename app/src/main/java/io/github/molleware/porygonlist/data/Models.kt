@@ -223,6 +223,25 @@ data class GroceryList(
     copy(people = people.map { if (it.wasEver(device)) it.copy(removed = it.removed.set(true, at)) else it })
 
   /**
+   * Puts someone on this list, including someone who once left it.
+   *
+   * Stamped for the same reason leaving is. Their old "left" may still be out there — on their own
+   * phone, or one that has not caught up — and a re-add stamped at the beginning of time loses to
+   * it on the next exchange, taking them quietly off the list again. Stamped now, it wins.
+   */
+  fun withPersonAdded(device: DeviceId, name: String, at: Hlc): GroceryList =
+    if (people.any { it.wasEver(device) }) {
+      copy(
+        people =
+          people.map {
+            if (it.wasEver(device) && !it.present) it.copy(removed = it.removed.set(false, at)) else it
+          }
+      )
+    } else {
+      copy(people = people + Person(device, name, initialOf(name), removed = Field(false, at)))
+    }
+
+  /**
    * Drops tombstones every peer has confirmed receiving.
    *
    * Once the removal has reached all of them, no phone still holds the live item, so there is

@@ -78,8 +78,8 @@ fun conflictSide(
 fun GroceryList.nameFor(peer: DeviceId, localDevice: DeviceId): String =
   if (peer == localDevice) "you" else personFor(peer)?.name ?: "someone"
 
-/** The other people on a list — everyone who is not this device. */
-fun GroceryList.others(localDevice: DeviceId) = people.filter { it.device != localDevice }
+/** The other people on a list — everyone who is not this device, and has not left it. */
+fun GroceryList.others(localDevice: DeviceId) = people.filter { it.present && it.device != localDevice }
 
 /** The single other person, for the many places the design assumes a pair. */
 fun GroceryList.partnerName(localDevice: DeviceId): String = others(localDevice).firstOrNull()?.name ?: "them"

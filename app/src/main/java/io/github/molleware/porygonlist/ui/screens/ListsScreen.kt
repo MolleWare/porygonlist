@@ -58,6 +58,7 @@ import io.github.molleware.porygonlist.ui.components.SectionLabel
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
 import io.github.molleware.porygonlist.ui.itemCountLabel
 import io.github.molleware.porygonlist.ui.listCardMeta
+import io.github.molleware.porygonlist.ui.others
 
 /** The home screen: who you share with, whether you are in step, and every list you keep. */
 @Composable
@@ -119,7 +120,7 @@ fun ListsScreen(
             onCancel = onCancelRename,
             canDelete = state.visibleLists.size > 1,
             confirmingDelete = confirmingDelete == list.id,
-            sharedWith = list.people.count { it.device != state.localDevice },
+            sharedWith = list.others(state.localDevice).size,
             onShare = { onShareList(list.id) },
             onAskDelete = { onAskDelete(list.id) },
             onCancelDelete = onCancelDelete,
@@ -300,7 +301,7 @@ private fun ListCard(
       )
       // Negative spacing gives the same tucked-under stack as `margin-left:-7px` in the design.
       Row(horizontalArrangement = Arrangement.spacedBy((-7).dp)) {
-        list.people.forEach { person ->
+        list.people.filter { it.present }.forEach { person ->
           val isYou = person.device == localDevice
           Avatar(
             initial = person.initial,

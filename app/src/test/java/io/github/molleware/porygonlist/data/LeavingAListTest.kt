@@ -2,6 +2,7 @@ package io.github.molleware.porygonlist.data
 
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.HybridClock
 import io.github.molleware.porygonlist.data.sync.ListId
@@ -122,5 +123,69 @@ class LeavingAListTest {
     // load, and refusing to drop a list with nobody on it is what stops an odd state costing
     // somebody their groceries. In the app this path is never reached — deleteList removes a list
     // nobody else is on outright, which PorygonViewModelTest covers.
+  }
+
+  // ── Coming back ───────────────────────────────────────────────────────────
+  // Found on hardware: a re-add stamped at the beginning of time lost to the old "left" the moment
+  // the leaver's phone, not yet caught up, sent it again — and the person vanished a second time.
+
+  private fun hugoLeftAt(at: Hlc) =
+    stateOf(listOf(Person(ava, "Ava", "A"), Person(hugo, "Hugo", "H", removed = Field(true, at))))
+
+  @Test
+  fun `someone added back stays on when their old leaving arrives`() {
+    val left = Hlc(2_000, 0, hugo)
+    val readded = hugoLeftAt(left).let { s ->
+      s.copy(lists = s.lists.map { it.withPersonAdded(hugo, "Hugo", Hlc(3_000, 0, ava)) })
+    }
+
+    // Hugo's phone still holds the list as he left it.
+    val stale =
+      SyncPayload(
+        from = hugo,
+        at = Hlc(2_500, 0, hugo),
+        lists = readded.lists.map { it.withPersonLeft(hugo, left) },
+      )
+    val merged = (readded.receive(stale, HybridClock(ava)) as SyncResult.Merged).state
+
+    assertTrue("the later decision, adding him back, wins", merged.lists.single().personFor(hugo)!!.present)
+  }
+
+  @Test
+  fun `adding back someone who left reuses their place rather than adding a second one`() {
+    val readded = hugoLeftAt(Hlc(2_000, 0, hugo)).lists.single().withPersonAdded(hugo, "Hugo", Hlc(3_000, 0, ava))
+
+    assertEquals(2, readded.people.size)
+    assertTrue(readded.personFor(hugo)!!.present)
+  }
+
+  @Test
+  fun `a phone that left takes the list back when it is invited again`() {
+    val after = leave(stateOf(both()), Hlc(2_000, 0, ava))
+
+    // Hugo puts Ava back on before her leaving was ever collected.
+    val reinvite =
+      SyncPayload(
+        from = hugo,
+        at = Hlc(3_000, 0, hugo),
+        lists = listOf(after.lists.single().withPersonAdded(ava, "Ava", Hlc(3_000, 0, hugo))),
+      )
+    val merged = (after.receive(reinvite, HybridClock(ava)) as SyncResult.Merged).state
+
+    assertEquals("Weekly shop", merged.visibleLists.single().name)
+  }
+
+  @Test
+  fun `a list that only remembers you leaving is not an invitation`() {
+    val gone = stateOf(both()).copy(lists = emptyList())
+
+    val remembered =
+      SyncPayload(
+        from = hugo,
+        at = Hlc(3_000, 0, hugo),
+        lists = listOf(GroceryList(listId, "Weekly shop", ListAccent.ACCENT, emptyList(), both()).withPersonLeft(ava, Hlc(2_000, 0, ava))),
+      )
+
+    assertTrue(gone.receive(remembered, HybridClock(ava)) is SyncResult.Rejected)
   }
 }
