@@ -42,6 +42,13 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!--
+      Lets the background sync window (SyncJob) stay scheduled across a reboot. Normal protection
+      level: granted at install, no runtime prompt. The app is not started at boot by this; the job
+      scheduler simply remembers the job, and it runs on its usual quarter-hour schedule.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -88,6 +95,15 @@
                 <data android:scheme="porygonlist" android:host="pair" />
             </intent-filter>
         </activity>
+
+        <!--
+          A short sync window every quarter-hour or so while the app is out of sight. Not exported:
+          only the system's job scheduler, which holds BIND_JOB_SERVICE, may start it. See SyncJob.
+        -->
+        <service
+            android:name=".data.net.SyncJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 
 </manifest>

@@ -45,6 +45,16 @@ enum class ListenReason {
    * socket is open only while that screen is, and what arrives on it still has to be agreed to.
    */
   PAIRING,
+
+  /**
+   * A short scheduled window while the app is out of sight — see [SyncJob].
+   *
+   * Its own reason rather than borrowing [DISCOVERY], because the two have different owners on
+   * different clocks: the open app turning discovery off must not close a window the job is in the
+   * middle of, and the window ending must not close a socket the app is using. It stands for the
+   * same thing, though: the job checks the approved-network gate before it ever starts.
+   */
+  BACKGROUND,
 }
 
 /**
@@ -134,6 +144,9 @@ class SyncEndpoint(
       if (reasons.isEmpty()) closeLocked()
     }
 
+  /** Whether the socket is being held open for [reason]. */
+  fun holds(reason: ListenReason): Boolean = synchronized(lock) { reason in reasons }
+
   /** Closes regardless of reasons. For teardown, not for ordinary use. */
   fun stopAll() =
     synchronized(lock) {
@@ -196,7 +209,8 @@ class SyncEndpoint(
         // Sync happens only where the owner has approved the network. The socket may be open just
         // because a pairing code is on screen, on a wifi nobody approved, and a paired phone being
         // able to exchange lists there would walk straight round the gate.
-        val discovering = synchronized(lock) { ListenReason.DISCOVERY in reasons }
+        val discovering =
+          synchronized(lock) { ListenReason.DISCOVERY in reasons || ListenReason.BACKGROUND in reasons }
         // Same reasoning as the handshake above: whatever goes wrong answering one peer is that
         // connection's problem, never the process's.
         if (discovering) runCatching { syncHandler?.answer(presented, client) }

@@ -38,6 +38,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import io.github.molleware.porygonlist.data.net.SyncJob
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.ui.PorygonViewModel
 import io.github.molleware.porygonlist.ui.Sheet
@@ -59,6 +60,8 @@ import io.github.molleware.porygonlist.ui.screens.SettingsScreen
 import io.github.molleware.porygonlist.ui.screens.ShareScreen
 import io.github.molleware.porygonlist.ui.screens.ShopScreen
 import io.github.molleware.porygonlist.ui.screens.StaplesScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {}) {
@@ -79,6 +82,14 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
   val networkSnapshot by viewModel.network.collectAsStateWithLifecycle()
   val discovery by viewModel.discovery.collectAsStateWithLifecycle()
   val wifiName by viewModel.wifiName.collectAsStateWithLifecycle()
+
+  // The background sync window, scheduled once there is somebody to sync with. After the first
+  // frame by construction — the state has to have loaded for there to be peers — and off the main
+  // thread, because asking the job scheduler is a binder call.
+  val hasPeers = state?.peers?.isNotEmpty() == true
+  LaunchedEffect(hasPeers) {
+    if (hasPeers) withContext(Dispatchers.IO) { SyncJob.ensureScheduled(context.applicationContext) }
+  }
 
   // What to call the network in passing: the owner's own name for it, then the wifi's own name if
   // the optional permission allows reading it, then the fingerprint's short form.
