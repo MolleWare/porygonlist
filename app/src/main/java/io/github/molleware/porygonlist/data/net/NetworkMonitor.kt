@@ -194,6 +194,20 @@ class AndroidNetworkMonitor(private val context: Context) : NetworkMonitor {
       }
       .getOrNull()
 
+  /**
+   * One network as it stands right now, read in one go — the default one unless [network] is given.
+   *
+   * For code that runs briefly and cannot wait on [snapshots]: a background window, or a broadcast
+   * saying a wifi has just been joined. The flow is the wrong tool there, and was found to be on
+   * hardware: capabilities and link properties arrive in separate callbacks, so its first value has
+   * no link yet, hence no fingerprint, and reads as an unidentifiable network.
+   */
+  fun current(network: Network? = connectivity.activeNetwork): NetworkSnapshot {
+    val target = network ?: return NetworkSnapshot.Offline
+    return runCatching { snapshotOf(connectivity.getNetworkCapabilities(target), connectivity.getLinkProperties(target)) }
+      .getOrDefault(NetworkSnapshot.Offline)
+  }
+
   private fun snapshotOf(capabilities: NetworkCapabilities?, link: LinkProperties?): NetworkSnapshot {
     if (capabilities == null) return NetworkSnapshot.Offline
 

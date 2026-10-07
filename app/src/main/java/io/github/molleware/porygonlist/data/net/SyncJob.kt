@@ -15,7 +15,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Syncs for a short while every quarter of an hour or so, with the app out of sight.
@@ -35,8 +34,11 @@ import kotlinx.coroutines.withTimeoutOrNull
  * It adds no dependency and installs no startup initialiser, so the cold-start path does not grow.
  * Nothing about it runs before the first frame: [ensureScheduled] is called after it.
  *
- * The approved-network gate is checked here just as the open app checks it. A window on a café's
- * wifi announces nothing and opens nothing.
+ * **Only after joining a known wifi.** [WifiWatch] starts the schedule on arriving at an approved
+ * network and stops it on arriving anywhere else, so away from home the phone does not wake every
+ * quarter hour to find that out. The gate is still checked in every window, just as the open app
+ * checks it: a window that finds itself on a café's wifi announces nothing, opens nothing, and
+ * stops the schedule.
  */
 class SyncJob : JobService() {
 
@@ -72,11 +74,20 @@ class SyncJob : JobService() {
     val repo = Graph.listRepository(applicationContext)
     repo.load()
     val state = repo.state.filterNotNull().first()
-    // Nobody to talk to: nothing to open, nothing to announce.
-    if (state.peers.isEmpty()) return
 
-    val snapshot = withTimeoutOrNull(SNAPSHOT_MS) { Graph.networkMonitor(applicationContext).snapshots.first() } ?: return
-    if (discoveryDecision(snapshot, state.approvedFingerprints) !is DiscoveryDecision.Discover) return
+    // Read in one go, not off the monitor's flow — whose first value has no fingerprint yet, which
+    // made every window on hardware give up as "unidentifiable" before announcing anything.
+    val snapshot = AndroidNetworkMonitor(applicationContext).current()
+    when (backgroundPlan(snapshot, state)) {
+      BackgroundPlan.RUN -> Unit
+      // Woke somewhere it should not be — a reboot while away, a network since un-approved, nobody
+      // left to sync with. Stop the schedule; joining an approved wifi starts it again.
+      BackgroundPlan.STOP -> {
+        cancel(applicationContext)
+        return
+      }
+      BackgroundPlan.LEAVE -> return
+    }
 
     val endpoint = Graph.syncEndpoint()
     val discovery = Graph.peerDiscovery(applicationContext)
@@ -106,13 +117,14 @@ class SyncJob : JobService() {
   companion object {
     private const val JOB_ID = 0x5059 // "PY"
 
+    /** A single window as soon as possible, on joining an approved wifi. See [WifiWatch]. */
+    private const val NOW_ID = 0x5060
+
     /** Android will not run a periodic job more often than this. */
     private const val PERIOD_MS = 15 * 60_000L
 
     /** Long enough to find a peer, resolve it and exchange; short enough to cost next to nothing. */
     private const val WINDOW_MS = 30_000L
-
-    private const val SNAPSHOT_MS = 5_000L
 
     /**
      * Schedules the window if it is not already, and leaves it alone if it is.
@@ -135,6 +147,23 @@ class SyncJob : JobService() {
           .setPersisted(true)
           .build()
       )
+    }
+
+    /** One window soon, outside the quarter-hour rhythm. Replaces any that is still waiting. */
+    fun runSoon(context: Context) {
+      val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
+      scheduler.schedule(
+        JobInfo.Builder(NOW_ID, ComponentName(context, SyncJob::class.java))
+          .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+          .build()
+      )
+    }
+
+    /** Stops the windows until an approved wifi is joined again. */
+    fun cancel(context: Context) {
+      val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
+      scheduler.cancel(JOB_ID)
+      scheduler.cancel(NOW_ID)
     }
   }
 }

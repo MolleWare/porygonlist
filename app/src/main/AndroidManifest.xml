@@ -104,6 +104,19 @@
             android:name=".data.net.SyncJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!--
+          Told when a wifi is joined (through a PendingIntent the app registers with
+          ConnectivityManager) and after a reboot, so the sync windows run only on approved wifi.
+          Not exported: both senders are the system. See WifiWatch.
+        -->
+        <receiver
+            android:name=".data.net.WifiWatch"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

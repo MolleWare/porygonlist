@@ -38,7 +38,9 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.SyncJob
+import io.github.molleware.porygonlist.data.net.WifiWatch
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.ui.PorygonViewModel
 import io.github.molleware.porygonlist.ui.Sheet
@@ -83,12 +85,18 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
   val discovery by viewModel.discovery.collectAsStateWithLifecycle()
   val wifiName by viewModel.wifiName.collectAsStateWithLifecycle()
 
-  // The background sync window, scheduled once there is somebody to sync with. After the first
-  // frame by construction — the state has to have loaded for there to be peers — and off the main
-  // thread, because asking the job scheduler is a binder call.
+  // Background sync. Once there is somebody to sync with, Android is asked to say whenever a wifi is
+  // joined, and that is what turns the quarter-hour windows on and off — see WifiWatch. While open,
+  // the app also starts them itself whenever it is on an approved network, which covers approving
+  // the network you are standing on. After the first frame by construction — the state has to have
+  // loaded for there to be peers — and off the main thread, because both are binder calls.
   val hasPeers = state?.peers?.isNotEmpty() == true
+  val onApprovedWifi = discovery is DiscoveryDecision.Discover
   LaunchedEffect(hasPeers) {
-    if (hasPeers) withContext(Dispatchers.IO) { SyncJob.ensureScheduled(context.applicationContext) }
+    if (hasPeers) withContext(Dispatchers.IO) { WifiWatch.register(context.applicationContext) }
+  }
+  LaunchedEffect(hasPeers, onApprovedWifi) {
+    if (hasPeers && onApprovedWifi) withContext(Dispatchers.IO) { SyncJob.ensureScheduled(context.applicationContext) }
   }
 
   // What to call the network in passing: the owner's own name for it, then the wifi's own name if
