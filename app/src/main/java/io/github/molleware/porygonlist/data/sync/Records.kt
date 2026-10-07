@@ -2,6 +2,7 @@ package io.github.molleware.porygonlist.data.sync
 
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.Origin
+import io.github.molleware.porygonlist.data.device
 
 /**
  * The line-based record format shared by the state file and the sync payload.
@@ -25,7 +26,9 @@ internal object Records {
       field(item.name) { it } +
       field(item.qty) { it.toString() } +
       field(item.removed) { bool(it) } +
-      listOf(bool(item.checked), item.checkedAt.encode(), item.origin.name, bool(item.pending))
+      listOf(bool(item.checked), item.checkedAt.encode(), item.origin.name, bool(item.pending)) +
+      // Last, so a reader from before reordering, which stops at `pending`, still reads the rest.
+      field(item.position) { it }
 
   /** A field is three columns: the value, the stamp it was written at, and what it was written against. */
   fun <T> field(field: Field<T>, encodeValue: (T) -> String): List<String> =
@@ -48,6 +51,9 @@ internal object Records {
       checkedAt = Hlc.decode(f[from + 11]) ?: return null,
       origin = runCatching { Origin.valueOf(f[from + 12]) }.getOrNull() ?: return null,
       pending = f[from + 13] == "1",
+      // Absent from anything written before reordering, which reads as never placed.
+      position =
+        (if (f.size >= from + 17) parseField(f, from + 14) { it } else null) ?: Field("", Hlc(0, 0, ItemId(id).device)),
     )
   }
 

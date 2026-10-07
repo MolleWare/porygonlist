@@ -7,6 +7,7 @@ import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ItemId
 import io.github.molleware.porygonlist.data.sync.ListId
+import io.github.molleware.porygonlist.data.sync.OrderKey
 
 /** The device that minted an id, read back out of it. Ids are `deviceId:counter`. */
 val ItemId.device: DeviceId
@@ -113,6 +114,14 @@ data class GroceryItem(
    * meaningless once the app is closed.
    */
   val editing: Boolean = false,
+  /**
+   * Where it sits in the list: an [io.github.molleware.porygonlist.data.sync.OrderKey], shared by
+   * everyone on the list, so sorting the list by aisle on one phone sorts it on the other.
+   *
+   * Empty means never placed — every item from before reordering existed, and anything a list
+   * holds until somebody first moves something in it. Those keep the order they were stored in.
+   */
+  val position: Field<String> = Field("", Hlc(0, 0, id.device)),
 ) {
   /** The phone that first added this item. */
   val createdBy: DeviceId
@@ -120,7 +129,7 @@ data class GroceryItem(
 
   /** The newest stamp across everything mutable on this item. */
   val touchedAt: Hlc
-    get() = maxOf(name.at, qty.at, checkedAt, removed.at)
+    get() = maxOf(name.at, qty.at, checkedAt, removed.at, position.at)
 
   /** Whoever made the most recent change, which is not always the creator. */
   val lastWriter: DeviceId
@@ -159,6 +168,14 @@ data class GroceryList(
    * renamed loses to any rename at all.
    */
   val nameAt: Hlc = Hlc(0, 0, DeviceId("")),
+  /**
+   * Kept at the top of this phone's Lists screen.
+   *
+   * This phone's arrangement and nobody else's: never sent, and a merge keeps whatever this phone
+   * had. The order of the lists is personal for the same reason — each person also has lists the
+   * other never sees, so a shared arrangement of them could not mean anything.
+   */
+  val pinned: Boolean = false,
 ) {
   /**
    * Items still on the list — everything anyone sees, counts or sends.
@@ -168,6 +185,72 @@ data class GroceryList(
    */
   val liveItems: List<GroceryItem>
     get() = items.filterNot { it.removed.value }
+
+  /**
+   * [liveItems] in the order everyone on the list sees them.
+   *
+   * Never-placed items come first, in the order they are stored — that is how every list looked
+   * before reordering existed, and how one looks until somebody moves something in it. Placed items
+   * follow by [GroceryItem.position], with the item id breaking a tie, because two phones can mint
+   * the same key at once and both must still draw the same list.
+   */
+  val orderedItems: List<GroceryItem>
+    get() {
+      val (unplaced, placed) = liveItems.partition { it.position.value.isEmpty() }
+      return unplaced + placed.sortedWith(compareBy({ it.position.value }, { it.id.value }))
+    }
+
+  /**
+   * Moves one item to [toIndex] of [orderedItems], stamping only what had to change.
+   *
+   * Normally that is the moved item alone, keyed between its new neighbours. The whole list is given
+   * fresh positions instead when there is nothing to key between: the first move in a list whose
+   * items were never placed, or two neighbours that ended up with the same key on two phones.
+   */
+  fun withItemMoved(id: ItemId, toIndex: Int, at: Hlc): GroceryList {
+    val order = orderedItems.toMutableList()
+    val from = order.indexOfFirst { it.id == id }
+    if (from < 0) return this
+    val moving = order.removeAt(from)
+    val to = toIndex.coerceIn(0, order.size)
+    order.add(to, moving)
+    if (from == to) return this
+
+    val before = order.getOrNull(to - 1)?.position?.value
+    val after = order.getOrNull(to + 1)?.position?.value
+    val placeable = order.none { it.position.value.isEmpty() } && (before == null || after == null || before < after)
+
+    val newPositions: Map<ItemId, String> =
+      if (placeable) mapOf(id to OrderKey.between(before, after))
+      else order.map { it.id }.zip(OrderKey.spread(order.size)).toMap()
+
+    return copy(
+      items =
+        items.map { item ->
+          newPositions[item.id]?.let { key -> item.copy(position = item.position.set(key, at)) } ?: item
+        }
+    )
+  }
+
+  /**
+   * Adds new items at the bottom of the list.
+   *
+   * In a list nobody has arranged, appending is enough: unplaced items keep their stored order. Once
+   * anything is placed, a new item needs a position after the last one, or it would sort above
+   * every placed item and turn up at the top.
+   */
+  fun withItemsAppended(added: List<GroceryItem>, at: Hlc): GroceryList {
+    if (added.isEmpty()) return this
+    if (liveItems.none { it.position.value.isNotEmpty() }) return copy(items = items + added)
+    var last: String? = items.maxOfOrNull { it.position.value }
+    val placed =
+      added.map { item ->
+        val key = OrderKey.between(last, null)
+        last = key
+        item.copy(position = item.position.set(key, at))
+      }
+    return copy(items = items + placed)
+  }
 
   val doneCount: Int
     get() = liveItems.count { it.checked }
@@ -404,6 +487,43 @@ data class AppState(
    */
   val visibleLists: List<GroceryList>
     get() = lists.filter { it.personFor(localDevice)?.present == true }
+
+  /**
+   * [visibleLists] as the Lists screen draws them: pinned first, then the rest, each group in the
+   * order the owner arranged.
+   *
+   * The arrangement is simply the order of [lists], which is the order the file stores them in. It
+   * is this phone's own: an exchange keeps the local order and adds newcomers at the end.
+   */
+  val orderedVisibleLists: List<GroceryList>
+    get() = visibleLists.partition { it.pinned }.let { (pinned, rest) -> pinned + rest }
+
+  /**
+   * Moves a list to [toIndex] of [orderedVisibleLists], within its own group.
+   *
+   * Pinned and unpinned lists are arranged separately, so the target is clamped to the moved list's
+   * group: dragging a list past the boundary is what pinning is for. Lists the owner cannot see —
+   * ones they have left, held only until the others hear — keep their places at the end.
+   */
+  fun withListMoved(id: ListId, toIndex: Int): AppState {
+    val order = orderedVisibleLists.toMutableList()
+    val from = order.indexOfFirst { it.id == id }
+    if (from < 0) return this
+    val moving = order.removeAt(from)
+    val pinnedCount = order.count { it.pinned }
+    val to = if (moving.pinned) toIndex.coerceIn(0, pinnedCount) else toIndex.coerceIn(pinnedCount, order.size)
+    order.add(to, moving)
+    val shown = order.map { it.id }.toSet()
+    return copy(lists = order + lists.filterNot { it.id in shown })
+  }
+
+  /** Pins or unpins a list. A newly pinned list joins the bottom of the pinned group. */
+  fun withPinned(id: ListId, pinned: Boolean): AppState {
+    val target = lists.firstOrNull { it.id == id } ?: return this
+    if (target.pinned == pinned) return this
+    // Moved to the end of the stored order, which is the end of whichever group it now belongs to.
+    return copy(lists = lists.filterNot { it.id == id } + target.copy(pinned = pinned))
+  }
 
   /** The fingerprints discovery is allowed to run on. */
   val approvedFingerprints: Set<NetworkFingerprint>

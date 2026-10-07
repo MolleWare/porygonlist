@@ -160,7 +160,9 @@ object StateCodec {
     state.staples.forEach { appendLine(record("staple", it.name, it.uses.toString())) }
 
     state.lists.forEach { list ->
-      appendLine(record("list", list.id.value, list.name, list.accent.name, list.nameAt.encode()))
+      // Pinned is this phone's own and lives only here; the sync payload's list record has no such
+      // field, so it never reaches anyone else.
+      appendLine(record("list", list.id.value, list.name, list.accent.name, list.nameAt.encode(), list.pinned.bool()))
       list.people.forEach {
         appendLine(
           record(
@@ -212,6 +214,7 @@ object StateCodec {
     val names = mutableMapOf<String, String>()
     val accents = mutableMapOf<String, ListAccent>()
     val nameStamps = mutableMapOf<String, Hlc>()
+    val pins = mutableSetOf<String>()
     val people = mutableMapOf<String, MutableList<Person>>()
     val items = mutableMapOf<String, MutableList<GroceryItem>>()
 
@@ -254,6 +257,8 @@ object StateCodec {
               // Absent before renames were stamped — including in version 10 files already on a
               // phone — which reads as never renamed: any rename from elsewhere then wins.
               f.getOrNull(4)?.let { Hlc.decode(it) }?.let { nameStamps[id] = it }
+              // Absent before pinning existed, which reads as not pinned.
+              if (f.getOrNull(5) == "1") pins += id
             }
             "person" -> {
               val device = DeviceId(f[2])
@@ -310,6 +315,7 @@ object StateCodec {
           items = items[raw].orEmpty(),
           people = people[raw].orEmpty(),
           nameAt = nameStamps[raw] ?: GroceryList.none.nameAt,
+          pinned = raw in pins,
         )
       }
 

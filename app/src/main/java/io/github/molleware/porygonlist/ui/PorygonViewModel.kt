@@ -852,6 +852,11 @@ class PorygonViewModel(
     confirmingListDelete = null
   }
 
+  /** Arranges this phone's Lists screen. Not stamped and never sent: the order is the owner's own. */
+  fun moveList(id: ListId, toIndex: Int) = repo.update { s, _ -> s.withListMoved(id, toIndex) }
+
+  fun setPinned(id: ListId, pinned: Boolean) = repo.update { s, _ -> s.withPinned(id, pinned) }
+
   // ── Items ─────────────────────────────────────────────────────────────────
 
   fun onDraftChange(value: String) {
@@ -924,6 +929,15 @@ class PorygonViewModel(
 
   fun celebrationShown() {
     celebrating = false
+  }
+
+  /**
+   * Puts an item at [toIndex] of the open list's [GroceryList.orderedItems].
+   *
+   * The order is shared, so this is stamped and travels like any other edit.
+   */
+  fun moveItem(itemId: ItemId, toIndex: Int) = repo.update { s, node ->
+    s.withActiveList { it.withItemMoved(itemId, toIndex, node.clock.tick()) }
   }
 
   fun toggleChecked(itemId: ItemId) {
@@ -1363,7 +1377,7 @@ class PorygonViewModel(
       // Each pasted item is created here, so it gets this phone's identity and a fresh id: the
       // message carries no identity of its own, by design.
       val items = fresh.map { node.newItem(s, it.name, qty = it.qty, origin = Origin.IMPORTED) }
-      s.withActiveList { it.copy(items = it.items + items) }
+      s.withActiveList { list -> items.lastOrNull()?.let { list.withItemsAppended(items, it.name.at) } ?: list }
     }
     importText = ""
     closeSheet()
@@ -1397,7 +1411,8 @@ class PorygonViewModel(
     val state = this
 
     if (existing == null) {
-      return withActiveList { it.copy(items = it.items + node.newItem(state, trimmed, qty = qty, origin = origin)) }
+      val item = node.newItem(state, trimmed, qty = qty, origin = origin)
+      return withActiveList { it.withItemsAppended(listOf(item), item.name.at) }
     }
 
     val stamp = node.clock.tick()

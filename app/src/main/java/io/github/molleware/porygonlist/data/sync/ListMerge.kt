@@ -62,6 +62,9 @@ fun merge(mine: GroceryItem, theirs: GroceryItem): ItemMerge {
         removed = removed.field,
         checked = if (minesTickIsNewer) mine.checked else theirs.checked,
         checkedAt = maxOf(mine.checkedAt, theirs.checkedAt),
+        // Where it sits. Two people moving the same item at once is not worth a question: the later
+        // move wins, the way a tick does, and nothing is reported.
+        position = mine.position.latest(theirs.position),
         // `origin` is a fact about creation and is the same on both sides. `pending` and `editing`
         // describe this phone's own situation — whether it still owes the change, and who has the
         // item open here — so neither is taken from a peer.

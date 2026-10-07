@@ -47,6 +47,12 @@ object IconPaths {
   /** Fewer, in the quantity stepper. */
   const val MINUS = "M5 12h14"
 
+  /** The drag handle: two columns of three dots, drawn as round-capped dabs. */
+  const val GRIP = "M9 6h.01 M15 6h.01 M9 12h.01 M15 12h.01 M9 18h.01 M15 18h.01"
+
+  /** A pushpin, for keeping a list at the top. */
+  const val PIN = "M12 17v5 M8 3h8 M9 3v7l-3 4v3h12v-3l-3-4V3"
+
   // Bottom bar.
   const val TAB_LISTS = "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"
   const val TAB_SHOP = "M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"

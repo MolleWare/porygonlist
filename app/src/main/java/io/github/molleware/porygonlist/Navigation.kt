@@ -193,6 +193,8 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onAskDelete = viewModel::askDeleteList,
                   onCancelDelete = viewModel::cancelDeleteList,
                   onDelete = viewModel::deleteList,
+                  onMoveList = viewModel::moveList,
+                  onSetPinned = viewModel::setPinned,
                   modifier = Modifier.fillMaxSize(),
                 )
               }
@@ -208,6 +210,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onEditItem = { item ->
                     viewModel.openEditSheet(item, itemSubLabel(item, appState.activeList, appState.localDevice))
                   },
+                  onMoveItem = viewModel::moveItem,
                   onMerge = viewModel::mergeConflict,
                   onKeepBoth = viewModel::keepBoth,
                   onShare = { backStack.goTo(Share) },

@@ -101,7 +101,8 @@ fun ShopScreen(
       Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp),
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-      list.liveItems.forEach { item ->
+      // The list's shared order, so a list sorted by aisle is walked in that order.
+      list.orderedItems.forEach { item ->
         ShopItemRow(
           item = item,
           subLabel = shopSubLabel(item, list, state.localDevice),
