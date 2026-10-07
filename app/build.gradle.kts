@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -22,8 +24,27 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Release signing, read from keystore.properties at the repository root — git-ignored, because
+    // this repository is public and a published app's key can never be replaced. Without that file
+    // the release build is simply unsigned, which is what F-Droid's build server expects: it
+    // compares its own unsigned build with our signed APK. See keystore.properties.example.
+    val keystoreFile = rootProject.file("keystore.properties")
+    val signing =
+        if (keystoreFile.exists()) Properties().apply { keystoreFile.inputStream().use { load(it) } } else null
+    signingConfigs {
+        if (signing != null) {
+            create("release") {
+                storeFile = rootProject.file(signing.getProperty("storeFile"))
+                storePassword = signing.getProperty("storePassword")
+                keyAlias = signing.getProperty("keyAlias")
+                keyPassword = signing.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (signing != null) signingConfig = signingConfigs.getByName("release")
             // R8: shrink, optimize and obfuscate. Also the prerequisite for
             // baseline profiles to have their full effect on startup.
             isMinifyEnabled = true

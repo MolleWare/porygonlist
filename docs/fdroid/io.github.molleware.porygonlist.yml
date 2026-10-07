@@ -1,0 +1,41 @@
+# DRAFT of the F-Droid metadata. The real file goes in a merge request to
+# https://gitlab.com/fdroid/fdroiddata as metadata/io.github.molleware.porygonlist.yml.
+# Kept here so it is versioned with the app; see docs/release-checklist.md.
+#
+# Before submitting:
+#   - check "Shopping List" is still in F-Droid's category list;
+#   - fill in AllowedAPKSigningKeys with the SHA-256 of our signing certificate
+#     (apksigner verify --print-certs on our signed APK);
+#   - attach our signed APK to the GitHub release under the name in Binaries;
+#   - confirm the build server has JDK 21, or add a sudo step installing it.
+
+Categories:
+  - Shopping List
+License: GPL-3.0-or-later
+AuthorName: MolleWare
+SourceCode: https://github.com/MolleWare/porygonlist
+IssueTracker: https://github.com/MolleWare/porygonlist/issues
+
+AutoName: PorygonList
+
+RepoType: git
+Repo: https://github.com/MolleWare/porygonlist.git
+
+# Reproducible builds: F-Droid builds from source, checks its build matches our signed APK, and
+# then publishes ours — so the signature is the same as the Play Store's and either can update the
+# other.
+Binaries: https://github.com/MolleWare/porygonlist/releases/download/v%v/porygonlist-%v.apk
+AllowedAPKSigningKeys: TODO-sha256-of-our-signing-certificate
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    commit: v0.1.0
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1

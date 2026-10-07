@@ -79,9 +79,11 @@ Release build (`assembleRelease`, R8 on), not debug — minification has to be p
 ### Both stores
 
 - [ ] Generate the signing key and back it up somewhere that is not this machine. Losing it means
-      never updating the app again. It never goes in the repo.
-- [ ] Release signing config that reads the key from outside the repo (environment or a local file
-      that is git-ignored).
+      never updating the app again. It never goes in the repo. The command is in
+      `keystore.properties.example`. **Owner's job.**
+- [x] Release signing config that reads the key from outside the repo: `keystore.properties`
+      (git-ignored). Without it the release build is unsigned, as F-Droid expects; tried both ways
+      with a throwaway key, and the unsigned build is still byte-identical across clean builds.
 - [x] Version `0.1.0`, version code 1. Bump both for every release, never reuse a code.
 - [x] Store text, changelog and icon in `fastlane/metadata/android/en-US/` (icon from
       `./scripts/icon.sh store`).
@@ -98,15 +100,20 @@ Release build (`assembleRelease`, R8 on), not debug — minification has to be p
 - [ ] Confirm the build server has JDK 21, or add an install step to the recipe.
 - [ ] `fdroid lint` and `fdroid build` locally, in F-Droid's build image.
 - [ ] Merge request to `fdroid/fdroiddata` adding `metadata/io.github.molleware.porygonlist.yml`,
-      with our signing certificate's hash so F-Droid ships our APK.
+      with our signing certificate's hash so F-Droid ships our APK. Draft:
+      [docs/fdroid/io.github.molleware.porygonlist.yml](fdroid/io.github.molleware.porygonlist.yml).
+- [ ] A GitHub release for `v0.1.0` with our signed APK attached, under the name the draft's
+      `Binaries` line expects. F-Droid compares against it.
 
 ### Play Store
 
 - [ ] Play Console account and app entry; enrol in Play App Signing with **our own** key.
-- [ ] Privacy policy page. Short and true: nothing is collected, there is no server, lists travel only
-      between paired phones on approved wifi.
+- [x] Privacy policy: [docs/privacy.md](privacy.md). Its GitHub page is the URL to give Play. If
+      the backup decision above changes, update its "Backups" section.
 - [ ] Data safety form: no data collected or shared.
 - [ ] Location permission declaration. Fine location is requested only to show the wifi's name and
-      the app works without it; Play may want an in-app disclosure before the prompt.
+      the app works without it. The Share screen already explains this beside the "Use the wifi's
+      own name" button, before Android's prompt — probably enough as the in-app disclosure, but
+      check it against Play's current wording when filling in the form.
 - [ ] Content rating questionnaire, target audience, store category.
 - [ ] Upload an app bundle (`bundleRelease`) to internal testing first, then production.
