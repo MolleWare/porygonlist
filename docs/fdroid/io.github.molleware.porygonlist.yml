@@ -2,8 +2,11 @@
 # https://gitlab.com/fdroid/fdroiddata as metadata/io.github.molleware.porygonlist.yml.
 # Kept here so it is versioned with the app; see docs/release-checklist.md.
 #
+# Checked 2026-10-06 with fdroidserver 2.4.5: `fdroid lint` passes apart from the placeholder key,
+# "Shopping List" is in fdroiddata's config/categories.yml, and the field order below is what
+# `fdroid rewritemeta` produces (comments aside).
+#
 # Before submitting:
-#   - check "Shopping List" is still in F-Droid's category list;
 #   - fill in AllowedAPKSigningKeys with the SHA-256 of our signing certificate
 #     (apksigner verify --print-certs on our signed APK);
 #   - attach our signed APK to the GitHub release under the name in Binaries;
@@ -25,7 +28,6 @@ Repo: https://github.com/MolleWare/porygonlist.git
 # then publishes ours — so the signature is the same as the Play Store's and either can update the
 # other.
 Binaries: https://github.com/MolleWare/porygonlist/releases/download/v%v/porygonlist-%v.apk
-AllowedAPKSigningKeys: TODO-sha256-of-our-signing-certificate
 
 Builds:
   - versionName: 0.1.0
@@ -34,6 +36,8 @@ Builds:
     subdir: app
     gradle:
       - yes
+
+AllowedAPKSigningKeys: TODO-sha256-of-our-signing-certificate
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags

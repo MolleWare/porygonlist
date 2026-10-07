@@ -99,7 +99,10 @@ Release build (`assembleRelease`, R8 on), not debug — minification has to be p
 - [ ] Two clean release builds here came out byte-identical (2026-10-06). Confirm the same on
       F-Droid's build server, which uses different paths and its own JDK.
 - [ ] Confirm the build server has JDK 21, or add an install step to the recipe.
-- [ ] `fdroid lint` and `fdroid build` locally, in F-Droid's build image.
+- [x] `fdroid lint` on the draft metadata (fdroidserver 2.4.5, 2026-10-06): clean apart from the
+      placeholder signing key; "Shopping List" is a valid category; field order matches
+      `fdroid rewritemeta`.
+- [ ] `fdroid build` locally, in F-Droid's build image — needs the tag and Docker.
 - [ ] Merge request to `fdroid/fdroiddata` adding `metadata/io.github.molleware.porygonlist.yml`,
       with our signing certificate's hash so F-Droid ships our APK. Draft:
       [docs/fdroid/io.github.molleware.porygonlist.yml](fdroid/io.github.molleware.porygonlist.yml).
