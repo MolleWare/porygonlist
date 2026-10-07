@@ -17,12 +17,11 @@ be true, not how to check it.
 
 ## Fix before release
 
-- [ ] **Removing someone from a list does not stick.** It only drops them on this phone; their copy
-      puts them back on the next exchange, and their phone never learns. Agreed fix: a stamped "removed"
-      tombstone like leaving, held until the removed person has heard too, and their phone keeps a
-      private copy of the list.
-- [ ] **Unpairing probably has the same bug.** `retireDevice` drops the person outright; a third phone
-      still on the list could hand them back. Check, then fix the same way.
+- [x] **Removing someone from a list does not stick.** Now a stamped tombstone, held until everyone
+      on the list and the removed person have confirmed it; the removed phone keeps a private copy.
+      Needs the phone check below.
+- [x] **Unpairing had the same bug** — a third phone on the list handed the person back. Now a
+      tombstone on every list too, without waiting on the unpaired phone.
 - [x] **"In step with Ava" is claimed without evidence.** The list card and banner now follow the
       delivery receipts: "in step with", "waiting for", or "not handed over yet".
 - [ ] **Two edits of the same item at once resolve silently.** The merge finds them and throws the
@@ -41,7 +40,16 @@ be true, not how to check it.
 - [ ] **Backups.** `allowBackup="true"` copies the lists to the owner's cloud backup, and a restore then
       throws them away (the identity key never travels). Either turn backup off, which is honest about
       throwaway lists and keeps list contents off Google's servers, or leave it and accept the copy.
-- [ ] **README is out of date.** It still says sync is not built and there is no release.
+- [x] **README is out of date.** Updated in `63b366a`.
+- [ ] **A shared list arrives silently.** Nothing says who shared it, and one that has the same name
+      as a list you already have shows up as a second, identical-looking card. Show "from Ava" on the
+      card until it is first opened. (Offering to combine two same-named lists is a possible later
+      step, not needed for 0.1.0.)
+- [ ] **No About screen.** Version, the GPL, where to report a bug, and credits for the open-source
+      libraries the app ships.
+- [ ] **Accessibility.** Content descriptions on every control that has no text; then a TalkBack and
+      largest-font pass on a phone (below).
+- [ ] **Language.** English only. A French translation is the owner's call.
 
 ## Check on real phones
 
@@ -63,6 +71,8 @@ Release build (`assembleRelease`, R8 on), not debug — minification has to be p
       wifi starts the schedule, joining another stops it, a reboot re-registers.
 - [ ] One night with background sync, one without: battery used by PorygonList, both phones.
 - [ ] The list card's avatars sit against the right edge (fixed in `d679f81`, not yet looked at).
+- [ ] TalkBack through every screen, and the largest font size: nothing unlabelled, nothing clipped.
+- [ ] Dark mode, if the theme has one; otherwise decide that it does not.
 
 ## Store preparation
 

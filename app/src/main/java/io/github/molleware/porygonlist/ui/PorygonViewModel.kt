@@ -669,7 +669,7 @@ class PorygonViewModel(
    * device left in a list's people is still waited on for delivery receipts, and one that will
    * never answer again would hold every tombstone on that list open for ever.
    */
-  fun unpair(deviceId: DeviceId) = repo.update { s, _ -> s.retireDevice(deviceId) }
+  fun unpair(deviceId: DeviceId) = repo.update { s, node -> s.retireDevice(deviceId, node.clock.tick()) }
 
   /** Which person the People section is asking about before removing. */
   var confirmingRemovalOf by mutableStateOf<DeviceId?>(null)
@@ -686,11 +686,11 @@ class PorygonViewModel(
   /**
    * Stops sharing the active list with someone.
    *
-   * Clears whatever was owed to them on that list as a consequence, which is the honest way round:
-   * the tombstones go because there is nobody left to tell, not because the guarantee was waived.
+   * Stamped, so the decision travels to everyone on the list and to them — see
+   * [AppState.removePersonFrom]. Their phone keeps what it had as a private list.
    */
   fun removePersonFromActiveList(device: DeviceId) {
-    repo.update { s, _ -> s.removePersonFrom(s.activeListId, device) }
+    repo.update { s, node -> s.removePersonFrom(s.activeListId, device, node.clock.tick()) }
     confirmingRemovalOf = null
   }
 

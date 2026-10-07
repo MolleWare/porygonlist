@@ -137,7 +137,7 @@ class SyncCoordinator(
     if (acknowledged[id] == content) return
 
     val exchange = (dial ?: ::callOverTls)(peer, payload) ?: return
-    repo.update { s, node -> s.afterExchange(id, exchange.theirs, exchange.ackOfMine, payload, node.clock) }
+    repo.update { s, node -> s.afterExchange(id, exchange.theirs, exchange.ackOfMine, payload, node.clock, node.ids) }
     if (exchange.ackOfMine == payload.at) acknowledged[id] = content
   }
 
@@ -162,7 +162,7 @@ class SyncCoordinator(
         else state.payloadFor(claimed, readOnlyClock(state)).also { sent = it }
       } ?: return
 
-    repo.update { s, node -> s.afterExchange(peer.deviceId, exchange.theirs, exchange.ackOfMine, sent, node.clock) }
+    repo.update { s, node -> s.afterExchange(peer.deviceId, exchange.theirs, exchange.ackOfMine, sent, node.clock, node.ids) }
     sent?.let { if (exchange.ackOfMine == it.at) acknowledged[peer.deviceId] = contentOf(it) }
   }
 

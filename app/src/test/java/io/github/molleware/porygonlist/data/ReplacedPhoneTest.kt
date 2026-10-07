@@ -58,7 +58,7 @@ class ReplacedPhoneTest {
     val before = state(item("Oat milk", removedAt = at(3_000)), people = pair)
     assertEquals(1, before.pruneDeliveredTombstones().lists.first().items.size)
 
-    val after = before.retireDevice(hugoOld)
+    val after = before.retireDevice(hugoOld, at(10_000))
 
     assertTrue("the tombstone had nobody left to wait for", after.lists.first().items.isEmpty())
   }
@@ -116,7 +116,7 @@ class ReplacedPhoneTest {
   fun `unpairing removes the person entirely`() {
     val before = state(item("Sourdough", author = hugoOld), people = pair)
 
-    val after = before.retireDevice(hugoOld)
+    val after = before.retireDevice(hugoOld, at(10_000))
 
     assertEquals(listOf("Ava"), after.lists.first().people.map { it.name })
     // Nothing left to attribute the old items to, which is honest rather than invented.

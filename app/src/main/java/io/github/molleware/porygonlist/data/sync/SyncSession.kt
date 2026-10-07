@@ -66,7 +66,7 @@ fun AppState.payloadFor(peer: DeviceId, clock: HybridClock): SyncPayload? {
  * which merges, and one this phone is being invited onto, which is taken whole. See the comment on
  * `invitations` below for what makes an invitation recognisable and what it still does not permit.
  */
-fun AppState.receive(payload: SyncPayload, clock: HybridClock): SyncResult {
+fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? = null): SyncResult {
   if (payload.from == localDevice) return SyncResult.Rejected(RejectReason.SELF)
   if (peers.none { it.deviceId == payload.from }) return SyncResult.Rejected(RejectReason.UNKNOWN_PEER)
 
@@ -112,12 +112,33 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock): SyncResult {
   clock.observe(payload.at)
   mergedLists.mapNotNull { it.newestStamp() }.maxOrNull()?.let { clock.observe(it) }
 
+  /*
+   * Lists this exchange has just taken this phone off, by somebody else's decision.
+   *
+   * The owner was told "they keep the copy they have" when they removed someone, so that is what
+   * happens: the removed phone keeps the list as its own private one, under new ids, and the shared
+   * one goes on as a hidden tombstone until everyone has heard. Leaving is not this case — that was
+   * this phone's own decision, and it already let go of the list.
+   *
+   * Needs [ids] to mint the copy; without them (in tests that do not care) the list simply goes.
+   */
+  val removedFrom =
+    mergedLists.filter { merged ->
+      val wasOn = lists.firstOrNull { it.id == merged.id }?.personFor(localDevice)?.present == true
+      val me = merged.personFor(localDevice)
+      wasOn && me != null && !me.present && !me.wasEver(me.removed.at.device)
+    }
+  val kept = if (ids == null) emptyMap() else removedFrom.associate { it.id to it.keptAsPrivate(ids.nextList(), ids::nextItem, localDevice) }
+  val active = kept[activeListId]?.id ?: activeListId
+
   // One card at a time, and an unanswered one is not thrown away for a newer one: the items behind
   // it are both on the list, so the question keeps until it is asked again on the next handover.
   val surfaced = conflict ?: duplicates.firstOrNull()
 
   return SyncResult.Merged(
-    state = copy(lists = mergedLists, clockHead = clock.head(), conflict = surfaced).pruneDeliveredTombstones(),
+    state =
+      copy(lists = mergedLists + kept.values, activeListId = active, clockHead = clock.head(), conflict = surfaced)
+        .pruneDeliveredTombstones(),
     clashes = clashes,
     duplicates = duplicates,
     receipt = payload.at,
@@ -145,11 +166,12 @@ fun AppState.afterExchange(
   ackOfMine: Hlc?,
   sent: SyncPayload?,
   clock: HybridClock,
+  ids: IdFactory? = null,
 ): AppState {
   var next = this
 
   if (theirs != null && theirs.from == peer && theirs.lists.isNotEmpty()) {
-    val result = next.receive(theirs, clock)
+    val result = next.receive(theirs, clock, ids)
     if (result is SyncResult.Merged) next = result.state
   }
 

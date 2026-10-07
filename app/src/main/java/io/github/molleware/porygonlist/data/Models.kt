@@ -292,15 +292,15 @@ data class GroceryList(
   fun withoutPerson(device: DeviceId): GroceryList = copy(people = people.filterNot { it.wasEver(device) })
 
   /**
-   * Marks someone as having left, rather than forgetting them.
+   * Marks someone as off the list, rather than forgetting them — whether they left or were removed.
    *
-   * The difference from [withoutPerson] is who decided. Taking someone off a list is this phone's
-   * business and theirs alone — see [AppState.removePersonFrom]. *Leaving* is news the others need,
-   * so the person stays as a stamped tombstone until every remaining peer has confirmed hearing it,
-   * at which point [pruneDelivered] collects it.
+   * Both are news the others need, so the person stays as a stamped tombstone until everyone who has
+   * to hear it has confirmed, at which point [pruneDelivered] collects it. Who that is depends on
+   * who decided: see [mustHear].
    *
    * Without the stamp this would not survive a single exchange: the other phone's copy still lists
-   * the leaver, and [mergePeople] unions, so they would be added straight back.
+   * them, and [mergePeople] unions, so they would be added straight back. That is exactly what
+   * removing someone did when it simply dropped them — found on hardware.
    */
   fun withPersonLeft(device: DeviceId, at: Hlc): GroceryList =
     copy(people = people.map { if (it.wasEver(device)) it.copy(removed = it.removed.set(true, at)) else it })
@@ -331,15 +331,55 @@ data class GroceryList(
    * nothing left for the tombstone to contradict and it can go. Until then it stays, however old
    * it is — age is not evidence of delivery.
    */
-  fun pruneDelivered(log: DeliveryLog, localDevice: DeviceId): GroceryList {
+  fun pruneDelivered(log: DeliveryLog, localDevice: DeviceId, reachable: Set<DeviceId>? = null): GroceryList {
     val peers = peersOf(localDevice)
-    // With nobody to deliver to there is nothing to wait for, and a solo list keeps no tombstones.
-    if (peers.isEmpty()) return copy(items = liveItems, people = people.filter { it.present })
     return copy(
-      items = items.filterNot { it.removed.value && log.deliveredToAll(it.removed.at, peers) },
-      // Someone who has left is collected on the same terms as a removed item: once everyone still
-      // on the list has confirmed hearing it, nobody is left holding a copy that says otherwise.
-      people = people.filterNot { it.removed.value && log.deliveredToAll(it.removed.at, peers) },
+      // With nobody to deliver to there is nothing to wait for, and a solo list keeps no tombstones.
+      items =
+        if (peers.isEmpty()) liveItems else items.filterNot { it.removed.value && log.deliveredToAll(it.removed.at, peers) },
+      // Someone off the list is collected on the same terms as a removed item: once everyone who has
+      // to hear it has confirmed, nobody is left holding a copy that says otherwise.
+      people =
+        people.filterNot { person ->
+          person.removed.value && log.deliveredToAll(person.removed.at, peers + listOfNotNull(mustHear(person, localDevice, reachable)))
+        },
+    )
+  }
+
+  /**
+   * Whether a person who is off the list has to hear about it themselves before it can be forgotten.
+   *
+   * Someone who left decided it on their own phone, so it already knows. Someone *removed* did not:
+   * their phone still holds the list and would hand them straight back, and would go on believing
+   * the list was shared. So their own confirmation is waited for too — unless they are no longer a
+   * phone this one talks to at all, as after unpairing, when there is nobody to wait for.
+   *
+   * Null when nothing extra is owed.
+   */
+  private fun mustHear(person: Person, localDevice: DeviceId, reachable: Set<DeviceId>?): DeviceId? {
+    val decidedByThemselves = person.wasEver(person.removed.at.device)
+    if (decidedByThemselves || person.device == localDevice) return null
+    if (reachable != null && person.device !in reachable) return null
+    return person.device
+  }
+
+  /**
+   * What a phone keeps after being taken off this list: the same list, as its own private one.
+   *
+   * New ids for the list and its items, because the original is still somebody else's, and this
+   * phone may one day be put back on it — two lists sharing item ids would then be merged into each
+   * other. Everything else is as it stood: names, quantities, ticks, order, who added what.
+   */
+  fun keptAsPrivate(id: ListId, newItemId: () -> ItemId, localDevice: DeviceId): GroceryList {
+    val me = personFor(localDevice)
+    return GroceryList(
+      id = id,
+      name = name,
+      accent = accent,
+      items = liveItems.map { it.copy(id = newItemId(), pending = false, editing = false) },
+      people = listOf(Person(localDevice, me?.name.orEmpty(), me?.initial.orEmpty())),
+      nameAt = nameAt,
+      pinned = pinned,
     )
   }
 
@@ -581,20 +621,26 @@ data class AppState(
   /**
    * Stops sharing one list with someone.
    *
-   * Their tombstones on that list go with them, and safely: collection is normally held back
-   * because a phone that never heard about a removal would offer the item back on the next
-   * handover — but once they are off the list there is no next handover. Nothing to wait for, and
-   * nothing that can come back.
+   * A stamped tombstone, not a deletion. Dropping them outright — what this used to do — lasted
+   * until their phone next sent its copy, which still named them, and the merge put them back; and
+   * their phone never found out it had been taken off. Now the decision travels: to everyone still
+   * on the list, and to the person removed, whose phone keeps the list as its own private copy.
    */
-  fun removePersonFrom(listId: ListId, device: DeviceId): AppState =
-    copy(lists = lists.map { if (it.id == listId) it.withoutPerson(device) else it })
-      .let { next -> next.copy(deliveredTo = next.deliveredTo.retaining(next.knownPeers())) }
-      .pruneDeliveredTombstones()
+  fun removePersonFrom(listId: ListId, device: DeviceId, at: Hlc): AppState =
+    copy(lists = lists.map { if (it.id == listId) it.withPersonLeft(device, at) else it }).pruneDeliveredTombstones()
 
-  /** Removes a person from every list, and stops waiting on their phone. */
-  fun retireDevice(device: DeviceId): AppState =
-    copy(lists = lists.map { it.withoutPerson(device) }, peers = peers.filterNot { it.deviceId == device })
-      .let { next -> next.copy(deliveredTo = next.deliveredTo.retaining(next.knownPeers())) }
+  /**
+   * Unpairs a phone: off every list it is on, and no longer trusted.
+   *
+   * Off the lists by tombstone, for the same reason as [removePersonFrom] — anyone else on a list
+   * would otherwise hand them back. Their own confirmation is not waited for: an unpaired phone is
+   * never spoken to again, so there is nobody to wait for.
+   */
+  fun retireDevice(device: DeviceId, at: Hlc): AppState =
+    copy(
+        lists = lists.map { list -> if (list.personFor(device)?.present == true) list.withPersonLeft(device, at) else list },
+        peers = peers.filterNot { it.deviceId == device },
+      )
       .pruneDeliveredTombstones()
 
   /**
@@ -607,7 +653,7 @@ data class AppState(
     copy(
       lists =
         lists
-          .map { it.pruneDelivered(deliveredTo, localDevice) }
+          .map { it.pruneDelivered(deliveredTo, localDevice, reachable = peers.map { p -> p.deviceId }.toSet()) }
           // A list this phone has left is kept, and kept being sent, for exactly as long as its own
           // leaving tombstone survives — that is what carries the news. Once the tombstone has been
           // collected above, everyone has heard, and the list can finally go. Dropping it any
