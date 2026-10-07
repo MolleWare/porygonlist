@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -105,9 +106,10 @@ fun ListsScreen(
   // Edit order: cards grow a pin and a handle, and stop opening on a tap so a grab cannot also
   // open a list. The screen's own mode, put away by leaving it.
   var arranging by rememberSaveable { mutableStateOf(false) }
+  val scrollState = rememberScrollState()
 
   Column(
-    modifier.verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = tabBarClearance())
+    modifier.verticalScroll(scrollState).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = tabBarClearance())
   ) {
     Row(
       Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -139,7 +141,7 @@ fun ListsScreen(
     }
 
     if (arranging) {
-      ArrangeLists(state, onMoveList, onSetPinned)
+      ArrangeLists(state, scrollState, onMoveList, onSetPinned)
     } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
       state.orderedVisibleLists.forEach { list ->
         if (renamingList == list.id) {
@@ -202,11 +204,22 @@ fun ListsScreen(
  * the other — it would only snap back — because the pin is what moves it between them.
  */
 @Composable
-private fun ArrangeLists(state: AppState, onMoveList: (ListId, Int) -> Unit, onSetPinned: (ListId, Boolean) -> Unit) {
+private fun ArrangeLists(
+  state: AppState,
+  scrollState: ScrollState,
+  onMoveList: (ListId, Int) -> Unit,
+  onSetPinned: (ListId, Boolean) -> Unit,
+) {
   val (pinned, rest) = state.orderedVisibleLists.partition { it.pinned }
   Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (pinned.isNotEmpty()) {
-      ReorderableColumn(pinned, keyOf = { it.id.value }, onMove = { list, to -> onMoveList(list.id, to) }, spacing = 12.dp) {
+      ReorderableColumn(
+        pinned,
+        keyOf = { it.id.value },
+        onMove = { list, to -> onMoveList(list.id, to) },
+        spacing = 12.dp,
+        scrollState = scrollState,
+      ) {
         list,
         handle,
         dragging ->
@@ -220,6 +233,7 @@ private fun ArrangeLists(state: AppState, onMoveList: (ListId, Int) -> Unit, onS
         keyOf = { it.id.value },
         onMove = { list, to -> onMoveList(list.id, pinned.size + to) },
         spacing = 12.dp,
+        scrollState = scrollState,
       ) { list, handle, dragging ->
         ArrangeRow(list, handle, dragging, onTogglePin = { onSetPinned(list.id, true) })
       }

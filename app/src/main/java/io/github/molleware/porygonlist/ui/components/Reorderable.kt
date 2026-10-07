@@ -1,8 +1,10 @@
 package io.github.molleware.porygonlist.ui.components
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -18,12 +21,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -76,6 +84,10 @@ fun DragHandle(handle: Modifier, contentDescription: String) {
  *
  * The handle also carries "Move up" and "Move down" as accessibility actions, because a drag is
  * the one gesture a screen reader cannot perform.
+ *
+ * Given the screen's [scrollState], a row held near the top or bottom of what is visible scrolls
+ * the screen along, so a long list can be rearranged end to end in one drag. [bottomEdge] is larger
+ * than [topEdge] because the tab bar lies over the bottom of every screen that has one.
  */
 @Composable
 fun <T> ReorderableColumn(
@@ -84,10 +96,19 @@ fun <T> ReorderableColumn(
   onMove: (item: T, toIndex: Int) -> Unit,
   spacing: Dp,
   modifier: Modifier = Modifier,
+  scrollState: ScrollState? = null,
+  topEdge: Dp = 64.dp,
+  bottomEdge: Dp = 136.dp,
   row: @Composable (item: T, handle: Modifier, dragging: Boolean) -> Unit,
 ) {
-  val spacingPx = with(LocalDensity.current) { spacing.toPx() }
+  val density = LocalDensity.current
+  val spacingPx = with(density) { spacing.toPx() }
+  val topEdgePx = with(density) { topEdge.toPx() }
+  val bottomEdgePx = with(density) { bottomEdge.toPx() }
   val heights = remember { mutableStateMapOf<Any, Int>() }
+  // Where things are in the window, for the edge scroll: the column, and each row.
+  val placed = remember { mutableMapOf<Any, LayoutCoordinates>() }
+  var column by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
   var draggingKey by remember { mutableStateOf<Any?>(null) }
   var offset by remember { mutableFloatStateOf(0f) }
@@ -107,7 +128,56 @@ fun <T> ReorderableColumn(
     if (item != null && from >= 0 && to != from) latestOnMove(item, to)
   }
 
-  Column(modifier, verticalArrangement = Arrangement.spacedBy(spacing)) {
+  // Past half of a neighbour, the two trade places and the offset carries on from the new slot, so
+  // the row stays under the finger. Called on every finger movement and every edge-scroll step.
+  fun settle(k: Any) {
+    val at = order.indexOfFirst { keyOf(it) == k }
+    val below = order.getOrNull(at + 1)
+    if (below != null) {
+      val step = (heights[keyOf(below)] ?: 0) + spacingPx
+      if (offset > step / 2) {
+        order = order.toMutableList().apply { add(at + 1, removeAt(at)) }
+        offset -= step
+      }
+    }
+    val above = order.getOrNull(at - 1)
+    if (above != null) {
+      val step = (heights[keyOf(above)] ?: 0) + spacingPx
+      if (offset < -step / 2) {
+        order = order.toMutableList().apply { add(at - 1, removeAt(at)) }
+        offset += step
+      }
+    }
+  }
+
+  // While a row is held near an edge of what is visible, scroll a little every frame. The row moves
+  // with the content, so the offset takes up whatever was scrolled to keep it under the finger.
+  LaunchedEffect(draggingKey, scrollState) {
+    val k = draggingKey ?: return@LaunchedEffect
+    val scroll = scrollState ?: return@LaunchedEffect
+    while (true) {
+      withFrameNanos {}
+      val rowAt = placed[k]?.takeIf { it.isAttached } ?: continue
+      val visible = column?.takeIf { it.isAttached }?.boundsInWindow() ?: continue
+      val top = rowAt.positionInWindow().y
+      val bottom = top + rowAt.size.height
+      val speed =
+        when {
+          bottom > visible.bottom - bottomEdgePx && scroll.canScrollForward -> EDGE_SPEED
+          top < visible.top + topEdgePx && scroll.canScrollBackward -> -EDGE_SPEED
+          else -> 0f
+        }
+      if (speed != 0f) {
+        offset += scroll.scrollBy(speed)
+        settle(k)
+      }
+    }
+  }
+
+  Column(
+    modifier.onGloballyPositioned { column = it },
+    verticalArrangement = Arrangement.spacedBy(spacing),
+  ) {
     order.forEachIndexed { index, item ->
       val k = keyOf(item)
       // Keyed, so a row keeps its own composition — and the drag gesture running in it — as it
@@ -127,25 +197,7 @@ fun <T> ReorderableColumn(
                 onDrag = { change, amount ->
                   change.consume()
                   offset += amount.y
-                  val at = order.indexOfFirst { keyOf(it) == k }
-                  // Past half of a neighbour, the two trade places and the offset carries on from
-                  // the new slot, so the row stays under the finger.
-                  val below = order.getOrNull(at + 1)
-                  if (below != null) {
-                    val step = (heights[keyOf(below)] ?: 0) + spacingPx
-                    if (offset > step / 2) {
-                      order = order.toMutableList().apply { add(at + 1, removeAt(at)) }
-                      offset -= step
-                    }
-                  }
-                  val above = order.getOrNull(at - 1)
-                  if (above != null) {
-                    val step = (heights[keyOf(above)] ?: 0) + spacingPx
-                    if (offset < -step / 2) {
-                      order = order.toMutableList().apply { add(at - 1, removeAt(at)) }
-                      offset += step
-                    }
-                  }
+                  settle(k)
                 },
               )
             }
@@ -161,6 +213,7 @@ fun <T> ReorderableColumn(
 
         Box(
           Modifier.onSizeChanged { heights[k] = it.height }
+            .onGloballyPositioned { placed[k] = it }
             .zIndex(if (dragging) 1f else 0f)
             .graphicsLayer { translationY = if (dragging) offset else 0f }
         ) {
@@ -170,3 +223,6 @@ fun <T> ReorderableColumn(
     }
   }
 }
+
+/** Pixels scrolled per frame while a row is held at an edge: about a row every eight frames. */
+private const val EDGE_SPEED = 18f

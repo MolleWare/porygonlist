@@ -32,8 +32,9 @@ be true, not how to check it.
 - [x] **Copy that assumes exactly two people** ("both phones", "Laptop sees this the moment you save")
       on lists shared with three or more. Everyone on the list is named now; the Shop screen no
       longer claims somebody is shopping right now.
-- [ ] **Dragging a row past the edge of the screen does not scroll**, so a long list can only be
-      rearranged a screenful at a time.
+- [ ] **Dragging a row past the edge of the screen does not scroll.** Written: a row held near the
+      top or bottom now scrolls the screen along. Not yet tried by hand — feel the speed and the
+      zone above the tab bar on a phone, then tick.
 - [ ] **The design's fonts are not in the app.** `scripts/fetch-fonts.sh` was never run, so it draws in
       the system face. Run it and commit the TTFs (SIL OFL — note them in the README), or decide the
       system font is the look.

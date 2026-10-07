@@ -206,6 +206,7 @@ fun ListDetailScreen(
       onMove = { item, to -> onMoveItem(item.id, to) },
       spacing = 8.dp,
       modifier = Modifier.padding(horizontal = 20.dp),
+      scrollState = scrollState,
     ) { item, handle, dragging ->
       ItemRow(
         item = item,
