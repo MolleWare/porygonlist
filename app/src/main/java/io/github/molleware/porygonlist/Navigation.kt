@@ -53,7 +53,8 @@ import io.github.molleware.porygonlist.ui.components.TabBar
 import io.github.molleware.porygonlist.ui.itemSubLabel
 import io.github.molleware.porygonlist.ui.networkLabel
 import io.github.molleware.porygonlist.ui.others
-import io.github.molleware.porygonlist.ui.partnerName
+import io.github.molleware.porygonlist.ui.editSyncNote
+import io.github.molleware.porygonlist.ui.removeNote
 import io.github.molleware.porygonlist.ui.screens.ListDetailScreen
 import io.github.molleware.porygonlist.ui.screens.ListsScreen
 import io.github.molleware.porygonlist.ui.screens.NameScreen
@@ -377,11 +378,8 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
           viewModel.editDraft?.let { draft ->
             EditItemSheet(
               draft = draft,
-              syncNote =
-                // Nobody on the list means nobody to see it, whatever the network is doing.
-                if (appState.activeList.others(appState.localDevice).isEmpty()) "Saved on this phone."
-                else if (appState.online) "${appState.activeList.partnerName(appState.localDevice)} sees this the moment you save."
-                else "Saved here now, handed over next time you share a network.",
+              syncNote = editSyncNote(appState),
+              removeNote = removeNote(appState),
               onNameChange = viewModel::onSheetNameChange,
               onQtyUp = viewModel::qtyUp,
               onQtyDown = viewModel::qtyDown,

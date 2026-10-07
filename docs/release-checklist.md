@@ -23,14 +23,16 @@ be true, not how to check it.
       private copy of the list.
 - [ ] **Unpairing probably has the same bug.** `retireDevice` drops the person outright; a third phone
       still on the list could hand them back. Check, then fix the same way.
-- [ ] **"In step with Ava" is claimed without evidence.** The list card says it whenever the phone is
-      online, even when nothing has ever been delivered. It should follow the delivery receipts.
+- [x] **"In step with Ava" is claimed without evidence.** The list card and banner now follow the
+      delivery receipts: "in step with", "waiting for", or "not handed over yet".
 - [ ] **Two edits of the same item at once resolve silently.** The merge finds them and throws the
       finding away. The agreed rule is automatic merge with genuine conflicts surfaced, so this needs
       the "keep which?" card — or an explicit decision that silence is fine for a throwaway list.
-- [ ] **The sync banner's "a moment ago" is hard-coded.**
-- [ ] **Copy that assumes exactly two people** ("both phones", "Laptop sees this the moment you save")
-      on lists shared with three or more.
+- [x] **The sync banner's "a moment ago" is hard-coded.** It now gives the time of the last
+      confirmed handover.
+- [x] **Copy that assumes exactly two people** ("both phones", "Laptop sees this the moment you save")
+      on lists shared with three or more. Everyone on the list is named now; the Shop screen no
+      longer claims somebody is shopping right now.
 - [ ] **Dragging a row past the edge of the screen does not scroll**, so a long list can only be
       rearranged a screenful at a time.
 - [ ] **The design's fonts are not in the app.** `scripts/fetch-fonts.sh` was never run, so it draws in

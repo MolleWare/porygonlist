@@ -40,7 +40,7 @@ import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.tabBarClearance
 import io.github.molleware.porygonlist.ui.others
-import io.github.molleware.porygonlist.ui.partnerName
+import io.github.molleware.porygonlist.ui.names
 import io.github.molleware.porygonlist.ui.shopSubLabel
 
 /**
@@ -74,7 +74,6 @@ fun ShopScreen(
   val list = state.activeList
   val done = list.doneCount
   val total = list.liveItems.size
-  val partner = list.partnerName(state.localDevice)
 
   Column(modifier.verticalScroll(rememberScrollState()).padding(top = 18.dp, bottom = tabBarClearance())) {
     Column(Modifier.padding(horizontal = 22.dp)) {
@@ -128,9 +127,12 @@ fun ShopScreen(
 
     // Only worth saying when there is actually someone else on the list. With nobody sharing it,
     // nobody is crossing anything off, and the fallback name turns the sentence into "them is".
-    if (list.others(state.localDevice).isNotEmpty()) {
+    // Said as what will happen rather than what is happening: nothing here knows whether anyone else
+    // is in a shop right now, and "Ava is crossing things off too" claimed that she was.
+    val others = list.others(state.localDevice)
+    if (others.isNotEmpty()) {
       Text(
-        "$partner is crossing things off too.",
+        "Ticks from ${names(others)} show up here too.",
         style = PorygonType.ShopMeta.copy(lineHeight = PorygonType.ShopMeta.fontSize * 1.5),
         color = Neutral700,
         modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 24.dp),

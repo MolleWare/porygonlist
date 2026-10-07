@@ -72,6 +72,8 @@ fun PorygonBottomSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier, con
 fun EditItemSheet(
   draft: EditDraft,
   syncNote: String,
+  /** Under the remove confirmation: whose phones it goes from, named for the people on the list. */
+  removeNote: String,
   confirmingRemoval: Boolean,
   onNameChange: (String) -> Unit,
   onQtyUp: () -> Unit,
@@ -150,7 +152,7 @@ fun EditItemSheet(
         SecondaryButton("Keep it", onCancelRemove, modifier = Modifier.heightIn(min = 46.dp))
       }
       Text(
-        "It goes from both phones.",
+        removeNote,
         style = PorygonType.Fine,
         color = Neutral700,
         textAlign = TextAlign.Center,

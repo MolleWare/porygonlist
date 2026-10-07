@@ -67,7 +67,10 @@ import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
 import io.github.molleware.porygonlist.ui.itemCountLabel
+import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.ui.listCardMeta
+import io.github.molleware.porygonlist.ui.syncDetail
+import io.github.molleware.porygonlist.ui.syncHeadline
 import io.github.molleware.porygonlist.ui.others
 
 /** The home screen: who you share with, whether you are in step, and every list you keep. */
@@ -158,6 +161,7 @@ fun ListsScreen(
             list = list,
             online = state.online,
             localDevice = state.localDevice,
+            delivered = state.deliveredTo,
             onClick = { onOpenList(list.id) },
             onLongClick = { onStartRename(list) },
           )
@@ -337,12 +341,6 @@ private fun ListEditCard(
  */
 @Composable
 private fun SyncPill(state: AppState, networkLabel: String, onToggle: () -> Unit) {
-  // Null, not "them", when nobody else is on any list. "In step with them" beside a card reading
-  // "just you" is the app claiming to have synced with somebody who does not exist.
-  val partner =
-    state.visibleLists.flatMap { it.people }.firstOrNull { it.present && it.device != state.localDevice }?.name
-  val waiting = state.visibleLists.sumOf { list -> list.items.count { it.pending } }
-
   Row(
     Modifier.fillMaxWidth()
       .clip(Shapes.Pill)
@@ -353,21 +351,9 @@ private fun SyncPill(state: AppState, networkLabel: String, onToggle: () -> Unit
     horizontalArrangement = Arrangement.spacedBy(9.dp),
   ) {
     Dot(if (state.online) Accent2 else Accent)
-    Text(
-      when {
-        !state.online -> "Off the network"
-        partner != null -> "In step with $partner"
-        else -> "Nobody to sync with yet"
-      },
-      style = PorygonType.MetaBold,
-      color = TextInk,
-    )
-    Text(
-      if (state.online) "$networkLabel · a moment ago"
-      else "$waiting ${if (waiting == 1) "change" else "changes"} waiting to hand over",
-      style = PorygonType.Meta,
-      color = TextInk.copy(alpha = 0.72f),
-    )
+    // Both lines come from delivery receipts, not from being online — see syncHeadline.
+    Text(syncHeadline(state), style = PorygonType.MetaBold, color = TextInk)
+    Text(syncDetail(state, networkLabel), style = PorygonType.Meta, color = TextInk.copy(alpha = 0.72f))
   }
 }
 
@@ -377,6 +363,7 @@ private fun ListCard(
   list: GroceryList,
   online: Boolean,
   localDevice: DeviceId,
+  delivered: DeliveryLog,
   onClick: () -> Unit,
   onLongClick: () -> Unit,
 ) {
@@ -416,7 +403,7 @@ private fun ListCard(
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
       Text(itemCountLabel(list), style = PorygonType.Meta, color = Neutral700)
       Text("·", style = PorygonType.Meta, color = Neutral700.copy(alpha = 0.4f))
-      Text(listCardMeta(list, online, localDevice), style = PorygonType.Meta, color = Neutral700)
+      Text(listCardMeta(list, online, localDevice, delivered), style = PorygonType.Meta, color = Neutral700)
     }
   }
 }
