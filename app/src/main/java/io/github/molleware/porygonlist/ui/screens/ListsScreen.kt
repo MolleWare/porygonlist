@@ -164,6 +164,7 @@ fun ListsScreen(
             online = state.online,
             localDevice = state.localDevice,
             delivered = state.deliveredTo,
+            needsAnswer = state.openConflict?.let { it.listId == list.id || (it.listId == null && state.activeListId == list.id) } == true,
             onClick = { onOpenList(list.id) },
             onLongClick = { onStartRename(list) },
           )
@@ -378,6 +379,7 @@ private fun ListCard(
   online: Boolean,
   localDevice: DeviceId,
   delivered: DeliveryLog,
+  needsAnswer: Boolean,
   onClick: () -> Unit,
   onLongClick: () -> Unit,
 ) {
@@ -417,7 +419,7 @@ private fun ListCard(
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
       Text(itemCountLabel(list), style = PorygonType.Meta, color = Neutral700)
       Text("·", style = PorygonType.Meta, color = Neutral700.copy(alpha = 0.4f))
-      Text(listCardMeta(list, online, localDevice, delivered), style = PorygonType.Meta, color = Neutral700)
+      Text(listCardMeta(list, online, localDevice, delivered, needsAnswer), style = PorygonType.Meta, color = Neutral700)
     }
   }
 }

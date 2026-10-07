@@ -6,6 +6,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.Conflict
+import io.github.molleware.porygonlist.data.ConflictKind
 import io.github.molleware.porygonlist.data.ApprovedNetwork
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
@@ -1152,12 +1154,12 @@ class PorygonViewModel(
    * straight back — and the person would have merged nothing.
    */
   fun mergeConflict() = repo.update { s, node ->
-    val c = s.conflict ?: return@update s
+    val c = s.openConflict?.takeIf { it.kind == ConflictKind.DUPLICATE } ?: return@update s
     val stamp = node.clock.tick()
     val merged = node.newItem(s, c.itemName, qty = c.yours.qty.value + c.theirs.qty.value, origin = Origin.MERGED)
     val replaced = setOf(c.yours.id, c.theirs.id)
 
-    s.copy(conflict = null).withActiveList { list ->
+    s.copy(conflict = null).withConflictList(c) { list ->
       list.copy(
         items = list.items.map { if (it.id in replaced) it.copy(removed = it.removed.set(true, stamp)) else it } + merged
       )
@@ -1172,14 +1174,23 @@ class PorygonViewModel(
    * so only what is missing is added, and answering twice cannot produce a third copy.
    */
   fun keepBoth() = repo.update { s, node ->
-    val c = s.conflict ?: return@update s
+    val c = s.openConflict?.takeIf { it.kind == ConflictKind.DUPLICATE } ?: return@update s
     // Both sides are already stamped by the phones that made them; folding them into this clock
     // keeps it ahead of anything it has now seen.
     node.clock.observe(c.theirs.touchedAt)
-    s.copy(conflict = null).withActiveList { list ->
+    s.copy(conflict = null).withConflictList(c) { list ->
       val here = list.items.map { it.id }.toSet()
       list.copy(items = list.items + listOf(c.yours, c.theirs).filterNot { it.id in here })
     }
+  }
+
+  /** Answers "keep which?" for an item changed on two phones at once — see [AppState.withVersionKept]. */
+  fun keepVersion(yours: Boolean) = repo.update { s, node -> s.withVersionKept(yours, node.clock.tick()) }
+
+  /** The list a conflict is about — the open one only for a card from before that was recorded. */
+  private inline fun AppState.withConflictList(c: Conflict, transform: (GroceryList) -> GroceryList): AppState {
+    val target = c.listId ?: activeListId
+    return copy(lists = lists.map { if (it.id == target) transform(it) else it })
   }
 
   // ── Networks ──────────────────────────────────────────────────────────────

@@ -222,6 +222,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onMoveItem = viewModel::moveItem,
                   onMerge = viewModel::mergeConflict,
                   onKeepBoth = viewModel::keepBoth,
+                  onKeepVersion = viewModel::keepVersion,
                   onShare = { backStack.goTo(Share) },
                   confirmingClear = viewModel.confirmingClear,
                   onAskClear = viewModel::askClearChecked,

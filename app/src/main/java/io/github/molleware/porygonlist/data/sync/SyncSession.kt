@@ -2,6 +2,7 @@ package io.github.molleware.porygonlist.data.sync
 
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.Conflict
+import io.github.molleware.porygonlist.data.ConflictKind
 
 /** Why a payload was not applied. */
 enum class RejectReason {
@@ -99,13 +100,16 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
 
   val clashes = mutableListOf<ItemMerge>()
   val duplicates = mutableListOf<Conflict>()
+  val edited = mutableListOf<Conflict>()
   val mergedLists =
     lists.map { mine ->
       val theirs = applicable.firstOrNull { it.id == mine.id } ?: return@map mine
       if (theirs.people.none { it.wasEver(payload.from) }) return@map mine
       val result = merge(mine, theirs)
       clashes += result.clashes
-      duplicates += result.duplicates
+      // Each question remembers its list, so it is asked on that list and answered there.
+      duplicates += result.duplicates.map { it.copy(listId = mine.id) }
+      edited += result.clashes.map { Conflict(it.mine, it.theirs, ConflictKind.EDITED, mine.id) }
       result.list
     } + invitations.map { it.copy(arrivedFrom = payload.from) } // so the card can say who it is from
 
@@ -133,7 +137,10 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
 
   // One card at a time, and an unanswered one is not thrown away for a newer one: the items behind
   // it are both on the list, so the question keeps until it is asked again on the next handover.
-  val surfaced = conflict ?: duplicates.firstOrNull()
+  // An edit clash goes first: unlike a duplicate, its losing version is already off the screen.
+  // A card the merge has just overtaken — answered on the other phone, say — is dropped first.
+  val merging = copy(lists = mergedLists)
+  val surfaced = merging.openConflict ?: edited.firstOrNull() ?: duplicates.firstOrNull()
 
   return SyncResult.Merged(
     state =

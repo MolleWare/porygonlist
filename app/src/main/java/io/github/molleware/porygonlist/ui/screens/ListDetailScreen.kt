@@ -38,9 +38,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import io.github.molleware.porygonlist.data.AppState
-import io.github.molleware.porygonlist.data.Conflict
+import io.github.molleware.porygonlist.data.ConflictKind
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
+import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.ItemId
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.theme.Accent
@@ -78,8 +79,11 @@ import io.github.molleware.porygonlist.ui.components.tabBarClearance
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
+import io.github.molleware.porygonlist.ui.behind
 import io.github.molleware.porygonlist.ui.conflictSide
+import io.github.molleware.porygonlist.ui.editClashText
 import io.github.molleware.porygonlist.ui.itemSubLabel
+import io.github.molleware.porygonlist.ui.names
 import io.github.molleware.porygonlist.ui.others
 
 /**
@@ -106,6 +110,8 @@ fun ListDetailScreen(
   onMoveItem: (ItemId, Int) -> Unit,
   onMerge: () -> Unit,
   onKeepBoth: () -> Unit,
+  /** Answers "keep which?": true keeps this phone's version of an item changed on two phones. */
+  onKeepVersion: (yours: Boolean) -> Unit,
   /** Opens sharing for this list — who has it, and who else could. */
   onShare: () -> Unit,
   confirmingClear: Boolean,
@@ -166,7 +172,7 @@ fun ListDetailScreen(
         horizontalArrangement = Arrangement.spacedBy(7.dp),
       ) {
         Dot(if (state.online) Accent2 else Accent)
-        Text(listStatus(list, state.online, state.localDevice), style = PorygonType.Meta, color = Neutral700)
+        Text(listStatus(list, state.online, state.localDevice, state.deliveredTo), style = PorygonType.Meta, color = Neutral700)
         Text(
           if (list.others(state.localDevice).isEmpty()) "Share it" else "Change",
           style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
@@ -189,15 +195,36 @@ fun ListDetailScreen(
       }
     }
 
-    state.conflict?.let { conflict ->
-      ConflictCard(
-        conflict = conflict,
-        yourSide = conflictSide(conflict.yours, list, state.localDevice),
-        theirSide = conflictSide(conflict.theirs, list, state.localDevice),
-        onMerge = onMerge,
-        onKeepBoth = onKeepBoth,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
-      )
+    // Only on the list it is about. A card used to follow you to whichever list was open, and its
+    // answer was applied there.
+    state.openConflict?.takeIf { it.listId == null || it.listId == list.id }?.let { conflict ->
+      val cardModifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp)
+      when (conflict.kind) {
+        ConflictKind.DUPLICATE ->
+          ConflictCard(
+            title = "You both added ${conflict.itemName}",
+            body =
+              "${conflictSide(conflict.yours, list, state.localDevice)}, " +
+                "${conflictSide(conflict.theirs, list, state.localDevice)} — neither of you could see the other's copy at the time.",
+            primary = "Merge",
+            onPrimary = onMerge,
+            secondary = "Keep both",
+            onSecondary = onKeepBoth,
+            modifier = cardModifier,
+          )
+        ConflictKind.EDITED -> {
+          val text = editClashText(conflict, list, state.localDevice)
+          ConflictCard(
+            title = text.title,
+            body = text.body,
+            primary = text.keepYours,
+            onPrimary = { onKeepVersion(true) },
+            secondary = text.keepTheirs,
+            onSecondary = { onKeepVersion(false) },
+            modifier = cardModifier,
+          )
+        }
+      }
     }
 
     ReorderableColumn(
@@ -270,26 +297,34 @@ fun ListDetailScreen(
   }
 }
 
-private fun listStatus(list: GroceryList, online: Boolean, localDevice: DeviceId): String {
+/** Under the title: who has the list, and whether they have caught up — from receipts, as on its card. */
+private fun listStatus(list: GroceryList, online: Boolean, localDevice: DeviceId, delivered: DeliveryLog): String {
   val others = list.others(localDevice)
   if (others.isEmpty()) return "Just you"
-  val names = others.joinToString(" & ") { it.name }
-  return if (online) "Shared with $names · in step" else "Shared with $names · will hand over on wifi"
+  val behind = list.behind(localDevice, delivered)
+  return when {
+    !online -> "Shared with ${names(others)} · will hand over on wifi"
+    behind.isEmpty() -> "Shared with ${names(others)} · in step"
+    else -> "Shared with ${names(others)} · waiting for ${names(behind)}"
+  }
 }
 
 /**
- * Surfaced when the same thing was added on both phones while neither could see the other.
+ * A question only a person can answer, after two phones did something at once while neither could
+ * see the other: the same thing added twice (merge, or keep both), or one item changed two ways
+ * (keep which).
  *
- * Merging is automatic everywhere else; this is the case where a person has to say what they meant,
- * so it is shown rather than resolved quietly.
+ * Merging is automatic everywhere else; these are the cases where a person has to say what they
+ * meant, so they are shown rather than resolved quietly.
  */
 @Composable
 private fun ConflictCard(
-  conflict: Conflict,
-  yourSide: String,
-  theirSide: String,
-  onMerge: () -> Unit,
-  onKeepBoth: () -> Unit,
+  title: String,
+  body: String,
+  primary: String,
+  onPrimary: () -> Unit,
+  secondary: String,
+  onSecondary: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Column(
@@ -308,24 +343,24 @@ private fun ConflictCard(
       Box(Modifier.size(24.dp).clip(CircleShape).background(Accent), contentAlignment = Alignment.Center) {
         StrokeIcon(IconPaths.MERGE_LINES, contentDescription = null, size = 14.dp, strokeWidth = 2.9f, tint = Bg)
       }
-      Text("You both added ${conflict.itemName}", style = PorygonType.InlineHeading, color = TextInk)
+      Text(title, style = PorygonType.InlineHeading, color = TextInk)
     }
     Text(
-      "$yourSide, $theirSide — neither of you could see the other's copy at the time.",
+      body,
       style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
       color = Accent800,
       modifier = Modifier.padding(bottom = 11.dp),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       PrimaryButton(
-        "Merge",
-        onMerge,
+        primary,
+        onPrimary,
         style = PorygonType.Meta,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
       )
       SecondaryButton(
-        "Keep both",
-        onKeepBoth,
+        secondary,
+        onSecondary,
         style = PorygonType.Meta,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
       )

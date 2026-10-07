@@ -129,9 +129,9 @@ object StateCodec {
     )
 
     state.conflict?.let { c ->
-      // A marker only. The two sides follow on their own lines, and what the card says about them
-      // is written at display time rather than stored.
-      appendLine(record("conflict"))
+      // Which kind of question, and on which list. The two sides follow on their own lines, and what
+      // the card says about them is written at display time rather than stored.
+      appendLine(record("conflict", c.kind.name, c.listId?.value.orEmpty()))
       appendLine(record(*(listOf("conflictitem", "yours") + itemFields(c.yours)).toTypedArray()))
       appendLine(record(*(listOf("conflictitem", "theirs") + itemFields(c.theirs)).toTypedArray()))
     }
@@ -212,6 +212,8 @@ object StateCodec {
     var online = true
     var displayName = ""
     var sawConflict = false
+    var conflictKind = ConflictKind.DUPLICATE
+    var conflictListRaw: String? = null
     var conflictYours: GroceryItem? = null
     var conflictTheirs: GroceryItem? = null
     val networks = mutableListOf<ApprovedNetwork>()
@@ -244,7 +246,13 @@ object StateCodec {
             }
             // Versions up to 8 wrote two ready-made sentences here. They are ignored rather than
             // read: the card works them out from the items now, and a stored one was already stale.
-            "conflict" -> sawConflict = true
+            "conflict" -> {
+              sawConflict = true
+              // Both absent in files from before edit clashes were asked about: a duplicate, on
+              // whichever list is open.
+              conflictKind = f.getOrNull(1)?.let { runCatching { ConflictKind.valueOf(it) }.getOrNull() } ?: ConflictKind.DUPLICATE
+              conflictListRaw = f.getOrNull(2)?.takeIf { it.isNotEmpty() }
+            }
             "conflictitem" -> {
               val item = parseItem(f, from = 2) ?: return@runCatching
               if (f[1] == "yours") conflictYours = item else conflictTheirs = item
@@ -335,8 +343,9 @@ object StateCodec {
 
     // Both sides must be present, or there is no clash to show.
     val conflict =
-      if (sawConflict && conflictYours != null && conflictTheirs != null) Conflict(conflictYours, conflictTheirs)
-      else null
+      if (sawConflict && conflictYours != null && conflictTheirs != null) {
+        Conflict(conflictYours, conflictTheirs, conflictKind, conflictListRaw?.let { renamed.ids[it] ?: ListId(it) })
+      } else null
 
     val everyItem = lists.flatMap { it.items } + listOfNotNull(conflict?.yours, conflict?.theirs)
 

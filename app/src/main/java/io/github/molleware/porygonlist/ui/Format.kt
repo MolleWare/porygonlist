@@ -2,6 +2,7 @@ package io.github.molleware.porygonlist.ui
 
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.ApprovedNetwork
+import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.Origin
@@ -165,11 +166,19 @@ fun shopSubLabel(item: GroceryItem, list: GroceryList, localDevice: DeviceId): S
  * be said whenever this phone was online, and on hardware a card read "in step with Ava" about a
  * list her phone had never received.
  */
-fun listCardMeta(list: GroceryList, online: Boolean, localDevice: DeviceId, delivered: DeliveryLog): String {
+fun listCardMeta(
+  list: GroceryList,
+  online: Boolean,
+  localDevice: DeviceId,
+  delivered: DeliveryLog,
+  /** A "keep which?" or duplicate card is waiting on this list. It is asked only inside the list. */
+  needsAnswer: Boolean = false,
+): String {
   val waiting = list.items.count { it.pending }
   val others = list.others(localDevice)
   val behind = list.behind(localDevice, delivered)
   return when {
+    needsAnswer -> "a change needs you"
     // Until it is first opened, a list someone shared says so — the one thing that tells it apart
     // from a list of your own with the same name.
     list.arrivedFrom != null -> "new, from ${list.nameFor(list.arrivedFrom, localDevice)}"
@@ -207,6 +216,48 @@ fun removeNote(state: AppState): String {
     1 -> "It goes from your phone and ${others.single().name}'s."
     else -> "It goes from everyone's phone on this list."
   }
+}
+
+/** What the "keep which?" card says, worked out when it is shown rather than stored. */
+data class EditClashText(val title: String, val body: String, val keepYours: String, val keepTheirs: String)
+
+/**
+ * The words for an item changed on two phones before either had seen the other's change.
+ *
+ * Each side is said as what that person did to it — "Ava made it “Oat milk ×3”", "you took it off
+ * the list" — because the bare values alone ("Oat milk ×2 / Oat milk ×3") do not say that anything
+ * happened, let alone that two people did it at once.
+ */
+fun editClashText(c: Conflict, list: GroceryList, localDevice: DeviceId): EditClashText {
+  val yourWriter = writerOf(c.yours, c.theirs)
+  val theirWriter = writerOf(c.theirs, c.yours)
+  val you = list.nameFor(yourWriter, localDevice)
+  val them = list.nameFor(theirWriter, localDevice)
+
+  fun did(version: GroceryItem) = if (version.removed.value) "took it off the list" else "made it “${version.label}”"
+
+  // Normally the first side is this phone's own. With three phones it can be somebody else's that
+  // arrived here earlier, and then it is named like anyone else.
+  val keepYours = if (yourWriter == localDevice) "Keep yours" else "Keep $you's"
+  val keepTheirs = if (theirWriter == localDevice) "Keep yours" else "Keep $them's"
+  return EditClashText(
+    title = "Changed on two phones at once",
+    body = "${you.replaceFirstChar { it.uppercase() }} ${did(c.yours)} and $them ${did(c.theirs)}, " +
+      "each before seeing the other's change. Which should stay?",
+    keepYours = keepYours,
+    keepTheirs = keepTheirs,
+  )
+}
+
+/** Who made [version] different from [other]: the writer of the newest field where they disagree. */
+private fun writerOf(version: GroceryItem, other: GroceryItem): DeviceId {
+  val differing =
+    listOfNotNull(
+      version.name.at.takeIf { version.name.value != other.name.value },
+      version.qty.at.takeIf { version.qty.value != other.qty.value },
+      version.removed.at.takeIf { version.removed.value != other.removed.value },
+    )
+  return (differing.maxOrNull() ?: version.touchedAt).device
 }
 
 /** The banner's headline: whether everyone you share with has caught up. */

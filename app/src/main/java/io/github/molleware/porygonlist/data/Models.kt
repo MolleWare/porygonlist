@@ -485,9 +485,44 @@ data class Staple(val name: String, val uses: Int = 0) {
  * explaining the clash is worked out from them when it is shown, never stored. A stored sentence
  * goes stale: it would still read "just now" under something added last week.
  */
-data class Conflict(val yours: GroceryItem, val theirs: GroceryItem) {
+data class Conflict(
+  val yours: GroceryItem,
+  val theirs: GroceryItem,
+  val kind: ConflictKind = ConflictKind.DUPLICATE,
+  /**
+   * The list both sides are on. Null only in files written before it was recorded, which read as the
+   * open list — what every conflict was taken to be about then, rightly or not.
+   */
+  val listId: ListId? = null,
+) {
   val itemName: String
     get() = yours.name.value
+
+  /** The newest edit either side made to what can clash: name, quantity, being on the list. */
+  private val sidesTouched: Hlc
+    get() = listOf(yours, theirs).maxOf { maxOf(it.name.at, it.qty.at, it.removed.at) }
+
+  /**
+   * Whether the question has been overtaken: somebody has since edited the item knowing about it —
+   * answered the same card on the other phone, or simply changed it again. Asking then would be
+   * about a choice that no longer exists.
+   */
+  fun isStaleOn(list: GroceryList?): Boolean {
+    if (kind != ConflictKind.EDITED) return false
+    if (list == null) return true
+    // Gone altogether means a removal was collected once everyone had heard it — which says nothing
+    // about whether the person wanted it kept. The question still stands; see withVersionKept.
+    val now = list.items.firstOrNull { it.id == yours.id } ?: return false
+    return maxOf(now.name.at, now.qty.at, now.removed.at) > sidesTouched
+  }
+}
+
+enum class ConflictKind {
+  /** Two different items that are the same thing, added on two phones: merge, or keep both. */
+  DUPLICATE,
+
+  /** One item changed on two phones before either had seen the other's change: keep which? */
+  EDITED,
 }
 
 data class AppState(
@@ -571,6 +606,55 @@ data class AppState(
     if (target.pinned == pinned) return this
     // Moved to the end of the stored order, which is the end of whichever group it now belongs to.
     return copy(lists = lists.filterNot { it.id == id } + target.copy(pinned = pinned))
+  }
+
+  /**
+   * The card waiting for an answer, if it still means anything.
+   *
+   * An edit clash somebody has since settled — on the other phone, or by editing the item again —
+   * is no longer a question, so it reads as none rather than asking about a choice already made.
+   */
+  val openConflict: Conflict?
+    get() = conflict?.takeUnless { c -> c.isStaleOn(lists.firstOrNull { it.id == (c.listId ?: activeListId) }) }
+
+  /**
+   * Answers "keep which?" for an item changed on two phones at once.
+   *
+   * The chosen version is written again as a fresh edit, made in knowledge of both — so it beats
+   * either original everywhere it travels, and the other phone's card goes away when it arrives
+   * rather than asking a question that has been answered. Only what the two versions disagree on
+   * is rewritten; anything else about the item is left as the merge had it.
+   */
+  fun withVersionKept(yours: Boolean, at: Hlc): AppState {
+    val c = openConflict?.takeIf { it.kind == ConflictKind.EDITED } ?: return this
+    val chosen = if (yours) c.yours else c.theirs
+    val target = c.listId ?: activeListId
+    return copy(
+      conflict = null,
+      lists =
+        lists.map { list ->
+          if (list.id != target) list
+          else
+            list.copy(
+              items =
+                // The removed side's tombstone may have been collected while the card waited. Keeping
+                // the other side then puts the item back from the card's own copy.
+                (if (list.items.any { it.id == chosen.id } || chosen.removed.value) list.items else list.items + chosen)
+                  .map { item ->
+                  if (item.id != chosen.id) item
+                  else
+                    item.copy(
+                      name = if (c.yours.name.value != c.theirs.name.value) item.name.set(chosen.name.value, at) else item.name,
+                      qty = if (c.yours.qty.value != c.theirs.qty.value) item.qty.set(chosen.qty.value, at) else item.qty,
+                      removed =
+                        if (c.yours.removed.value != c.theirs.removed.value) item.removed.set(chosen.removed.value, at)
+                        else item.removed,
+                      pending = !online,
+                    )
+                }
+            )
+        },
+    )
   }
 
   /** The fingerprints discovery is allowed to run on. */

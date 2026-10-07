@@ -24,9 +24,10 @@ be true, not how to check it.
       tombstone on every list too, without waiting on the unpaired phone.
 - [x] **"In step with Ava" is claimed without evidence.** The list card and banner now follow the
       delivery receipts: "in step with", "waiting for", or "not handed over yet".
-- [ ] **Two edits of the same item at once resolve silently.** The merge finds them and throws the
-      finding away. The agreed rule is automatic merge with genuine conflicts surfaced, so this needs
-      the "keep which?" card — or an explicit decision that silence is fine for a throwaway list.
+- [x] **Two edits of the same item at once resolve silently.** Now a "keep which?" card on the list
+      it concerns, saying what each person did ("You made it “Oat milk ×3” and Ava made it “Oat milk
+      ×2”…"), including a removal on one side against an edit on the other. The answer travels and
+      closes the card on the other phone. Needs the two-phone check below.
 - [x] **The sync banner's "a moment ago" is hard-coded.** It now gives the time of the last
       confirmed handover.
 - [x] **Copy that assumes exactly two people** ("both phones", "Laptop sees this the moment you save")

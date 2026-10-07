@@ -15,8 +15,18 @@ enum class ItemField {
   PRESENCE,
 }
 
-/** One item after merging, and whatever the two sides settled blind. */
-data class ItemMerge(val item: GroceryItem, val concurrent: Set<ItemField>)
+/**
+ * One item after merging, and whatever the two sides settled blind.
+ *
+ * [mine] and [theirs] are the two versions that went in, kept so that a blind pick can be put to a
+ * person as the choice it was.
+ */
+data class ItemMerge(
+  val item: GroceryItem,
+  val concurrent: Set<ItemField>,
+  val mine: GroceryItem = item,
+  val theirs: GroceryItem = item,
+)
 
 /**
  * A list after merging, with everything that needed a person.
@@ -51,7 +61,7 @@ fun merge(mine: GroceryItem, theirs: GroceryItem): ItemMerge {
   val concurrent = buildSet {
     if (name.wasConcurrent) add(ItemField.NAME)
     if (qty.wasConcurrent) add(ItemField.QUANTITY)
-    if (removed.wasConcurrent) add(ItemField.PRESENCE)
+    if (removed.wasConcurrent || removedWhileEdited(mine, theirs) || removedWhileEdited(theirs, mine)) add(ItemField.PRESENCE)
   }
 
   return ItemMerge(
@@ -72,8 +82,24 @@ fun merge(mine: GroceryItem, theirs: GroceryItem): ItemMerge {
         editing = mine.editing,
       ),
     concurrent = concurrent,
+    mine = mine,
+    theirs = theirs,
   )
 }
+
+/**
+ * One side took the item off the list while the other changed it, neither having seen the other.
+ *
+ * Field by field this is no clash at all — the removal and the rename touch different fields — so
+ * the merge would quietly delete something somebody had just edited. Seen as a person sees it, it is
+ * the plainest clash there is. [remover] has the removal the other has not got; [editor] has a name
+ * or quantity the remover's copy never had.
+ */
+private fun removedWhileEdited(remover: GroceryItem, editor: GroceryItem): Boolean =
+  remover.removed.value &&
+    !editor.removed.value &&
+    remover.removed.at > editor.removed.at &&
+    (editor.name.at > remover.name.at || editor.qty.at > remover.qty.at)
 
 /**
  * Merges two views of the same list.
