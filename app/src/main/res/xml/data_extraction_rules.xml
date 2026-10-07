@@ -1,19 +1,28 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing of PorygonList's leaves the phone through Android's backup or transfer, by decision.
+
+  Lists are throwaway, and the phone's identity lives in the keystore, which is never backed up. So
+  a restored copy of the state file belongs to an identity the new phone does not hold, and the app
+  throws it away on first launch (see ListRepository.load). Backing it up would only put people's
+  lists on a cloud drive for nothing.
+
+  allowBackup="false" in the manifest covers cloud backup. From Android 12 it no longer covers
+  device-to-device transfer, which is what these rules are for: every domain is excluded from both.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
     </device-transfer>
-    -->
 </data-extraction-rules>

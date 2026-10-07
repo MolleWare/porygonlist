@@ -1,6 +1,6 @@
 # PorygonList privacy policy
 
-*Applies to PorygonList for Android, version 0.1.0 and later. Last changed 6 October 2026.*
+*Applies to PorygonList for Android, version 0.1.0 and later. Last changed 7 October 2026.*
 
 PorygonList has no server and no account, and the people who make it receive nothing from it.
 There are no analytics, no advertising, no crash reporting and no tracking of any kind.
@@ -39,9 +39,9 @@ it goes wherever you send that message, through the messaging app you choose.
 
 ## Backups
 
-Android may include the app's data in your phone's own backup, if you have backups turned on. That
-backup is handled by your phone's system and goes wherever your system sends it, not to us. Lists
-restored from a backup onto a new phone are not kept, because the new phone has a new identity.
+PorygonList opts out of Android's backup and of copying apps from one phone to another. Your lists
+are not put in your phone's cloud backup, and they do not move to a new phone. They are meant to be
+thrown away, and they live only on the phones that share them.
 
 ## Changes and contact
 

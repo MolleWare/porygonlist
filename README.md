@@ -66,18 +66,13 @@ silently downloading one. Install JDK 21 and point `JAVA_HOME` at it.
 
 ### Fonts
 
-The interface is drawn in Caprasimo (headings) and Figtree (body). Both are SIL
-OFL 1.1 and are bundled in the APK rather than fetched at runtime: the
-downloadable-fonts provider needs Play Services, which rules it out here, and it
-would put a network round trip on the cold-start path.
+The app draws in the phone's own system font, by decision for 0.1.0: nothing to
+bundle, nothing to license, and it reads the way the rest of the phone does.
 
-```sh
-./scripts/fetch-fonts.sh        # pulls the TTFs into app/src/main/res/font/
-```
-
-Run it once and commit the result; the build itself never needs the network.
-Until then the app falls back to the system face, which changes the lettering
-but nothing else.
+The design was drawn in Caprasimo (headings) and Figtree (body), both SIL OFL
+1.1. Should that change, `./scripts/fetch-fonts.sh` pulls the TTFs into
+`app/src/main/res/font/`; commit the result, so the build itself never needs the
+network, and credit the fonts in the About section.
 
 ## Design
 

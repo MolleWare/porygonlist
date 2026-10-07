@@ -12,70 +12,88 @@ be true, not how to check it.
 - **One signing key, held by us, for every store.** F-Droid publishes our signed APK through
   reproducible builds, and Play App Signing is set up with that same key ("use my own key"), so an
   install from any store can be updated from any other.
-- **Lists are throwaway.** Uninstalling, or restoring a backup onto a new phone, loses them along with
-  the phone's identity. Accepted: this is a list app for things you will have bought by Friday.
+- **Lists are throwaway.** Uninstalling loses them along with the phone's identity. Accepted: this is
+  a list app for things you will have bought by Friday.
+- **No Android backup, no device-to-device transfer** (2026-10-07). `allowBackup="false"` plus
+  `data_extraction_rules.xml` excluding everything; the privacy policy says so.
+- **System font** (2026-10-07). The design's Caprasimo and Figtree are not bundled.
+- **English only for 0.1.0** (2026-10-07). Translation can come later.
+- **Light only** (2026-10-07). The theme is `Theme.Material.Light`; no dark palette.
 
 ## Fix before release
 
 - [x] **Removing someone from a list does not stick.** Now a stamped tombstone, held until everyone
       on the list and the removed person have confirmed it; the removed phone keeps a private copy.
-      Needs the phone check below.
 - [x] **Unpairing had the same bug** — a third phone on the list handed the person back. Now a
       tombstone on every list too, without waiting on the unpaired phone.
-- [x] **"In step with Ava" is claimed without evidence.** The list card and banner now follow the
-      delivery receipts: "in step with", "waiting for", or "not handed over yet".
+- [x] **"In step with Ava" is claimed without evidence.** List cards, the banner and the list header
+      follow delivery receipts: "in step with", "waiting for", or "not handed over yet".
 - [x] **Two edits of the same item at once resolve silently.** Now a "keep which?" card on the list
-      it concerns, saying what each person did ("You made it “Oat milk ×3” and Ava made it “Oat milk
-      ×2”…"), including a removal on one side against an edit on the other. The answer travels and
-      closes the card on the other phone. Needs the two-phone check below.
-- [x] **The sync banner's "a moment ago" is hard-coded.** It now gives the time of the last
-      confirmed handover.
-- [x] **Copy that assumes exactly two people** ("both phones", "Laptop sees this the moment you save")
-      on lists shared with three or more. Everyone on the list is named now; the Shop screen no
-      longer claims somebody is shopping right now.
-- [ ] **Dragging a row past the edge of the screen does not scroll.** Written: a row held near the
-      top or bottom now scrolls the screen along. Not yet tried by hand — feel the speed and the
-      zone above the tab bar on a phone, then tick.
-- [ ] **The design's fonts are not in the app.** `scripts/fetch-fonts.sh` was never run, so it draws in
-      the system face. Run it and commit the TTFs (SIL OFL — note them in the README), or decide the
-      system font is the look.
-- [ ] **Backups.** `allowBackup="true"` copies the lists to the owner's cloud backup, and a restore then
-      throws them away (the identity key never travels). Either turn backup off, which is honest about
-      throwaway lists and keeps list contents off Google's servers, or leave it and accept the copy.
+      it concerns, saying what each person did, including a removal against an edit. The answer
+      travels and closes the card on the other phone. (`be31359`)
+- [x] **The sync banner's "a moment ago" is hard-coded.** It gives the last confirmed handover.
+- [x] **Copy that assumes exactly two people.** Everyone on the list is named now.
+- [ ] **Dragging a row past the edge of the screen does not scroll.** Written (`512c68d`), not yet
+      tried by hand — see the phone session.
+- [x] **Backups.** Off, by decision (above).
 - [x] **README is out of date.** Updated in `63b366a`.
-- [x] **A shared list arrives silently.** Its card now reads "new, from Ava" until it is first
-      opened. (Offering to combine two same-named lists is a possible later step, not needed for
-      0.1.0.)
-- [x] **No About screen.** An About section at the bottom of Settings: version, the GPL, source
-      code and "Report a problem" links, and credits.
-- [x] **Accessibility, in code.** Tick circles are checkboxes named for their item, Shop rows say
-      whether they are ticked, tabs say which is selected. The TalkBack and largest-font pass on a
-      phone is still to do (below).
-- [ ] **Language.** English only. A French translation is the owner's call.
+- [x] **A shared list arrives silently.** Its card reads "new, from Ava" until first opened.
+- [x] **No About screen.** An About section at the bottom of Settings.
+- [x] **Accessibility, in code.** Checkboxes named for their item, Shop rows state ticked, tabs state
+      selected. The TalkBack pass on a phone is in the session below.
 
-## Check on real phones
+## The two-phone session
 
 Release build (`assembleRelease`, R8 on), not debug — minification has to be proven, not assumed.
+Both phones on an approved wifi unless a step says otherwise. Use throwaway lists, never anyone's real
+ones; the screenshots at the end come from these too.
+
+**Before:** sign a release build (needs the key, below), uninstall the debug build from both phones
+— this wipes their lists, so export anything worth keeping first — and install the release build.
+
+### One phone at a time
 
 - [ ] First run on a clean install: naming, first list, nothing left over from development.
-- [ ] Pairing two phones from scratch, both directions.
-- [ ] A shared list arriving, edits both ways, tick and untick, remove, rename.
-- [ ] Leaving a list, and being added back.
-- [ ] Someone removing you (after the fix above).
-- [ ] Unpairing cuts sync off.
-- [ ] The same item edited on both phones at once.
-- [ ] Reboot: comes back on the approved wifi and catches up without being opened.
+- [ ] About: the version reads 0.1.0, both links open the browser.
+- [ ] Edit order on a 30-item list: drag end to end, the screen scrolls along at the edges, the
+      speed feels right, and the bottom zone sits above the tab bar.
+- [ ] Pin and unpin lists; list order stays as arranged after a restart.
+- [ ] The list card's avatars sit against the right edge (`d679f81`).
+- [ ] TalkBack through every screen, then the largest font size: nothing unlabelled, nothing clipped.
+- [ ] `adb shell bmgr backupnow io.github.molleware.porygonlist` reports the app as not eligible.
+
+### Both phones
+
+- [ ] Pair from scratch, both directions.
+- [ ] Share a list: it arrives reading "new, from …"; edits both ways; tick and untick; remove;
+      rename.
+- [ ] A shared list named like one the other phone already has: two cards, told apart.
+- [ ] Item order travels; list order and pins stay on each phone.
+- [ ] "In step with" appears only after a handover; "waiting for" while one phone is away.
+- [ ] Same item changed on both phones while one is off the wifi: "keep which?" on both, the answer
+      on one closes the other's card. Then the same with a removal against a rename.
+- [ ] Remove the other person from a list: it sticks, and their phone keeps a private copy.
+- [ ] Leave a list, and be added back.
+- [ ] Unpair: sync stops, and a third copy of the list does not bring them back.
 - [ ] Off the wifi and back: edits from both sides merge.
-- [ ] A 200-item list: how long the handover takes, and whether the phone stutters.
-- [ ] Item order travelling between two phones; list order and pins staying on one.
-- [ ] Background windows with the app closed — the procedure is in the notes for `SyncJob`/`WifiWatch`:
-      a forced window advertises and exchanges, an unapproved wifi announces nothing, joining home
-      wifi starts the schedule, joining another stops it, a reboot re-registers.
-- [ ] One night with background sync, one without: battery used by PorygonList, both phones.
-- [ ] The list card's avatars sit against the right edge (fixed in `d679f81`, not yet looked at).
-- [ ] TalkBack through every screen, and the largest font size: nothing unlabelled, nothing clipped.
-- [ ] Dark mode: **the theme has none** — the app stays light when the phone is dark. Decide
-      whether 0.1.0 ships light-only (no work) or gets a dark palette (design work first).
+- [ ] A 200-item list: how long the handover takes, and whether either phone stutters.
+
+### App closed
+
+The procedure is in the notes for `SyncJob`/`WifiWatch`.
+
+- [ ] A forced background window advertises and exchanges, then goes quiet.
+- [ ] On a wifi that is not approved, nothing is announced.
+- [ ] Joining the home wifi starts the schedule and runs a window; joining another stops it.
+- [ ] Reboot: the phone comes back on the approved wifi and catches up without being opened.
+
+### Overnight
+
+- [ ] One night with background sync, one without: battery used by PorygonList on both phones.
+
+### To finish
+
+- [ ] Phone screenshots, 3–6, into `fastlane/metadata/android/en-US/images/phoneScreenshots/`.
 
 ## Store preparation
 
@@ -90,10 +108,7 @@ Release build (`assembleRelease`, R8 on), not debug — minification has to be p
 - [x] Version `0.1.0`, version code 1. Bump both for every release, never reuse a code.
 - [x] Store text, changelog and icon in `fastlane/metadata/android/en-US/` (icon from
       `./scripts/icon.sh store`).
-- [ ] Phone screenshots in `fastlane/metadata/android/en-US/images/phoneScreenshots/`, 3–6, taken
-      from the release build with lists that are not anyone's real ones.
-- [ ] Reread the store text once the "Fix before release" list is done; it describes the app as
-      that list leaves it.
+- [ ] Reread the store text after the phone session; it describes the app as that leaves it.
 - [x] Merge `list-identity` into `main` (fast-forward, pushed `63b366a`). Work continues on `main`.
 - [ ] Tag `v0.1.0` on `main` once everything above is ticked.
 
@@ -115,9 +130,8 @@ Release build (`assembleRelease`, R8 on), not debug — minification has to be p
 ### Play Store
 
 - [ ] Play Console account and app entry; enrol in Play App Signing with **our own** key.
-- [x] Privacy policy: [docs/privacy.md](privacy.md). Its GitHub page is the URL to give Play. If
-      the backup decision above changes, update its "Backups" section.
-- [ ] Data safety form: no data collected or shared.
+- [x] Privacy policy: [docs/privacy.md](privacy.md). Its GitHub page is the URL to give Play.
+- [ ] Data safety form: no data collected or shared; no backup.
 - [ ] Location permission declaration. Fine location is requested only to show the wifi's name and
       the app works without it. The Share screen already explains this beside the "Use the wifi's
       own name" button, before Android's prompt — probably enough as the in-app disclosure, but

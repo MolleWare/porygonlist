@@ -49,8 +49,13 @@
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!--
+      No backup and no device-to-device transfer, by decision: lists are throwaway, and a restored
+      state file belongs to an identity the new phone does not hold. See data_extraction_rules.xml.
+    -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
