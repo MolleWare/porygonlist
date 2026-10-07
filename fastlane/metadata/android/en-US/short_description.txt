@@ -1,0 +1,1 @@
+Shared lists that sync phone to phone over your wifi. No account, no server.

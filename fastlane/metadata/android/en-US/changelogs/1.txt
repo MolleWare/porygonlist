@@ -1,0 +1,5 @@
+First release.
+• Shared lists that sync directly between paired phones on wifi you approve
+• Items in a shared order; your own arrangement and pins for the lists themselves
+• Background sync on approved wifi
+• Hand a list over as text when you are apart

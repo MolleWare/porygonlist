@@ -10,14 +10,20 @@ when they are together on a local network you have approved, and nothing leaves
 the phone anywhere else. Away from a shared network, a list can be sent as a
 single line of text that the other person pastes straight back in.
 
-**Status: the interface is built; sync is not.** All five screens from the
-design are implemented and lists persist across launches. Sharing is still a
-stub — the sync banner toggles a flag rather than talking to another phone, and
-nothing crosses the network yet. There is no release to install.
+**Status: working towards a first release, 0.1.0.** Two phones pair by
+scanning a code and keep shared lists in step over an approved wifi, including
+for a moment every quarter of an hour with the app closed. There is no release
+to install yet; what stands between here and one is in
+[docs/release-checklist.md](docs/release-checklist.md).
 
-What works: multiple lists, adding and ticking off items, editing name and
-quantity, staples, shopping mode, conflict resolution, and handing a list over
-as a text message you can paste into the other person's app.
+What works: multiple lists shared with whoever you choose, adding, ticking,
+editing and removing items with changes merging from both sides, a shared item
+order, your own list order and pins, staples, shopping mode, leaving a shared
+list, and handing a list over as a text message you can paste into the other
+person's app.
+
+Lists are throwaway by design. They live only on the phones that share them,
+and uninstalling the app takes that phone's lists with it.
 
 ## Goals
 

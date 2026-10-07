@@ -3,6 +3,10 @@
 #
 #   ./scripts/icon.sh            write build/icon-preview.png
 #   ./scripts/icon.sh open       write it and open it in the image viewer
+#   ./scripts/icon.sh store      write the 512px store icon into fastlane/metadata
+#
+# The store icon is the launcher's visible area, square and full colour, which is what F-Droid and
+# the Play Store both ask for. Rerun `store` after changing the artwork and commit the result.
 #
 # The icon lives in three vector drawables that no editor previews usefully, and
 # the thing that actually matters — whether the bird still reads once a launcher
@@ -75,6 +79,16 @@ done
 # Themed icons keep only this layer's alpha and tint it, so preview it tinted.
 magick "$work/mono.png" -gravity center -crop 288x288+0+0 +repage \
   -fill '#B7D3C2' -colorize 100 -background '#26332C' -alpha remove "$work/themed.png"
+
+if [[ "${1:-}" == "store" ]]; then
+  store="$REPO_ROOT/fastlane/metadata/android/en-US/images/icon.png"
+  mkdir -p "$(dirname "$store")"
+  # Rendered large and cropped to the middle 72dp before scaling down, so the edges stay crisp.
+  inkscape "$work/icon.svg" -o "$work/store-full.png" -w 768 -h 768 2>/dev/null
+  magick "$work/store-full.png" -gravity center -crop 512x512+0+0 +repage -strip "$store"
+  info "Wrote $store"
+  exit 0
+fi
 
 mkdir -p "$(dirname "$OUT")"
 magick "$work/full.png" -resize 288x288 "$work/square.png"

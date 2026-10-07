@@ -12,8 +12,10 @@ android {
         applicationId = "io.github.molleware.porygonlist"
         minSdk = 26
         targetSdk = 36
+        // Every release bumps both, and a code is never reused: F-Droid and the Play Store refuse an
+        // update whose code is not higher. See docs/release-checklist.md.
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.1.0"
 
         // Never set, which is why `./scripts/test.sh instrumented` could only ever report an empty
         // suite: without a runner the androidTest variant has nothing to execute the tests with.

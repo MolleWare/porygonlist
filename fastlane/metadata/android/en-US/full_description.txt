@@ -1,0 +1,23 @@
+PorygonList keeps shopping lists, to-dos and any other quick list in step between the people who share them — straight from one phone to the other, with no account to make and no server in between.
+
+<b>How sharing works</b>
+Pair two phones once by scanning a code. After that, a shared list hands its changes over whenever both phones are on a wifi you have approved, such as your home network. Nothing is sent anywhere else, and nothing ever goes to the internet. Away from a shared wifi, a list can travel as one line of text that the other person pastes back in.
+
+<b>What it does</b>
+• Several lists, each shared with whoever you choose, or kept to yourself
+• Add, tick off, rename and remove items; changes from both sides merge
+• Put items in order — the order is shared, so sorting by aisle works for everyone
+• Arrange and pin your lists, just for you
+• Staples for the things you buy every week, and a shopping view for the shop itself
+• Syncs in the background for a moment every quarter of an hour, only while you are on an approved wifi
+
+<b>Good to know</b>
+• Lists are meant to be thrown away. They live only on the phones that share them: uninstall the app and that phone's lists go with it.
+• Two phones only swap changes while both can be reached on the same wifi. If one has the app open, the other catches up within about a quarter of an hour.
+
+<b>Permissions</b>
+• Network access, to talk to paired phones on your local wifi
+• Location (optional), only because Android hides the wifi's name without it — the app uses it to show that name and works fine if you say no
+• Run at startup, so background sync carries on after a restart
+
+Free software under the GPL, version 3 or later.
