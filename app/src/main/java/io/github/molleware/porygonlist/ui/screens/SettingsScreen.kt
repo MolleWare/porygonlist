@@ -12,9 +12,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import io.github.molleware.porygonlist.data.AppState
@@ -134,6 +137,54 @@ fun SettingsScreen(
       onAsk = onAskDelete,
       onCancel = onCancelDelete,
       onConfirm = onConfirmDelete,
+    )
+
+    SectionLabel("About", Modifier.padding(top = 30.dp, bottom = 10.dp))
+    AboutCard()
+  }
+}
+
+private const val SOURCE = "https://github.com/MolleWare/porygonlist"
+
+/**
+ * Which version this is, the licence, where the code lives and where to report a problem.
+ *
+ * The links open in the browser and only when tapped: the app itself still never reaches the
+ * internet. The version is read from the installed package rather than a generated constant, which
+ * the build deliberately does not produce (`buildConfig = false`).
+ */
+@Composable
+private fun AboutCard() {
+  val context = LocalContext.current
+  val uris = LocalUriHandler.current
+  val version =
+    remember {
+      runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+    }
+  val open = { url: String -> runCatching { uris.openUri(url) } }
+
+  Column(Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 14.dp)) {
+    Text("PorygonList $version", style = PorygonType.RowName, color = TextInk)
+    Text(
+      "Free software under the GPL, version 3 or later. No account, no server, nothing collected.",
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+      SecondaryButton("Source code", { open(SOURCE) }, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp))
+      SecondaryButton(
+        "Report a problem",
+        { open("$SOURCE/issues") },
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+      )
+    }
+    Text(
+      "Built with Kotlin, Jetpack Compose and the AndroidX libraries, under the Apache License 2.0.",
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(top = 12.dp),
     )
   }
 }

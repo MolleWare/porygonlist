@@ -2,6 +2,8 @@ package io.github.molleware.porygonlist.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -199,7 +201,8 @@ private fun ShopItemRow(
       // Surface either way. A checked row is marked by the strikethrough and the fade below; a
       // second, quieter background as well made it read as disabled rather than done.
       .background(Surface)
-      .clickable(onClick = onToggle)
+      // A checkbox to a screen reader, so it says whether the item is in the trolley, not only its name.
+      .toggleable(value = item.checked, role = Role.Checkbox, onValueChange = { onToggle() })
       .alpha(if (item.checked) 0.55f else 1f)
       .padding(horizontal = 18.dp, vertical = 20.dp),
     verticalAlignment = Alignment.CenterVertically,

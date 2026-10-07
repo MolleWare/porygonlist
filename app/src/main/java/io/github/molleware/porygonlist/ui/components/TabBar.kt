@@ -1,7 +1,6 @@
 package io.github.molleware.porygonlist.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,10 +8,12 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.molleware.porygonlist.theme.Accent700
 import io.github.molleware.porygonlist.theme.Divider
@@ -46,7 +47,8 @@ fun TabBar(current: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier)
         Column(
           Modifier.weight(1f)
             .defaultMinSize(minHeight = 48.dp)
-            .clickable(onClick = { onSelect(tab) })
+            // A tab to a screen reader, so it says which one you are on.
+            .selectable(selected = selected, role = Role.Tab, onClick = { onSelect(tab) })
             .padding(top = 8.dp),
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.spacedBy(4.dp),

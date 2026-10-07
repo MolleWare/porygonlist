@@ -44,10 +44,11 @@ be true, not how to check it.
 - [x] **A shared list arrives silently.** Its card now reads "new, from Ava" until it is first
       opened. (Offering to combine two same-named lists is a possible later step, not needed for
       0.1.0.)
-- [ ] **No About screen.** Version, the GPL, where to report a bug, and credits for the open-source
-      libraries the app ships.
-- [ ] **Accessibility.** Content descriptions on every control that has no text; then a TalkBack and
-      largest-font pass on a phone (below).
+- [x] **No About screen.** An About section at the bottom of Settings: version, the GPL, source
+      code and "Report a problem" links, and credits.
+- [x] **Accessibility, in code.** Tick circles are checkboxes named for their item, Shop rows say
+      whether they are ticked, tabs say which is selected. The TalkBack and largest-font pass on a
+      phone is still to do (below).
 - [ ] **Language.** English only. A French translation is the owner's call.
 
 ## Check on real phones

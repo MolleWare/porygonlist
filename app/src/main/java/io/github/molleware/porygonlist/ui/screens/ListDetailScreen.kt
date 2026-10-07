@@ -4,6 +4,10 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -405,8 +409,13 @@ private fun ItemRow(
   ) {
     // A 44dp target around a 26dp circle. The row's reduced start padding is the design's
     // `margin-left:-9px`, which keeps the circle itself aligned to the 14dp gutter.
+    // A checkbox named for its item. As a bare clickable it was read out as an unlabelled button,
+    // with no word of what it ticks or whether it already had been.
     Box(
-      Modifier.size(44.dp).clip(CircleShape).clickable(enabled = handle == null, onClick = onToggle),
+      Modifier.size(44.dp)
+        .clip(CircleShape)
+        .toggleable(value = item.checked, enabled = handle == null, role = Role.Checkbox, onValueChange = { onToggle() })
+        .semantics { contentDescription = item.label },
       contentAlignment = Alignment.Center,
     ) {
       CheckCircle(item.checked)
