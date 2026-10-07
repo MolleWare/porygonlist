@@ -107,7 +107,7 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
       clashes += result.clashes
       duplicates += result.duplicates
       result.list
-    } + invitations
+    } + invitations.map { it.copy(arrivedFrom = payload.from) } // so the card can say who it is from
 
   clock.observe(payload.at)
   mergedLists.mapNotNull { it.newestStamp() }.maxOrNull()?.let { clock.observe(it) }

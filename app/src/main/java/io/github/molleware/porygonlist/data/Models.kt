@@ -176,6 +176,14 @@ data class GroceryList(
    * other never sees, so a shared arrangement of them could not mean anything.
    */
   val pinned: Boolean = false,
+  /**
+   * Who shared this list with this phone, until it is first opened here.
+   *
+   * A shared list used to arrive with no word about it, and one named like a list you already have
+   * looked like a mysterious second copy. This phone's own note, like [pinned]: never sent, kept
+   * through merges, and cleared by opening the list.
+   */
+  val arrivedFrom: DeviceId? = null,
 ) {
   /**
    * Items still on the list — everything anyone sees, counts or sends.

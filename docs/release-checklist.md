@@ -41,10 +41,9 @@ be true, not how to check it.
       throws them away (the identity key never travels). Either turn backup off, which is honest about
       throwaway lists and keeps list contents off Google's servers, or leave it and accept the copy.
 - [x] **README is out of date.** Updated in `63b366a`.
-- [ ] **A shared list arrives silently.** Nothing says who shared it, and one that has the same name
-      as a list you already have shows up as a second, identical-looking card. Show "from Ava" on the
-      card until it is first opened. (Offering to combine two same-named lists is a possible later
-      step, not needed for 0.1.0.)
+- [x] **A shared list arrives silently.** Its card now reads "new, from Ava" until it is first
+      opened. (Offering to combine two same-named lists is a possible later step, not needed for
+      0.1.0.)
 - [ ] **No About screen.** Version, the GPL, where to report a bug, and credits for the open-source
       libraries the app ships.
 - [ ] **Accessibility.** Content descriptions on every control that has no text; then a TalkBack and

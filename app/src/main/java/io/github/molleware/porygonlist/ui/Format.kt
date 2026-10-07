@@ -170,6 +170,9 @@ fun listCardMeta(list: GroceryList, online: Boolean, localDevice: DeviceId, deli
   val others = list.others(localDevice)
   val behind = list.behind(localDevice, delivered)
   return when {
+    // Until it is first opened, a list someone shared says so — the one thing that tells it apart
+    // from a list of your own with the same name.
+    list.arrivedFrom != null -> "new, from ${list.nameFor(list.arrivedFrom, localDevice)}"
     others.isEmpty() -> "just you"
     !online && waiting > 0 -> "$waiting ${if (waiting == 1) "change" else "changes"} waiting"
     list.liveItems.any { it.editing } -> "${others.first().name} is adding to it"

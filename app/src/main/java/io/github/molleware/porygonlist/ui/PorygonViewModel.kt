@@ -278,7 +278,10 @@ class PorygonViewModel(
     )
   }
 
-  fun openList(id: ListId) = repo.update { s, _ -> s.copy(activeListId = id) }
+  /** Opens a list, which also marks a newly shared one as seen. */
+  fun openList(id: ListId) = repo.update { s, _ ->
+    s.copy(activeListId = id, lists = s.lists.map { if (it.id == id && it.arrivedFrom != null) it.copy(arrivedFrom = null) else it })
+  }
 
   /**
    * What this phone should send a peer: everything it knows, and the point in its own clock that

@@ -162,7 +162,17 @@ object StateCodec {
     state.lists.forEach { list ->
       // Pinned is this phone's own and lives only here; the sync payload's list record has no such
       // field, so it never reaches anyone else.
-      appendLine(record("list", list.id.value, list.name, list.accent.name, list.nameAt.encode(), list.pinned.bool()))
+      appendLine(
+        record(
+          "list",
+          list.id.value,
+          list.name,
+          list.accent.name,
+          list.nameAt.encode(),
+          list.pinned.bool(),
+          list.arrivedFrom?.value.orEmpty(),
+        )
+      )
       list.people.forEach {
         appendLine(
           record(
@@ -215,6 +225,7 @@ object StateCodec {
     val accents = mutableMapOf<String, ListAccent>()
     val nameStamps = mutableMapOf<String, Hlc>()
     val pins = mutableSetOf<String>()
+    val arrivals = mutableMapOf<String, DeviceId>()
     val people = mutableMapOf<String, MutableList<Person>>()
     val items = mutableMapOf<String, MutableList<GroceryItem>>()
 
@@ -259,6 +270,8 @@ object StateCodec {
               f.getOrNull(4)?.let { Hlc.decode(it) }?.let { nameStamps[id] = it }
               // Absent before pinning existed, which reads as not pinned.
               if (f.getOrNull(5) == "1") pins += id
+              // Absent before shared lists said who they came from: read as already seen.
+              f.getOrNull(6)?.takeIf { it.isNotEmpty() }?.let { arrivals[id] = DeviceId(it) }
             }
             "person" -> {
               val device = DeviceId(f[2])
@@ -316,6 +329,7 @@ object StateCodec {
           people = people[raw].orEmpty(),
           nameAt = nameStamps[raw] ?: GroceryList.none.nameAt,
           pinned = raw in pins,
+          arrivedFrom = arrivals[raw],
         )
       }
 
