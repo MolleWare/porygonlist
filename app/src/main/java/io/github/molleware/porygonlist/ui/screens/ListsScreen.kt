@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -392,16 +391,15 @@ private fun ListCard(
   ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
       Dot(list.accent.color(), size = 11.dp)
-      Text(
-        list.name,
-        style = PorygonType.ListName,
-        color = TextInk,
-        modifier = Modifier.padding(start = 11.dp).weight(1f, fill = false),
-      )
-      if (list.pinned) {
-        StrokeIcon(IconPaths.PIN, contentDescription = "Pinned", size = 14.dp, tint = Neutral600, modifier = Modifier.padding(start = 6.dp))
+      // The name and its pin share the free space as one group, so the avatars stay against the
+      // right edge. Weighting the name and a spacer separately split that space between them and
+      // left the avatars stranded mid-card.
+      Row(Modifier.padding(start = 11.dp).weight(1f), verticalAlignment = Alignment.CenterVertically) {
+        Text(list.name, style = PorygonType.ListName, color = TextInk, modifier = Modifier.weight(1f, fill = false))
+        if (list.pinned) {
+          StrokeIcon(IconPaths.PIN, contentDescription = "Pinned", size = 14.dp, tint = Neutral600, modifier = Modifier.padding(start = 6.dp))
+        }
       }
-      Spacer(Modifier.weight(1f))
       // Negative spacing gives the same tucked-under stack as `margin-left:-7px` in the design.
       Row(horizontalArrangement = Arrangement.spacedBy((-7).dp)) {
         list.people.filter { it.present }.forEach { person ->
