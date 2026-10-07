@@ -73,7 +73,8 @@ Release build (`assembleRelease`, R8 on), not debug — minification has to be p
 - [ ] One night with background sync, one without: battery used by PorygonList, both phones.
 - [ ] The list card's avatars sit against the right edge (fixed in `d679f81`, not yet looked at).
 - [ ] TalkBack through every screen, and the largest font size: nothing unlabelled, nothing clipped.
-- [ ] Dark mode, if the theme has one; otherwise decide that it does not.
+- [ ] Dark mode: **the theme has none** — the app stays light when the phone is dark. Decide
+      whether 0.1.0 ships light-only (no work) or gets a dark palette (design work first).
 
 ## Store preparation
 
@@ -92,7 +93,8 @@ Release build (`assembleRelease`, R8 on), not debug — minification has to be p
       from the release build with lists that are not anyone's real ones.
 - [ ] Reread the store text once the "Fix before release" list is done; it describes the app as
       that list leaves it.
-- [ ] Merge `list-identity` into `main`, then tag `v0.1.0` on `main`.
+- [x] Merge `list-identity` into `main` (fast-forward, pushed `63b366a`). Work continues on `main`.
+- [ ] Tag `v0.1.0` on `main` once everything above is ticked.
 
 ### F-Droid
 
@@ -120,4 +122,5 @@ Release build (`assembleRelease`, R8 on), not debug — minification has to be p
       own name" button, before Android's prompt — probably enough as the in-app disclosure, but
       check it against Play's current wording when filling in the form.
 - [ ] Content rating questionnaire, target audience, store category.
-- [ ] Upload an app bundle (`bundleRelease`) to internal testing first, then production.
+- [ ] Upload an app bundle (`bundleRelease`) to internal testing first, then production. The
+      bundle builds (2026-10-06, 3.5 MB unsigned); it signs itself once `keystore.properties` exists.
