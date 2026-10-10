@@ -26,9 +26,22 @@
       "Bash(./gradlew :app:testDebugUnitTest *)",
       "Bash(./gradlew :app:installBenchmarkRelease)",
       "Bash(./gradlew :app:installBenchmarkRelease *)",
+      "Bash(./gradlew :app:compileDebugUnitTestKotlin)",
+      "Bash(./gradlew :app:compileDebugUnitTestKotlin *)",
+      "Bash(./gradlew :app:lintDebug)",
+      "Bash(./gradlew :app:lintDebug *)",
 
       "Bash(adb devices)",
-      "Bash(adb devices *)"
+      "Bash(adb devices *)",
+      "Bash(adb mdns services)",
+      "Bash(adb shell dumpsys power)",
+      "Bash(adb shell dumpsys window)",
+      "Bash(adb shell getprop ro.build.version.release)",
+      "Bash(adb exec-out screencap -p)",
+
+      "Bash(podman ps)",
+      "Bash(podman ps *)",
+      "Bash(ip addr show)"
     ]
   }
 }
