@@ -30,6 +30,8 @@
       "Bash(./gradlew :app:compileDebugUnitTestKotlin *)",
       "Bash(./gradlew :app:lintDebug)",
       "Bash(./gradlew :app:lintDebug *)",
+      "Bash(./gradlew :benchmark:dependencies)",
+      "Bash(./gradlew :benchmark:dependencies *)",
 
       "Bash(adb devices)",
       "Bash(adb devices *)",
@@ -38,6 +40,10 @@
       "Bash(adb shell dumpsys window)",
       "Bash(adb shell getprop ro.build.version.release)",
       "Bash(adb exec-out screencap -p)",
+      "Bash(adb shell dumpsys activity activities)",
+      "Bash(adb shell dumpsys package io.github.molleware.porygonlist)",
+      "Bash(adb shell pm list packages)",
+      "Bash(adb exec-out cat /sdcard/ui.xml)",
 
       "Bash(podman ps)",
       "Bash(podman ps *)",
