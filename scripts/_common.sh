@@ -63,13 +63,19 @@ require_device() {
     die "No permission to access the device. Install android-udev-rules, then unplug and replug."
   fi
 
-  local count
-  count="$(grep -cw "device" <<<"$listing" || true)"
-  case "$count" in
-    0) die "No device connected. Enable USB debugging and plug the phone in." ;;
-    1) : ;;
-    *) die "$count devices connected. Benchmarks need exactly one; disconnect the others." ;;
-  esac
+  # ANDROID_SERIAL picks one phone when several are attached; adb and Gradle both honour it.
+  if [[ -n "${ANDROID_SERIAL:-}" ]]; then
+    grep -qF "$ANDROID_SERIAL"$'\t'"device" <<<"$listing" \
+      || die "ANDROID_SERIAL is $ANDROID_SERIAL, but no such device is connected."
+  else
+    local count
+    count="$(grep -cw "device" <<<"$listing" || true)"
+    case "$count" in
+      0) die "No device connected. Enable USB debugging and plug the phone in." ;;
+      1) : ;;
+      *) die "$count devices connected. Set ANDROID_SERIAL to pick one (see adb devices -l)." ;;
+    esac
+  fi
 
   info "Device: $("$ADB" shell getprop ro.product.model | tr -d '\r') (Android $("$ADB" shell getprop ro.build.version.release | tr -d '\r'))"
 }
