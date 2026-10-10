@@ -114,6 +114,7 @@ object Graph {
               identity = ::identity,
               found = peerDiscovery(context).found,
               scope = networkScope,
+              callbackPort = { syncEndpoint().syncPort },
             )
             .also {
               syncEndpoint().syncHandler = it

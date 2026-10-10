@@ -116,6 +116,17 @@ class SyncEndpoint(
     get() = synchronized(lock) { socket?.localPort?.takeIf { it > 0 && socket?.isClosed == false } }
 
   /**
+   * The port a paired phone may call back on, or null while sync is not allowed here.
+   *
+   * Null whenever the socket is open only for a pairing code: a phone that offers to be called back
+   * on a wifi nobody approved would walk round the gate as surely as answering there would.
+   */
+  val syncPort: Int?
+    get() = synchronized(lock) { if (syncAllowedLocked()) port else null }
+
+  private fun syncAllowedLocked() = ListenReason.DISCOVERY in reasons || ListenReason.BACKGROUND in reasons
+
+  /**
    * Opens the socket for [reason], returning the port everything should be told about.
    *
    * Null when TLS or the bind failed. The honest response to that is silence: advertising an
@@ -209,8 +220,7 @@ class SyncEndpoint(
         // Sync happens only where the owner has approved the network. The socket may be open just
         // because a pairing code is on screen, on a wifi nobody approved, and a paired phone being
         // able to exchange lists there would walk straight round the gate.
-        val discovering =
-          synchronized(lock) { ListenReason.DISCOVERY in reasons || ListenReason.BACKGROUND in reasons }
+        val discovering = synchronized(lock) { syncAllowedLocked() }
         // Same reasoning as the handshake above: whatever goes wrong answering one peer is that
         // connection's problem, never the process's.
         if (discovering) runCatching { syncHandler?.answer(presented, client) }

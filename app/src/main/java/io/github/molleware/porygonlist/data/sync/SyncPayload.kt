@@ -16,8 +16,11 @@ import io.github.molleware.porygonlist.data.Person
  * [at] is the sender's clock when the payload was assembled. The receiver echoes it back untouched,
  * and that echo is the sender's proof of delivery — which is why it must be read at assembly and
  * not at reply time. A later reading would claim delivery of changes that were never in the bundle.
+ *
+ * [callback] is the port the sender listens on, so the phone it called can call it back without
+ * discovery: on hardware, one phone never saw the other's mDNS service at all.
  */
-data class SyncPayload(val from: DeviceId, val at: Hlc, val lists: List<GroceryList>)
+data class SyncPayload(val from: DeviceId, val at: Hlc, val lists: List<GroceryList>, val callback: Int? = null)
 
 /**
  * The wire format.
@@ -41,7 +44,8 @@ object SyncCodec {
 
   fun encode(payload: SyncPayload): String = buildString {
     appendLine(VERSION)
-    appendLine(Records.line("from", payload.from.value, payload.at.encode()))
+    // The callback port goes last, so a build that reads only the first two fields still reads this.
+    appendLine(Records.line(listOfNotNull("from", payload.from.value, payload.at.encode(), payload.callback?.toString())))
 
     payload.lists.forEach { list ->
       // The rename stamp travels, or the receiver cannot tell whose name is newer and keeps its own.
@@ -72,6 +76,7 @@ object SyncCodec {
 
     var from: DeviceId? = null
     var at: Hlc? = null
+    var callback: Int? = null
 
     val order = mutableListOf<ListId>()
     val names = mutableMapOf<ListId, String>()
@@ -87,6 +92,7 @@ object SyncCodec {
             "from" -> {
               from = DeviceId(f[1])
               at = Hlc.decode(f[2])
+              callback = f.getOrNull(3)?.toIntOrNull()?.takeIf { it in 1..65_535 }
             }
             "list" -> {
               val id = ListId(f[1])
@@ -137,6 +143,7 @@ object SyncCodec {
             nameAt = nameStamps[id] ?: GroceryList.none.nameAt,
           )
         },
+      callback = callback,
     )
   }
 }

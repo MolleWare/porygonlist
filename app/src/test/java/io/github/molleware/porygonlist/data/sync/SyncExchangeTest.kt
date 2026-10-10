@@ -173,6 +173,25 @@ class SyncExchangeTest {
   }
 
   @Test
+  fun `the callback port travels, and a payload without one still reads`() {
+    val withPort = payload(hugo, 2_000, "Ice").copy(callback = 40_123)
+    assertEquals(40_123, SyncCodec.decode(SyncCodec.encode(withPort))!!.callback)
+
+    // What a build from before the callback port sends: the same, minus the field.
+    val older = SyncCodec.decode(SyncCodec.encode(withPort.copy(callback = null)))!!
+    assertNull(older.callback)
+    assertEquals(listOf("Ice"), older.lists.single().items.map { it.name.value })
+  }
+
+  @Test
+  fun `a payload with a callback port reads the same to a build that ignores it`() {
+    // The port is the last field on the from line, where an older reader looks no further.
+    val line = SyncCodec.encode(payload(hugo, 2_000, "Ice").copy(callback = 40_123)).lines()[1]
+    val f = Records.split(line)
+    assertEquals(listOf("from", hugo.value, Hlc(2_000, 0, hugo).encode(), "40123"), f)
+  }
+
+  @Test
   fun `an oversized frame is refused before it is allocated`() {
     val inp = ByteArrayInputStream("PLX1 999999999\n".toByteArray())
 

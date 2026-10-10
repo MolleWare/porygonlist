@@ -129,13 +129,21 @@ class SyncCoordinatorTest {
           )
         ),
       )
-    ava.coordinator = coordinator(ava, callingInto = { hugo }, asKey = avaKey)
-    hugo.coordinator = coordinator(hugo, callingInto = { ava }, asKey = hugoKey)
+    ava.coordinator = coordinator(ava, callingInto = { hugo }, asKey = avaKey, port = AVA_PORT)
+    hugo.coordinator = coordinator(hugo, callingInto = { ava }, asKey = hugoKey, port = HUGO_PORT)
     return ava to hugo
   }
 
+  private companion object {
+    const val AVA_PORT = 4_001
+    const val HUGO_PORT = 4_002
+  }
+
+  /** Whether each phone's sync port is open, as the approved-network gate would have it. */
+  private var gateOpen = true
+
   /** A coordinator whose calls run the other phone's listener over a pair of pipes. */
-  private fun coordinator(me: Phone, callingInto: () -> Phone, asKey: ByteArray) =
+  private fun coordinator(me: Phone, callingInto: () -> Phone, asKey: ByteArray, port: Int = 4_000) =
     SyncCoordinator(
       repo = me.repo,
       identity = { error("no TLS in this test") },
@@ -151,7 +159,7 @@ class SyncCoordinatorTest {
         val answered =
           listener.submit {
             try {
-              callingInto().coordinator.answerOn(asKey, toListener, listenerOut)
+              callingInto().coordinator.answerOn(asKey, toListener, listenerOut, from = "10.0.0.${port % 256}")
             } finally {
               // What the endpoint's finally does with the socket.
               listenerOut.close()
@@ -163,6 +171,7 @@ class SyncCoordinatorTest {
         result
       },
       now = { clockMs },
+      callbackPort = { port.takeIf { gateOpen } },
     )
 
   private fun reach(id: DeviceId, key: ByteArray, name: String) = ReachablePeer(TrustedPeer(id, key, name, 0), "10.0.0.1", 1)
@@ -220,6 +229,73 @@ class SyncCoordinatorTest {
     val expected = setOf("Ice", "Lemons", "Cups")
     assertEquals(expected, ava.repo.now.visibleLists.single().liveItems.map { it.name.value }.toSet())
     assertEquals(expected, hugo.repo.now.visibleLists.single().liveItems.map { it.name.value }.toSet())
+  }
+
+  // ── Who can be called ─────────────────────────────────────────────────────
+
+  @Test
+  fun `a phone that never discovers the other still sends its edits once it has been called`() {
+    // Seen on hardware: the Samsung never saw the Pixel's mDNS service, so Ava's tick sat unsent
+    // until the Pixel happened to call. A call now teaches the listener where to call back.
+    val (ava, hugo) = pair()
+    hugo.pushTo(avaId, avaKey, "Ava")
+
+    ava.repo.update { s, node ->
+      s.copy(lists = s.lists.map { it.copy(items = it.items + item("${avaId.value}:200", "Lemons", node.clock.tick())) })
+    }
+    val avaCanCall = ava.coordinator.callable(records = emptyList(), state = ava.repo.now)
+    assertEquals(listOf(ServiceRecord(hugoId, "10.0.0.${HUGO_PORT % 256}", HUGO_PORT)), avaCanCall.map { ServiceRecord(it.peer.deviceId, it.host, it.port) })
+
+    avaCanCall.forEach { ava.coordinator.pushIfOwed(it, ava.repo.now) }
+
+    assertTrue("Lemons" in hugo.repo.now.visibleLists.single().liveItems.map { it.name.value })
+    assertTrue("Hugo is in step with Ava", hugo.repo.now.deliveredTo.confirmedBy(avaId) != null)
+    assertTrue("and Ava with Hugo", ava.repo.now.deliveredTo.confirmedBy(hugoId) != null)
+  }
+
+  @Test
+  fun `remembered addresses are not called where sync is not allowed`() {
+    // Off the approved wifi the gate closes the sync port, and a memory must not walk round it.
+    val (ava, hugo) = pair()
+    hugo.pushTo(avaId, avaKey, "Ava")
+
+    gateOpen = false
+
+    assertTrue(ava.coordinator.callable(records = emptyList(), state = ava.repo.now).isEmpty())
+  }
+
+  @Test
+  fun `a phone discovery drops for a moment can still be called`() {
+    // Android reports a service found and expired in the same millisecond.
+    val (_, hugo) = pair()
+    val found = listOf(ServiceRecord(avaId, "10.0.0.9", AVA_PORT))
+    hugo.coordinator.callable(found, hugo.repo.now)
+
+    clockMs = 5_000
+    assertEquals(listOf(avaId), hugo.coordinator.callable(emptyList(), hugo.repo.now).map { it.peer.deviceId })
+
+    clockMs = 31 * 60_000L
+    assertTrue("but not for ever", hugo.coordinator.callable(emptyList(), hugo.repo.now).isEmpty())
+  }
+
+  @Test
+  fun `an address that stops answering is forgotten`() {
+    val (_, hugo) = pair()
+    val unreachable =
+      SyncCoordinator(
+        repo = hugo.repo,
+        identity = { error("no TLS in this test") },
+        found = emptyFlow(),
+        scope = CoroutineScope(Dispatchers.Unconfined),
+        dial = { _, _ -> null },
+        now = { clockMs },
+        callbackPort = { HUGO_PORT },
+      )
+    val ava = unreachable.callable(listOf(ServiceRecord(avaId, "10.0.0.9", AVA_PORT)), hugo.repo.now).single()
+
+    unreachable.pushIfOwed(ava, hugo.repo.now)
+
+    assertTrue(unreachable.callable(emptyList(), hugo.repo.now).isEmpty())
   }
 
   @Test
