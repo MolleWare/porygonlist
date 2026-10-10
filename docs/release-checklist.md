@@ -80,12 +80,17 @@ ones; the screenshots at the end come from these too.
 
 ### App closed
 
-The procedure is in the notes for `SyncJob`/`WifiWatch`.
+The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 
 - [ ] A forced background window advertises and exchanges, then goes quiet.
 - [ ] On a wifi that is not approved, nothing is announced.
 - [ ] Joining the home wifi starts the schedule and runs a window; joining another stops it.
 - [ ] Reboot: the phone comes back on the approved wifi and catches up without being opened.
+- [ ] Alarms allowed on both: two closed phones, in Doze, exchange at the next :00/:15/:30/:45.
+- [ ] Allowing alarms in system settings, app closed, moves the schedule onto the quarter hour.
+- [ ] Alarms not allowed: a window still runs at the quarter hour while awake or charging, and
+      Settings offers "Allow alarms".
+- [ ] Updating from a build with the old periodic job replaces it rather than running both.
 
 ### Overnight
 

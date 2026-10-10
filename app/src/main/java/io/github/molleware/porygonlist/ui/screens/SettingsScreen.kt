@@ -1,5 +1,10 @@
 package io.github.molleware.porygonlist.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,7 +17,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,8 +28,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.TrustedPeer
+import io.github.molleware.porygonlist.data.net.BackgroundSync
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent100
@@ -130,6 +140,12 @@ fun SettingsScreen(
     }
     SecondaryButton("Pair a phone", onPair, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
 
+    // Only asked for once there is somebody to sync with, and only where Android asks at all.
+    if (state.peers.isNotEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      SectionLabel("With the app closed", Modifier.padding(top = 26.dp, bottom = 10.dp))
+      QuarterHourCard()
+    }
+
     SectionLabel("Starting over", Modifier.padding(top = 30.dp, bottom = 10.dp))
     DeleteIdentityCard(
       peerCount = state.peers.size,
@@ -141,6 +157,55 @@ fun SettingsScreen(
 
     SectionLabel("About", Modifier.padding(top = 30.dp, bottom = 10.dp))
     AboutCard()
+  }
+}
+
+/**
+ * Whether closed phones wake together on the quarter hour, and the way to let them.
+ *
+ * Read from Android on every return to the screen rather than held in the state: the switch lives
+ * in system settings, and the owner flips it there, not here. The schedule itself moves across on
+ * its own when they do — see SyncAlarm.
+ */
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+private fun QuarterHourCard() {
+  val context = LocalContext.current
+  var aligned by remember { mutableStateOf(BackgroundSync.canAlign(context)) }
+  LifecycleResumeEffect(Unit) {
+    aligned = BackgroundSync.canAlign(context)
+    onPauseOrDispose {}
+  }
+
+  Column(Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 14.dp)) {
+    Text(if (aligned) "Syncing on the quarter hour" else "Syncing around the quarter hour", style = PorygonType.RowName, color = TextInk)
+    Text(
+      if (aligned) {
+        "Wakes at :00, :15, :30 and :45 for half a minute, when your paired phones do too. " +
+          "A quiet notification shows while it runs."
+      } else {
+        "Aims for :00, :15, :30 and :45, but a phone left idle may wake late and miss the others. " +
+          "Allow alarms and it wakes on time."
+      },
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(top = 4.dp),
+    )
+    if (!aligned) {
+      SecondaryButton(
+        "Allow alarms",
+        {
+          runCatching {
+            context.startActivity(
+              Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.fromParts("package", context.packageName, null))
+            )
+          }
+        },
+        modifier = Modifier.padding(top = 12.dp),
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+      )
+    }
   }
 }
 

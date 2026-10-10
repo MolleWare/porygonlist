@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       Lets the app tell which link it is on, so peer discovery can be held on networks the owner
@@ -48,6 +49,24 @@
       scheduler simply remembers the job, and it runs on its usual quarter-hour schedule.
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      Optional: wakes the background window on the exact quarter hour even in Doze, so every paired
+      phone listens at the same moment. See BackgroundSync.
+
+      Android 14 and later leave it off until the owner turns on "Alarms & reminders" for the app;
+      Settings offers the way there. Without it the job scheduler aims at the same quarter hours, but
+      Doze can hold a window back past them.
+      Not USE_EXACT_ALARM: that one is granted silently, and is meant for alarm clocks.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!--
+      Holding the quarter-hour window open as a foreground service, which is what keeps the network
+      through Doze for its thirty seconds. Normal protection level. The service is a short service,
+      which needs no type-specific permission beside this one. See SyncWindowService.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <!--
       No backup and no device-to-device transfer, by decision: lists are throwaway, and a restored
@@ -109,6 +128,28 @@
             android:name=".data.net.SyncJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!--
+          The same window on the exact quarter hour, started by SyncAlarm when the alarm fires. Not
+          exported. See SyncWindowService.
+        -->
+        <service
+            android:name=".data.net.SyncWindowService"
+            android:exported="false"
+            android:foregroundServiceType="shortService"
+            tools:targetApi="34" />
+
+        <!--
+          The quarter-hour alarm, and the owner granting exact alarms from Settings. Not exported:
+          the alarm comes through the app's own PendingIntent, and the grant from the system.
+        -->
+        <receiver
+            android:name=".data.net.SyncAlarm"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!--
           Told when a wifi is joined (through a PendingIntent the app registers with

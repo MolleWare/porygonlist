@@ -38,8 +38,8 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import io.github.molleware.porygonlist.data.net.BackgroundSync
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
-import io.github.molleware.porygonlist.data.net.SyncJob
 import io.github.molleware.porygonlist.data.net.WifiWatch
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.ui.PorygonViewModel
@@ -97,7 +97,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
     if (hasPeers) withContext(Dispatchers.IO) { WifiWatch.register(context.applicationContext) }
   }
   LaunchedEffect(hasPeers, onApprovedWifi) {
-    if (hasPeers && onApprovedWifi) withContext(Dispatchers.IO) { SyncJob.ensureScheduled(context.applicationContext) }
+    if (hasPeers && onApprovedWifi) withContext(Dispatchers.IO) { BackgroundSync.ensureScheduled(context.applicationContext) }
   }
 
   // What to call the network in passing: the owner's own name for it, then the wifi's own name if

@@ -6,29 +6,33 @@ import android.app.job.JobScheduler
 import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
-import io.github.molleware.porygonlist.Graph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Syncs for a short while every quarter of an hour or so, with the app out of sight.
+ * Syncs for a short while around every quarter hour, with the app out of sight — the fallback for a
+ * phone that has not allowed exact alarms. See [BackgroundSync] for the schedule it falls back from,
+ * and [SyncWindow] for what a window does.
  *
  * With the app open, the phone listens and looks for its peers the whole time. Closed, Android
  * freezes it soon after and Doze takes it off the network, so on its own it would only hand over
- * changes while somebody was looking at it. This gives it a window on Android's schedule instead:
- * it wakes, does what the open app does for [WINDOW_MS], and stops.
+ * changes while somebody was looking at it. This gives it a window on Android's schedule instead.
  *
- * **What it can and cannot do.** Without a server, a change moves only when both phones are
- * reachable at once. A window lands whatever is waiting with a phone that has the app open, or
- * that is in its own window at the same moment. Two phones in pockets rarely line up, and Doze
- * stretches the gaps further the longer a phone sits still. That is the trade the owner chose over
- * listening all day, which keeps the wifi chip awake to stay discoverable.
+ * **Aimed at the quarter hour, not held to it.** A change moves only when both phones are reachable
+ * at once, so every window waits until the next :00, :15, :30 or :45 — the same moments the alarm
+ * uses, and the same moments the other phone is aiming at. Android treats the wait as "not before"
+ * rather than "at": awake or on a charger the window lands within seconds of it, but in Doze it is
+ * held to the phone's next maintenance window, which is the phone's own. Each window aims at the
+ * quarter after the one it actually ran in, so a late one costs one meeting, not every one after.
+ *
+ * That is why it is a chain of one-off jobs rather than a periodic one: a periodic job starts its
+ * period wherever Android likes and drifts from there, and nothing about it can be aimed.
+ *
+ * **Two ids, alternating.** Scheduling a job under the id of the one running stops the running one,
+ * so a window cannot book its successor under its own id. It books it under the other.
  *
  * **Why JobScheduler and not WorkManager.** This is the framework scheduler, which WorkManager wraps.
  * It adds no dependency and installs no startup initialiser, so the cold-start path does not grow.
@@ -43,110 +47,81 @@ import kotlinx.coroutines.launch
 class SyncJob : JobService() {
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-  @Volatile private var running: Job? = null
-  @Volatile private var opened: Opened? = null
 
-  /** What this window started itself, so it stops exactly that and nothing the open app is using. */
-  private class Opened(val socket: Boolean, val discovery: Boolean)
+  /** One per job id: a quarter-hour window and [runSoon]'s can both be live in this one service. */
+  private val running = mutableMapOf<Int, Pair<Job, SyncWindow>>()
 
   override fun onStartJob(params: JobParameters): Boolean {
-    running =
+    // The next one is booked before this one does anything, so a window that fails or is stopped
+    // never breaks the chain. A window that finds it should not be running cancels both anyway.
+    if (params.jobId in QUARTER_IDS) book(applicationContext, QUARTER_IDS.first { it != params.jobId })
+
+    val window = SyncWindow(applicationContext)
+    val job =
       scope.launch {
         try {
-          window()
+          window.run()
         } finally {
-          close()
+          synchronized(running) { running.remove(params.jobId) }
           jobFinished(params, false)
         }
       }
+    synchronized(running) { running[params.jobId] = job to window }
     return true
   }
 
   override fun onStopJob(params: JobParameters): Boolean {
-    // Android wants the time back: the wifi went, or the window ran long. Stop cleanly and let the
-    // next period try again rather than asking to be rescheduled straight away.
-    running?.cancel()
-    close()
+    // Android wants the time back: the wifi went, or the window ran long. Stop cleanly; the next
+    // quarter hour is already booked.
+    val (job, window) = synchronized(running) { running.remove(params.jobId) } ?: return false
+    job.cancel()
+    window.close()
     return false
   }
 
-  private suspend fun window() {
-    val repo = Graph.listRepository(applicationContext)
-    repo.load()
-    val state = repo.state.filterNotNull().first()
-
-    // Read in one go, not off the monitor's flow — whose first value has no fingerprint yet, which
-    // made every window on hardware give up as "unidentifiable" before announcing anything.
-    val snapshot = AndroidNetworkMonitor(applicationContext).current()
-    when (backgroundPlan(snapshot, state)) {
-      BackgroundPlan.RUN -> Unit
-      // Woke somewhere it should not be — a reboot while away, a network since un-approved, nobody
-      // left to sync with. Stop the schedule; joining an approved wifi starts it again.
-      BackgroundPlan.STOP -> {
-        cancel(applicationContext)
-        return
-      }
-      BackgroundPlan.LEAVE -> return
-    }
-
-    val endpoint = Graph.syncEndpoint()
-    val discovery = Graph.peerDiscovery(applicationContext)
-    Graph.syncCoordinator(applicationContext).start()
-
-    // The open app may already be listening — a frozen process wakes up into this job with its
-    // discovery still set up. Then the window only has to keep the process awake; starting a second
-    // advertisement would be the open app's to undo, and it would not know to.
-    val appListening = endpoint.holds(ListenReason.DISCOVERY)
-    val port = endpoint.start(ListenReason.BACKGROUND) ?: return
-    opened = Opened(socket = true, discovery = !appListening)
-    if (!appListening) discovery.start(port)
-
-    delay(WINDOW_MS)
-  }
-
-  private fun close() {
-    val was = opened ?: return
-    opened = null
-    val endpoint = Graph.syncEndpoint()
-    // Checked again at the end, not trusted from the start: the owner may have opened the app during
-    // the window, and its discovery is now the one running.
-    if (was.discovery && !endpoint.holds(ListenReason.DISCOVERY)) Graph.peerDiscovery(applicationContext).stop()
-    if (was.socket) endpoint.stop(ListenReason.BACKGROUND)
-  }
-
   companion object {
-    private const val JOB_ID = 0x5059 // "PY"
+    /** The first is the id the old periodic job had, so an update replaces it rather than adding to it. */
+    private val QUARTER_IDS = listOf(0x5059, 0x5062)
 
     /** A single window as soon as possible, on joining an approved wifi. See [WifiWatch]. */
     private const val NOW_ID = 0x5060
 
-    /** Android will not run a periodic job more often than this. */
-    private const val PERIOD_MS = 15 * 60_000L
-
-    /** Long enough to find a peer, resolve it and exchange; short enough to cost next to nothing. */
-    private const val WINDOW_MS = 30_000L
-
     /**
-     * Schedules the window if it is not already, and leaves it alone if it is.
+     * Books the next quarter-hour window if none is, and leaves it alone if one is.
      *
-     * Re-scheduling an existing periodic job restarts its period, so calling this on every launch
-     * without the check would push the next window back each time the app is opened.
-     *
-     * Unmetered rather than any network: the gate wants an approved wifi, and there is no reason to
-     * wake on mobile data only to find that out.
+     * A booked window already aims at a fixed moment, so leaving it is never wrong. The exception is
+     * the periodic job an earlier version scheduled under the same id, which is replaced.
      */
     fun ensureScheduled(context: Context) {
       val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
-      if (scheduler.getPendingJob(JOB_ID) != null) return
+      val pending = QUARTER_IDS.mapNotNull { scheduler.getPendingJob(it) }
+      if (pending.any { !it.isPeriodic }) return
+      book(context, QUARTER_IDS.first())
+    }
+
+    /**
+     * Unmetered rather than any network: the gate wants an approved wifi, and there is no reason to
+     * wake on mobile data only to find that out. No deadline either, for the same reason — a
+     * deadline runs the job with its network requirement unmet.
+     */
+    private fun book(context: Context, id: Int) {
+      val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
+      val now = System.currentTimeMillis()
       scheduler.schedule(
-        JobInfo.Builder(JOB_ID, ComponentName(context, SyncJob::class.java))
-          .setPeriodic(PERIOD_MS)
+        JobInfo.Builder(id, ComponentName(context, SyncJob::class.java))
+          .setMinimumLatency(nextQuarterHour(now) - now)
           .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
           // Survives a reboot, so a phone that restarts overnight goes back to syncing without
           // waiting for somebody to open the app.
           .setPersisted(true)
           .build()
       )
+    }
+
+    /** True while the quarter-hour windows are on — that is, while the phone is on an approved wifi. */
+    fun isScheduled(context: Context): Boolean {
+      val scheduler = context.getSystemService(JobScheduler::class.java) ?: return false
+      return QUARTER_IDS.any { scheduler.getPendingJob(it) != null }
     }
 
     /** One window soon, outside the quarter-hour rhythm. Replaces any that is still waiting. */
@@ -159,11 +134,16 @@ class SyncJob : JobService() {
       )
     }
 
-    /** Stops the windows until an approved wifi is joined again. */
-    fun cancel(context: Context) {
+    /** Stops the quarter-hour windows. [runSoon]'s one-off is left to finish or to [cancelAll]. */
+    fun cancelQuarterHours(context: Context) {
       val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
-      scheduler.cancel(JOB_ID)
-      scheduler.cancel(NOW_ID)
+      QUARTER_IDS.forEach(scheduler::cancel)
+    }
+
+    /** Stops the windows until an approved wifi is joined again. */
+    fun cancelAll(context: Context) {
+      cancelQuarterHours(context)
+      context.getSystemService(JobScheduler::class.java)?.cancel(NOW_ID)
     }
   }
 }

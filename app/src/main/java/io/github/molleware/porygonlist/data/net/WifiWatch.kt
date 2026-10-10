@@ -60,8 +60,9 @@ fun backgroundPlan(snapshot: NetworkSnapshot, state: AppState): BackgroundPlan {
  *
  * Android delivers the join through a [PendingIntent] it holds on the app's behalf, so nothing has
  * to be running. Those registrations do not survive a reboot, which is why this also listens for
- * the boot and re-registers. The job is persisted across the reboot anyway, and stops itself if it
- * wakes somewhere it should not be.
+ * the boot and re-registers. The fallback job is persisted across the reboot anyway, and stops itself
+ * if it wakes somewhere it should not be. The quarter-hour alarm is not — alarms never survive a
+ * reboot — and is re-armed by the join that follows, since a phone boots before its wifi is up.
  */
 class WifiWatch : BroadcastReceiver() {
 
@@ -85,10 +86,10 @@ class WifiWatch : BroadcastReceiver() {
         val state = repo.state.filterNotNull().first()
         when (backgroundPlan(AndroidNetworkMonitor(app).current(network), state)) {
           BackgroundPlan.RUN -> {
-            SyncJob.ensureScheduled(app)
-            SyncJob.runSoon(app)
+            BackgroundSync.ensureScheduled(app)
+            BackgroundSync.runSoon(app)
           }
-          BackgroundPlan.STOP -> SyncJob.cancel(app)
+          BackgroundPlan.STOP -> BackgroundSync.cancel(app)
           BackgroundPlan.LEAVE -> Unit
         }
       } finally {
