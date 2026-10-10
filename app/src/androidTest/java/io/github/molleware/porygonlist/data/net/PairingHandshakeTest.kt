@@ -7,6 +7,7 @@ import io.github.molleware.porygonlist.data.crypto.PairingCodec
 import io.github.molleware.porygonlist.data.crypto.PairingToken
 import io.github.molleware.porygonlist.data.crypto.PeerAddress
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -32,13 +33,10 @@ import org.junit.runner.RunWith
  * read, held in hardware that does not exist off a device. There is no way to ask that question on
  * a JVM, and no way to answer it by looking at a screenshot.
  *
- * **What was actually in doubt.** Identity keys are generated with
- * `setDigests(KeyProperties.DIGEST_SHA256)` and nothing else. If the TLS stack ever asks that key
- * for a SHA-384 or SHA-512 signature while negotiating, the handshake dies — and the keys on the
- * phones already in use cannot be given more digests after the fact, because a new key is a new
- * [io.github.molleware.porygonlist.data.sync.DeviceId]. So this is a load-bearing assumption with
- * no migration path, which is exactly the kind worth pinning down in a test rather than
- * discovering in a supermarket.
+ * **What is in doubt.** A key's authorised digests are fixed when it is generated. Conscrypt hashes
+ * the handshake transcript itself and asks the key to sign a raw digest, so the key must authorise
+ * `DIGEST_NONE`; one that does not cannot serve TLS, and cannot be fixed afterwards, because a new
+ * key is a new [io.github.molleware.porygonlist.data.sync.DeviceId].
  *
  * Loopback rather than two phones: what is being checked is the keystore and the TLS stack, and
  * both of those are the same whether the bytes cross a wifi or a loopback interface. Two phones
@@ -84,6 +82,16 @@ class PairingHandshakeTest {
   private fun linkTo(port: Int, token: PairingToken?, name: String = "Ava") =
     PairingCodec.link(server, name, at = PeerAddress("127.0.0.1", port), token = token)
 
+  /**
+   * Waits for the next invite, subscribed before this returns.
+   *
+   * [SyncEndpoint.incoming] keeps nothing for a late subscriber, and [PairingHandshake.deliver]
+   * blocks this thread, so an ordinary `async` would not subscribe until after the handshake — and
+   * would miss the invite whenever the server got there first.
+   */
+  private fun CoroutineScope.nextInvite(timeoutMs: Long) =
+    async(start = CoroutineStart.UNDISPATCHED) { withTimeoutOrNull(timeoutMs) { endpoint.incoming.first() } }
+
   @Test
   fun the_keystore_key_can_carry_a_tls_handshake() = runBlocking {
     // The whole question, in one line of setup: serverFactory is null when the keystore has no
@@ -92,7 +100,7 @@ class PairingHandshakeTest {
     val port = endpoint.start(ListenReason.PAIRING, token)
     assertNotNull("the keystore key would not stand up a TLS server socket", port)
 
-    val arrived = async { withTimeoutOrNull(10_000) { endpoint.incoming.first() } }
+    val arrived = nextInvite(10_000)
 
     val outcome =
       PairingHandshake.deliver(
@@ -140,7 +148,7 @@ class PairingHandshakeTest {
     val token = PairingToken.mint()
     val port = endpoint.start(ListenReason.PAIRING, token)!!
 
-    val arrived = async { withTimeoutOrNull(4_000) { endpoint.incoming.first() } }
+    val arrived = nextInvite(4_000)
 
     val outcome =
       PairingHandshake.deliver(
@@ -160,14 +168,14 @@ class PairingHandshakeTest {
     val token = PairingToken.mint()
     val port = endpoint.start(ListenReason.PAIRING, token)!!
 
-    val first = async { withTimeoutOrNull(10_000) { endpoint.incoming.first() } }
+    val first = nextInvite(10_000)
     assertEquals(
       PairingHandshake.Outcome.Delivered,
       PairingHandshake.deliver(linkTo(port, token), client, "Hugo", server.publicKey),
     )
     assertNotNull(first.await())
 
-    val second = async { withTimeoutOrNull(4_000) { endpoint.incoming.first() } }
+    val second = nextInvite(4_000)
     val outcome = PairingHandshake.deliver(linkTo(port, token), client, "Hugo", server.publicKey)
 
     assertTrue("the token was still good after being spent", outcome is PairingHandshake.Outcome.Failed)
