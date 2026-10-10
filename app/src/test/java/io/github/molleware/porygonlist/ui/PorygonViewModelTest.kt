@@ -109,7 +109,7 @@ class PorygonViewModelTest {
     vm =
       ViewModelProvider(
         viewModels,
-        viewModelFactory { initializer { PorygonViewModel(repo, OfflineMonitor, store::identity, store::forget) } },
+        viewModelFactory { initializer { PorygonViewModel(repo, OfflineMonitor, store::identity, store::forget, io = dispatcher) } },
       )[PorygonViewModel::class.java]
   }
 

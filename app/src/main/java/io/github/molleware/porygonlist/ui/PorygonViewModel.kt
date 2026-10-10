@@ -45,6 +45,7 @@ import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.ItemId
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -91,6 +92,8 @@ class PorygonViewModel(
   private val endpoint: SyncEndpoint? = null,
   /** Decides when to exchange lists with paired phones. Null alongside the two above. */
   private val syncCoordinator: SyncCoordinator? = null,
+  /** Where blocking socket work runs. Tests pass their own, so nothing outlives the test. */
+  private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
   val state: StateFlow<AppState?> = repo.state
@@ -464,7 +467,7 @@ class PorygonViewModel(
     viewModelScope.launch {
       // Binding a socket and building an SSL context are both slow enough to keep off the frame
       // that is drawing the code. The QR appears without an address and gains one a moment later.
-      val port = withContext(Dispatchers.IO) { socket.start(ListenReason.PAIRING, token) }
+      val port = withContext(io) { socket.start(ListenReason.PAIRING, token) }
       listeningPort = port
     }
   }
@@ -516,7 +519,7 @@ class PorygonViewModel(
 
     viewModelScope.launch {
       handingBack = true
-      val outcome = withContext(Dispatchers.IO) { PairingHandshake.deliver(link, me, myName, invite.publicKey) }
+      val outcome = withContext(io) { PairingHandshake.deliver(link, me, myName, invite.publicKey) }
       handingBack = false
 
       pairNote =
