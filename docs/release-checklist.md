@@ -123,10 +123,12 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 
 - [ ] Two clean release builds here came out byte-identical (2026-10-06). Confirm the same on
       F-Droid's build server, which uses different paths and its own JDK.
-- [ ] Confirm the build server has JDK 21, or add an install step to the recipe.
+- [x] Confirm the build server has JDK 21, or add an install step to the recipe. Its default in
+      `buildserver-trixie`; `./scripts/fdroid-check.sh` built `d1994a0` there with no extra step
+      (2026-10-10).
 - [x] `fdroid lint` on the draft metadata (fdroidserver 2.4.5, 2026-10-06): clean apart from the
       placeholder signing key; "Shopping List" is a valid category; field order matches
-      `fdroid rewritemeta`. The signing key is filled in since; lint again before the merge request.
+      `fdroid rewritemeta`. Linted again with the real key, 2026-10-10: clean.
 - [ ] `fdroid build` locally, in F-Droid's build image — needs the tag and Docker.
 - [ ] Merge request to `fdroid/fdroiddata` adding `metadata/io.github.molleware.porygonlist.yml`,
       with our signing certificate's hash so F-Droid ships our APK. Draft:
