@@ -35,7 +35,7 @@ require_device
 info "Building: $variant"
 case "$variant" in
   debug)   gradlew assembleDebug ;;
-  release) gradlew assembleRelease ;;
+  release) gradlew_signed assembleRelease ;;
 esac
 
 # Take the newest matching APK rather than a hardcoded path, so a change to the

@@ -83,7 +83,7 @@ done
 info "Building: $variant"
 case "$variant" in
   debug)   gradlew assembleDebug ;;
-  release) gradlew assembleRelease ;;
+  release) gradlew_signed assembleRelease ;;
 esac
 
 # Newest matching APK rather than a hardcoded path, so a change to the output
@@ -92,8 +92,8 @@ apk="$(find "$REPO_ROOT/app/build/outputs/apk/$variant" -name '*.apk' -printf '%
   | sort -rn | head -1 | cut -d' ' -f2-)"
 [[ -n "$apk" ]] || die "No $variant APK was produced."
 
-if [[ "$variant" == "release" ]]; then
-  warn "There is no release signing config, so this APK is unsigned and every install below will be rejected. For something measurable use: ./gradlew :app:installBenchmarkRelease"
+if [[ "$apk" == *-unsigned.apk ]]; then
+  warn "This APK is unsigned (no keystore.properties), so every install below will be rejected. For something measurable use: ./gradlew :app:installBenchmarkRelease"
 fi
 
 installed=0
