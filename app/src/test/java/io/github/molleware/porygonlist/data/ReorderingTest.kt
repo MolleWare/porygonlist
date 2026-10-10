@@ -108,6 +108,30 @@ class ReorderingTest {
     assertEquals(listOf(3, 1, 2, 9), added.names())
   }
 
+  private fun GroceryList.ticked(n: Int, at: Long): GroceryList {
+    val id = ItemId("${ava.value}:$n")
+    val stamp = Hlc(at, 0, ava)
+    return copy(items = items.map { if (it.id == id) it.copy(checked = true, checkedAt = stamp) else it }).withItemSettled(id, stamp)
+  }
+
+  @Test
+  fun `something added goes above the trolley, not into it`() {
+    // Seen on hardware: Jam, added after Milk was ticked, landed below Milk.
+    val shopping = list(1, 2, 3).ticked(1, 2_000)
+    assertEquals(listOf(2, 3, 1), shopping.names())
+
+    val added = shopping.withItemsAppended(listOf(item(8), item(9)), Hlc(3_000, 0, ava))
+
+    assertEquals(listOf(2, 3, 8, 9, 1), added.names())
+  }
+
+  @Test
+  fun `with everything ticked, something added goes to the top`() {
+    val done = list(1, 2).ticked(1, 2_000).ticked(2, 3_000)
+
+    assertEquals(listOf(9, 1, 2), done.withItemsAppended(listOf(item(9)), Hlc(4_000, 0, ava)).names())
+  }
+
   @Test
   fun `two people moving different items both keep their move`() {
     // A shared starting point where everything already has a position: 2 up, then 1 back above it.

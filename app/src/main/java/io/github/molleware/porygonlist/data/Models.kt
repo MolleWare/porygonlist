@@ -228,23 +228,38 @@ data class GroceryList(
   }
 
   /**
-   * Adds new items at the bottom of the list.
+   * Adds new items at the bottom of what is still to get, above the trolley.
    *
    * In a list nobody has arranged, appending is enough: unplaced items keep their stored order. Once
-   * anything is placed, a new item needs a position after the last one, or it would sort above
-   * every placed item and turn up at the top.
+   * anything is placed, a new item needs a key between the last unticked item and the first ticked
+   * one below it — a key after everything would put it under the trolley. Where there is no clean
+   * gap to key into, the list is given fresh positions first, as [withItemMoved] does.
    */
   fun withItemsAppended(added: List<GroceryItem>, at: Hlc): GroceryList {
     if (added.isEmpty()) return this
-    if (liveItems.none { it.position.value.isNotEmpty() }) return copy(items = items + added)
-    var last: String? = items.maxOfOrNull { it.position.value }
+    if (liveItems.none { it.position.value.isNotEmpty() || it.checked }) return copy(items = items + added)
+
+    val order = orderedItems
+    val anchor = order.indexOfLast { !it.checked }
+    var before = order.getOrNull(anchor)?.position?.value
+    val after = order.getOrNull(anchor + 1)?.position?.value
+    val keyable = order.none { it.position.value.isEmpty() } && (before == null || after == null || before < after)
+    if (!keyable) return withPositionsSpread(at).withItemsAppended(added, at)
+
     val placed =
       added.map { item ->
-        val key = OrderKey.between(last, null)
-        last = key
+        val key = OrderKey.between(before, after)
+        before = key
         item.copy(position = item.position.set(key, at))
       }
     return copy(items = items + placed)
+  }
+
+  /** Every live item a fresh position, in the order they are shown now. */
+  private fun withPositionsSpread(at: Hlc): GroceryList {
+    val order = orderedItems
+    val keys = order.map { it.id }.zip(OrderKey.spread(order.size)).toMap()
+    return copy(items = items.map { item -> keys[item.id]?.let { item.copy(position = item.position.set(it, at)) } ?: item })
   }
 
   val doneCount: Int
