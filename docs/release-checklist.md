@@ -104,9 +104,11 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 
 ### Both stores
 
-- [ ] Generate the signing key and back it up somewhere that is not this machine. Losing it means
-      never updating the app again. It never goes in the repo. The command is in
-      `keystore.properties.example`. **Owner's job.**
+- [x] Generate the signing key (2026-10-09). SHA-256
+      `3f6ec695199d89ca0509070f68320262c9c3ad3cf29a662defe4aaf414b01d81`, already in the F-Droid
+      draft. The password is asked for at build time, never stored. It never goes in the repo.
+- [ ] Back the key and its password up somewhere that is not this machine. Losing either means
+      never updating the app again. **Owner's job.**
 - [x] Release signing config that reads the key from outside the repo: `keystore.properties`
       (git-ignored). Without it the release build is unsigned, as F-Droid expects; tried both ways
       with a throwaway key, and the unsigned build is still byte-identical across clean builds.
@@ -124,7 +126,7 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 - [ ] Confirm the build server has JDK 21, or add an install step to the recipe.
 - [x] `fdroid lint` on the draft metadata (fdroidserver 2.4.5, 2026-10-06): clean apart from the
       placeholder signing key; "Shopping List" is a valid category; field order matches
-      `fdroid rewritemeta`.
+      `fdroid rewritemeta`. The signing key is filled in since; lint again before the merge request.
 - [ ] `fdroid build` locally, in F-Droid's build image — needs the tag and Docker.
 - [ ] Merge request to `fdroid/fdroiddata` adding `metadata/io.github.molleware.porygonlist.yml`,
       with our signing certificate's hash so F-Droid ships our APK. Draft:

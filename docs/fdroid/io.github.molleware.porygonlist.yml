@@ -6,9 +6,10 @@
 # "Shopping List" is in fdroiddata's config/categories.yml, and the field order below is what
 # `fdroid rewritemeta` produces (comments aside).
 #
+# AllowedAPKSigningKeys is our release certificate's SHA-256, lowercase without colons, as
+# `./scripts/build.sh signing` prints it (2026-10-09).
+#
 # Before submitting:
-#   - fill in AllowedAPKSigningKeys with the SHA-256 of our signing certificate
-#     (apksigner verify --print-certs on our signed APK);
 #   - attach our signed APK to the GitHub release under the name in Binaries;
 #   - confirm the build server has JDK 21, or add a sudo step installing it.
 
@@ -37,7 +38,7 @@ Builds:
     gradle:
       - yes
 
-AllowedAPKSigningKeys: TODO-sha256-of-our-signing-certificate
+AllowedAPKSigningKeys: 3f6ec695199d89ca0509070f68320262c9c3ad3cf29a662defe4aaf414b01d81
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
