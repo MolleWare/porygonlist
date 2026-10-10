@@ -71,8 +71,11 @@ class SyncCoordinator(
   /** What each peer last acknowledged, by content. In memory only: a restart simply pushes again. */
   private val acknowledged = ConcurrentHashMap<DeviceId, String>()
 
-  /** Where each phone was last reachable, from discovery or from its own call, and when. */
-  private val lastKnown = ConcurrentHashMap<DeviceId, Known>()
+  /** Where each phone last told us to call it back, from its own authenticated call, and when. */
+  private val heard = ConcurrentHashMap<DeviceId, Known>()
+
+  /** Where discovery last found each phone, and when, kept through Android's found-and-lost flicker. */
+  private val seen = ConcurrentHashMap<DeviceId, Known>()
 
   private class Known(val record: ServiceRecord, val at: Long)
 
@@ -106,7 +109,7 @@ class SyncCoordinator(
               // Presence, for re-pushing a peer that was away, is what discovery says. Who to call
               // also includes where peers were recently reachable.
               noteReachable(reachablePeers(records, state.peers, state.localDevice))
-              callable(records, state).forEach { peer -> pushIfOwed(peer, state) }
+              pushAll(records, state)
             }
         }
     }
@@ -151,28 +154,55 @@ class SyncCoordinator(
   }
 
   /**
-   * The paired phones worth calling now: everyone discovery reports, plus anyone reachable within
-   * [REMEMBER_MS], as long as sync is allowed on this network. A fresh discovery wins over a memory.
+   * Every address worth trying, best first: where a peer last told us to call it, then where
+   * discovery finds it now, then where discovery found it within [REMEMBER_MS].
+   *
+   * Any of them can be stale — a phone reopens its socket on a new port whenever it comes back onto
+   * the wifi — so a caller tries a peer's addresses in turn, and one that fails is forgotten. Seen on
+   * hardware: a stale discovery record taking the place of the address the peer had just given.
+   * Only discovery's current answer is used while sync is not allowed on this network.
    */
   internal fun callable(records: Collection<ServiceRecord>, state: AppState): List<ReachablePeer> {
     val t = now()
-    records.forEach { lastKnown[it.deviceId] = Known(it, t) }
-    if (callbackPort() == null) return reachablePeers(records, state.peers, state.localDevice)
-    val remembered = lastKnown.values.filter { t - it.at <= REMEMBER_MS }.map { it.record }
-    return reachablePeers(records + remembered, state.peers, state.localDevice)
+    records.forEach { seen[it.deviceId] = Known(it, t) }
+    val candidates = if (callbackPort() == null) records.toList() else heard.fresh(t) + records + seen.fresh(t)
+    val byId = state.peers.associateBy { it.deviceId }
+    return candidates
+      .filter { it.deviceId != state.localDevice }
+      .distinct()
+      .mapNotNull { record -> byId[record.deviceId]?.let { ReachablePeer(it, record.host, record.port) } }
   }
 
-  /** Pushes to [peer] if it is owed something. Internal so the tests can drive it without timing. */
-  internal fun pushIfOwed(peer: ReachablePeer, state: AppState) {
-    val id = peer.peer.deviceId
-    val payload = state.payloadFor(id, readOnlyClock(state))?.copy(callback = callbackPort()) ?: return
-    val content = contentOf(payload)
-    if (acknowledged[id] == content) return
+  private fun Map<DeviceId, Known>.fresh(t: Long) = values.filter { t - it.at <= REMEMBER_MS }.map { it.record }
 
-    // An address that no longer answers is forgotten; discovery or the peer's next call restores it.
-    val exchange = (dial ?: ::callOverTls)(peer, payload) ?: return run { lastKnown.remove(id) }
+  /** Pushes to every peer worth calling, trying each one's addresses in turn until one answers. */
+  internal fun pushAll(records: Collection<ServiceRecord>, state: AppState) =
+    callable(records, state).groupBy { it.peer.deviceId }.values.forEach { addresses ->
+      addresses.firstOrNull { pushIfOwed(it, state) }
+    }
+
+  /**
+   * Pushes to [peer] if it is owed something. Internal so the tests can drive it without timing.
+   *
+   * False only when the call did not go through, and that address is then forgotten: the peer's
+   * next call, or discovery, brings back a good one.
+   */
+  internal fun pushIfOwed(peer: ReachablePeer, state: AppState): Boolean {
+    val id = peer.peer.deviceId
+    val payload = state.payloadFor(id, readOnlyClock(state))?.copy(callback = callbackPort()) ?: return true
+    val content = contentOf(payload)
+    if (acknowledged[id] == content) return true
+
+    val exchange = (dial ?: ::callOverTls)(peer, payload) ?: return false.also { forget(peer) }
     repo.update { s, node -> s.afterExchange(id, exchange.theirs, exchange.ackOfMine, payload, node.clock, node.ids) }
     if (exchange.ackOfMine == payload.at) acknowledged[id] = content
+    return true
+  }
+
+  private fun forget(peer: ReachablePeer) {
+    val failed = ServiceRecord(peer.peer.deviceId, peer.host, peer.port)
+    heard.computeIfPresent(failed.deviceId) { _, known -> known.takeUnless { it.record == failed } }
+    seen.computeIfPresent(failed.deviceId) { _, known -> known.takeUnless { it.record == failed } }
   }
 
   override fun answer(peerKey: ByteArray, socket: SSLSocket) {
@@ -206,7 +236,7 @@ class SyncCoordinator(
 
     val port = exchange.theirs.callback
     if (from != null && port != null) {
-      lastKnown[peer.deviceId] = Known(ServiceRecord(peer.deviceId, from, port), now())
+      heard[peer.deviceId] = Known(ServiceRecord(peer.deviceId, from, port), now())
       learned.value++
     }
   }

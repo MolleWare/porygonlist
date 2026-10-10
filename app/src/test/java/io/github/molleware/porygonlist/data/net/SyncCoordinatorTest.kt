@@ -90,7 +90,14 @@ class SyncCoordinatorTest {
         )
       )
     lateinit var coordinator: SyncCoordinator
+    /** Where this phone listens. Changes when it comes back onto the wifi, as on hardware. */
+    var port = 0
+    val host: String
+      get() = "10.0.0.${port % 256}"
   }
+
+  /** When set, a call reaches a phone only at the address it actually listens on now. */
+  private var strictAddresses = false
 
   private fun item(id: String, name: String, at: Hlc) =
     GroceryItem(
@@ -145,11 +152,13 @@ class SyncCoordinatorTest {
   /** A coordinator whose calls run the other phone's listener over a pair of pipes. */
   private fun coordinator(me: Phone, callingInto: () -> Phone, asKey: ByteArray, port: Int = 4_000) =
     SyncCoordinator(
-      repo = me.repo,
+      repo = me.repo.also { me.port = port },
       identity = { error("no TLS in this test") },
       found = emptyFlow(),
       scope = CoroutineScope(Dispatchers.Unconfined),
-      dial = { _, payload ->
+      dial = dial@{ peer, payload ->
+        val callee = callingInto()
+        if (strictAddresses && (peer.host != callee.host || peer.port != callee.port)) return@dial null
         calls.incrementAndGet()
         val toListener = PipedInputStream(1 shl 16)
         val callerOut = PipedOutputStream(toListener)
@@ -159,7 +168,7 @@ class SyncCoordinatorTest {
         val answered =
           listener.submit {
             try {
-              callingInto().coordinator.answerOn(asKey, toListener, listenerOut, from = "10.0.0.${port % 256}")
+              callee.coordinator.answerOn(asKey, toListener, listenerOut, from = me.host)
             } finally {
               // What the endpoint's finally does with the socket.
               listenerOut.close()
@@ -171,7 +180,7 @@ class SyncCoordinatorTest {
         result
       },
       now = { clockMs },
-      callbackPort = { port.takeIf { gateOpen } },
+      callbackPort = { me.port.takeIf { gateOpen } },
     )
 
   private fun reach(id: DeviceId, key: ByteArray, name: String) = ReachablePeer(TrustedPeer(id, key, name, 0), "10.0.0.1", 1)
@@ -251,6 +260,46 @@ class SyncCoordinatorTest {
     assertTrue("Lemons" in hugo.repo.now.visibleLists.single().liveItems.map { it.name.value })
     assertTrue("Hugo is in step with Ava", hugo.repo.now.deliveredTo.confirmedBy(avaId) != null)
     assertTrue("and Ava with Hugo", ava.repo.now.deliveredTo.confirmedBy(hugoId) != null)
+  }
+
+  private fun Phone.adds(name: String, idPrefix: DeviceId, n: Int) =
+    repo.update { s, node -> s.copy(lists = s.lists.map { it.copy(items = it.items + item("${idPrefix.value}:$n", name, node.clock.tick())) }) }
+
+  private fun Phone.has(name: String) = name in repo.now.visibleLists.single().liveItems.map { it.name.value }
+
+  @Test
+  fun `a stale discovery record does not stop a call to where the peer said it is`() {
+    // Seen on hardware: Ava came back onto the wifi on a new port and called the Pixel, which went
+    // on dialling the port discovery remembered, so her answer waited until its screen woke.
+    val (ava, hugo) = pair()
+    hugo.pushTo(avaId, avaKey, "Ava")
+    strictAddresses = true
+
+    hugo.coordinator.callable(listOf(ServiceRecord(avaId, ava.host, 9_999)), hugo.repo.now)
+    ava.adds("Tea", avaId, 300)
+    ava.coordinator.pushAll(emptyList(), ava.repo.now)
+    assertTrue("Ava reached Hugo where he said he was", hugo.has("Tea"))
+
+    hugo.adds("Oil", hugoId, 301)
+    hugo.coordinator.pushAll(emptyList(), hugo.repo.now)
+
+    assertTrue("and Hugo reached her where she said, past the stale record", ava.has("Oil"))
+  }
+
+  @Test
+  fun `a peer that moved since it last called is reached through discovery`() {
+    val (ava, hugo) = pair()
+    hugo.pushTo(avaId, avaKey, "Ava")
+    ava.adds("Tea", avaId, 300)
+    ava.coordinator.pushAll(emptyList(), ava.repo.now)
+    strictAddresses = true
+
+    // Ava's socket reopened on a new port; only discovery knows it yet.
+    ava.port = AVA_PORT + 100
+    hugo.adds("Oil", hugoId, 301)
+    hugo.coordinator.pushAll(listOf(ServiceRecord(avaId, ava.host, ava.port)), hugo.repo.now)
+
+    assertTrue(ava.has("Oil"))
   }
 
   @Test
