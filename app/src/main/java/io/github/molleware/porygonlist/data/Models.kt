@@ -115,13 +115,20 @@ data class GroceryItem(
   val touchedAt: Hlc
     get() = maxOf(name.at, qty.at, checkedAt, removed.at, position.at)
 
+  /**
+   * The newest change to the item itself. Position is left out: a tick can place every item in the
+   * list, and that must not make whoever ticked the author of all of them.
+   */
+  private val editedAt: Hlc
+    get() = maxOf(name.at, qty.at, checkedAt, removed.at)
+
   /** Whoever made the most recent change, which is not always the creator. */
   val lastWriter: DeviceId
-    get() = touchedAt.device
+    get() = editedAt.device
 
   /** Wall-clock reading of the last change, for the human-readable sub-label. */
   val at: Long
-    get() = touchedAt.wall
+    get() = editedAt.wall
 
   /** "Sourdough", or "Oat milk ×2" once there is more than one. */
   val label: String

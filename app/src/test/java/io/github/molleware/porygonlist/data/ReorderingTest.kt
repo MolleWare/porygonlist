@@ -84,6 +84,24 @@ class ReorderingTest {
   }
 
   @Test
+  fun `a move does not make the mover the author of what it placed`() {
+    // Seen on hardware: Hugo ticked one item in Ava's never-arranged list, the tick placed every
+    // item, and every row then read "Hugo, just now".
+    val tick = Hlc(2_000, 0, hugo)
+    val one = ItemId("${ava.value}:1")
+    val ticked =
+      list(1, 2, 3)
+        .let { l -> l.copy(items = l.items.map { if (it.id == one) it.copy(checked = true, checkedAt = tick) else it }) }
+        .withItemSettled(one, tick)
+
+    assertTrue("the tick did place every item", ticked.items.all { it.position.at == tick })
+    val untouched = ticked.items.filterNot { it.id == one }
+    assertEquals(listOf(ava, ava), untouched.map { it.lastWriter })
+    assertEquals(listOf(1_000L, 1_000L), untouched.map { it.at })
+    assertEquals("the tick itself is still Hugo's", hugo, ticked.items.single { it.id == one }.lastWriter)
+  }
+
+  @Test
   fun `something added to an arranged list goes to the bottom`() {
     val arranged = list(1, 2, 3).withItemMoved(ItemId("${ava.value}:3"), 0, Hlc(2_000, 0, ava))
     val added = arranged.withItemsAppended(listOf(item(9)), Hlc(3_000, 0, ava))
