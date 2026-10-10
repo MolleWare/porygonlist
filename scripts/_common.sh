@@ -78,3 +78,27 @@ gradlew() {
   require_java
   ( cd "$REPO_ROOT" && ./gradlew "$@" )
 }
+
+# Runs Gradle with the release key unlocked, asking for its password unless
+# keystore.properties already holds one. The password lives only in this
+# command's environment, never on disk: the configuration cache is off for the
+# run, because it would otherwise store the signing config, password included.
+# Without keystore.properties the build is unsigned, as F-Droid builds it.
+gradlew_signed() {
+  local props="$REPO_ROOT/keystore.properties"
+  if [[ ! -f "$props" ]]; then
+    warn "No keystore.properties: the release build will be unsigned."
+    gradlew "$@"
+    return
+  fi
+  if grep -qE '^storePassword=.+' "$props"; then
+    gradlew --no-configuration-cache "$@"
+    return
+  fi
+
+  local password
+  read -rsp "Release key password: " password </dev/tty
+  echo
+  [[ -n "$password" ]] || die "No password given."
+  PORYGONLIST_KEYSTORE_PASSWORD="$password" gradlew --no-configuration-cache "$@"
+}

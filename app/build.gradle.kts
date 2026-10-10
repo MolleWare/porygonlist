@@ -28,16 +28,21 @@ android {
     // this repository is public and a published app's key can never be replaced. Without that file
     // the release build is simply unsigned, which is what F-Droid's build server expects: it
     // compares its own unsigned build with our signed APK. See keystore.properties.example.
+    //
+    // The password is better left out of the file: `./scripts/build.sh release` asks for it and
+    // hands it over in PORYGONLIST_KEYSTORE_PASSWORD for that one build. A PKCS12 keystore, which is
+    // what keytool makes, has a single password for the store and the key.
     val keystoreFile = rootProject.file("keystore.properties")
     val signing =
         if (keystoreFile.exists()) Properties().apply { keystoreFile.inputStream().use { load(it) } } else null
+    val promptedPassword = System.getenv("PORYGONLIST_KEYSTORE_PASSWORD")
     signingConfigs {
         if (signing != null) {
             create("release") {
                 storeFile = rootProject.file(signing.getProperty("storeFile"))
-                storePassword = signing.getProperty("storePassword")
+                storePassword = signing.getProperty("storePassword").orEmpty().ifEmpty { promptedPassword }
                 keyAlias = signing.getProperty("keyAlias")
-                keyPassword = signing.getProperty("keyPassword")
+                keyPassword = signing.getProperty("keyPassword").orEmpty().ifEmpty { promptedPassword }
             }
         }
     }
