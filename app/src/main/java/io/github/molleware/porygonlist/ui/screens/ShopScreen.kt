@@ -96,6 +96,20 @@ fun ShopScreen(
       Box(Modifier.fillMaxWidth().height(8.dp).clip(Shapes.Pill).background(Neutral300)) {
         Box(Modifier.fillMaxWidth(progress).height(8.dp).clip(Shapes.Pill).background(Accent))
       }
+
+      // The end of the shop, at the top where it can be reached without scrolling past every row —
+      // ticked rows sink to the bottom, so on a long list the end of it is a long way down. Same
+      // wording and the same ask-first shape as the list screen's, because it is the same act.
+      if (done > 0) {
+        ClearTrolley(
+          count = done,
+          confirming = confirmingClear,
+          onAsk = onAskClear,
+          onCancel = onCancelClear,
+          onConfirm = onClearChecked,
+          modifier = Modifier.padding(top = 14.dp),
+        )
+      }
     }
 
     Column(
@@ -112,19 +126,6 @@ fun ShopScreen(
           onToggle = { onToggleChecked(item.id) },
         )
       }
-    }
-
-    // The end of the shop, in the place the shop happens. Same wording and the same ask-first
-    // shape as the list screen's, because it is the same act and should not read as a new one.
-    if (done > 0) {
-      ClearTrolley(
-        count = done,
-        confirming = confirmingClear,
-        onAsk = onAskClear,
-        onCancel = onCancelClear,
-        onConfirm = onClearChecked,
-        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 20.dp),
-      )
     }
 
     // Only worth saying when there is actually someone else on the list. With nobody sharing it,
@@ -148,7 +149,8 @@ fun ShopScreen(
  *
  * Bigger than the list screen's version of the same control, for the same reason everything else
  * here is: one hand, moving, not looking closely. It still asks first — several items at once is
- * worth a moment's pause, and the count is the whole of what needs saying.
+ * worth a moment's pause, and the count is the whole of what needs saying. Until then it says
+ * nothing beside the button: the header just above already counts the trolley.
  */
 @Composable
 private fun ClearTrolley(
@@ -160,12 +162,14 @@ private fun ClearTrolley(
   modifier: Modifier = Modifier,
 ) {
   Column(modifier.fillMaxWidth()) {
-    Text(
-      if (confirming) "Take $count off the list?" else "$count in the trolley",
-      style = PorygonType.ShopMeta,
-      color = Neutral700,
-      modifier = Modifier.padding(bottom = 10.dp),
-    )
+    if (confirming) {
+      Text(
+        "Take $count off the list?",
+        style = PorygonType.ShopMeta,
+        color = Neutral700,
+        modifier = Modifier.padding(bottom = 10.dp),
+      )
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
       if (confirming) {
         PrimaryButton(
@@ -177,7 +181,7 @@ private fun ClearTrolley(
         SecondaryButton("Keep", onCancel, modifier = Modifier.heightIn(min = 48.dp), style = PorygonType.ShopMeta)
       } else {
         SecondaryButton(
-          "Clear the trolley",
+          "Clear ticked",
           onAsk,
           modifier = Modifier.heightIn(min = 48.dp),
           style = PorygonType.ShopMeta,

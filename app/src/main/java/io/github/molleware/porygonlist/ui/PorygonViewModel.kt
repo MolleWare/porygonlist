@@ -951,12 +951,14 @@ class PorygonViewModel(
       val stamp = node.clock.tick()
       val next =
         s.withActiveList { list ->
-          list.copy(
-            items =
-              list.items.map {
-                if (it.id != itemId) it else it.copy(checked = !it.checked, checkedAt = stamp, pending = !s.online)
-              }
-          )
+          list
+            .copy(
+              items =
+                list.items.map {
+                  if (it.id != itemId) it else it.copy(checked = !it.checked, checkedAt = stamp, pending = !s.online)
+                }
+            )
+            .withItemSettled(itemId, stamp)
         }
       // The *transition* into a finished list, not the state of being one: computed from before and
       // after so that unticking, re-ticking on an already-finished list, or simply opening one that

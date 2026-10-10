@@ -241,6 +241,20 @@ data class GroceryList(
   }
 
   /**
+   * Moves an item whose tick just changed to where that tick belongs.
+   *
+   * Ticked goes to the very bottom, so the trolley collects below what is still to get, newest last.
+   * Unticked comes back up to just below the last thing still to get — above the trolley, but not
+   * jumping ahead of anything that was already waiting.
+   */
+  fun withItemSettled(id: ItemId, at: Hlc): GroceryList {
+    val item = liveItems.firstOrNull { it.id == id } ?: return this
+    val others = orderedItems.filterNot { it.id == id }
+    val to = if (item.checked) others.size else others.indexOfLast { !it.checked } + 1
+    return withItemMoved(id, to, at)
+  }
+
+  /**
    * Adds new items at the bottom of the list.
    *
    * In a list nobody has arranged, appending is enough: unplaced items keep their stored order. Once

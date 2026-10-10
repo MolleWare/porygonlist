@@ -300,6 +300,33 @@ class PorygonViewModelTest {
     assertFalse(state().staples.any { it.name == "Tofu" })
   }
 
+  // ── Where a tick puts an item ─────────────────────────────────────────────
+
+  private fun order() = state().activeList.orderedItems.map { it.id }
+
+  @Test
+  fun `ticking something sends it to the bottom, and unticking puts it last of what is left`() =
+    runTest(dispatcher) {
+      repo.load()
+      vm.onListDraftChange("Order")
+      vm.createList()
+      listOf("A", "B", "C", "D").forEach { vm.addItem(it) }
+      val (a, b, c, d) = state().activeList.orderedItems.map { it.id }
+
+      vm.toggleChecked(a)
+      assertEquals(listOf(b, c, d, a), order())
+
+      vm.toggleChecked(c)
+      assertEquals("newest tick last", listOf(b, d, a, c), order())
+
+      vm.toggleChecked(a)
+      assertEquals("above the trolley, below what was already waiting", listOf(b, d, a, c), order())
+
+      vm.toggleChecked(b)
+      vm.toggleChecked(b)
+      assertEquals(listOf(d, a, b, c), order())
+    }
+
   // ── Finishing a list ──────────────────────────────────────────────────────
 
   /** Ticks everything but the last thing, and hands back the one still outstanding. */
