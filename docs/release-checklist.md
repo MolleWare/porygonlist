@@ -51,32 +51,80 @@ ones; the screenshots at the end come from these too.
 **Before:** sign a release build (needs the key, below), uninstall the debug build from both phones
 — this wipes their lists, so export anything worth keeping first — and install the release build.
 
+**Session 1, 2026-10-09:** release 0.1.0 signed with our key (`3f6ec695…`), on the Pixel and Ava's
+S24 FE. Stopped at sync: see *Found in the session* below.
+**Session 2, 2026-10-09:** release rebuilt with the fixes (`aa0755c`), installed over session 1's,
+pairing and lists kept. Two-phone checks continue from here.
+
 ### One phone at a time
 
-- [ ] First run on a clean install: naming, first list, nothing left over from development.
+- [x] First run on a clean install: naming, first list, nothing left over from development. Both
+      phones, session 1.
 - [ ] About: the version reads 0.1.0, both links open the browser.
 - [ ] Edit order on a 30-item list: drag end to end, the screen scrolls along at the edges, the
       speed feels right, and the bottom zone sits above the tab bar.
 - [ ] Pin and unpin lists; list order stays as arranged after a restart.
 - [ ] The list card's avatars sit against the right edge (`d679f81`).
 - [ ] TalkBack through every screen, then the largest font size: nothing unlabelled, nothing clipped.
-- [ ] `adb shell bmgr backupnow io.github.molleware.porygonlist` reports the app as not eligible.
+- [x] `adb shell bmgr backupnow io.github.molleware.porygonlist` reports the app as not eligible.
+      Both phones: "Backup is not allowed", session 1.
 
 ### Both phones
 
-- [ ] Pair from scratch, both directions.
-- [ ] Share a list: it arrives reading "new, from …"; edits both ways; tick and untick; remove;
-      rename.
+- [x] Pair from scratch, both directions. One scan each way, session 1 — Ava's new key carries TLS.
+- [x] Share a list: it arrives reading "new, from …"; edits both ways; tick and untick; remove;
+      rename. *Session 1: arrives "new, from Hugo" in under 5 s. Session 2: add, tick, untick
+      (Ava), remove and rename (Pixel), each on the other phone in under 5 s.*
 - [ ] A shared list named like one the other phone already has: two cards, told apart.
-- [ ] Item order travels; list order and pins stay on each phone.
-- [ ] "In step with" appears only after a handover; "waiting for" while one phone is away.
+- [x] Item order travels; list order and pins stay on each phone. *Session 2: Jam dragged to the
+      top on Ava's phone, same order on the Pixel in under 5 s; "Weekend shop" pinned on the Pixel
+      shows no pin on Ava's, and the Pixel's private "Spare" never reached her.*
+- [x] "In step with" appears only after a handover; "waiting for" while one phone is away.
+      *Session 2: Ava in airplane mode — the Pixel said "waiting for Ava", Ava "waiting for Hugo";
+      both "in step" within 20 s of her coming back.* (Turning wifi off alone does not hold on the
+      S24 FE: it turned itself back on within seconds. Use airplane mode.)
 - [ ] Same item changed on both phones while one is off the wifi: "keep which?" on both, the answer
-      on one closes the other's card. Then the same with a removal against a rename.
+      on one closes the other's card. Then the same with a removal against a rename. *Session 2:
+      Milk ×3 (Pixel) against Milk ×1 (Ava, offline) — the card on both, worded from each side;
+      "Keep Hugo's" on Ava closed the Pixel's card in under 5 s. Removal (Ava, offline) against
+      rename to Sourdough (Pixel): the card on both, worded right; "Keep yours" on the Pixel only
+      reached Ava once the Pixel's screen woke — fixed below, rerun on the next build to tick.*
 - [ ] Remove the other person from a list: it sticks, and their phone keeps a private copy.
 - [ ] Leave a list, and be added back.
 - [ ] Unpair: sync stops, and a third copy of the list does not bring them back.
-- [ ] Off the wifi and back: edits from both sides merge.
+- [x] Off the wifi and back: edits from both sides merge. *Session 2: Oil added on the Pixel and
+      Tea on Ava's phone while she was offline; both on both phones after she came back.*
 - [ ] A 200-item list: how long the handover takes, and whether either phone stutters.
+
+### Found in the session
+
+- [x] **Ava's phone never discovers the Pixel, so her edits never go out on their own.** Android's
+      mDNS logs on both phones show every service found and expired in the same millisecond, and
+      the S24 FE never sees the Pixel's service at all. Fixed (`aa0755c`): a caller tells the phone
+      it calls where to call back, and a peer seen recently stays callable through the flicker.
+      **Verified, session 2:** a tick on Ava's phone alone reached the Pixel in under 5 s.
+- [x] **A stale discovered address shadowed the one a peer had just given.** Ava's port changes each
+      time she comes back onto the wifi (40821 → 33323 → 44291); the Pixel kept dialling the old one.
+      Fixed (`a304778`): the peer's own address and discovery's are tried in turn, freshest first.
+      *Needs the next release build to see on phones.*
+- [ ] **Open: after an app restart, the first exchange waited for an edit.** The memory is in
+      process, so after the update Ava knew nowhere to call, and the Pixel — which saw Ava at
+      23:23:45 — had not called her five minutes later. An edit on the Pixel started it at once.
+      A closed app's background window starts with no memory the same way.
+- [x] **Ticking an item reattributes every item in the list.** In a never-arranged list the tick
+      places every item, and the sub-label followed the newest stamp, position included, so all
+      four of Hugo's items read "Ava, just now". Fixed: the sub-label ignores position (`94d6ace`).
+- [x] **Something added after a tick lands below the trolley.** Jam, added after Milk was ticked,
+      sat under Milk on both phones: adding keyed after the highest position, which is the
+      trolley's. Fixed: new items go above the first ticked one (`645010e`). *Needs a release
+      rebuild to see on phones.*
+- [ ] **An item added before the other phone's first tick arrives jumps to the top.** Butter was
+      added on the Pixel while its copy was still unarranged, so it had no position, and unplaced
+      items always sort first. Only happens in the window around a list's first arrangement.
+- [x] A flaky view-model test (a different one failed each run): pairing work outlived the test.
+      Fixed with an injectable IO dispatcher (`3c199c1`); five full runs green.
+- [ ] Copy: Share with no list says "Nobody else has this list yet."; pairing an already-paired
+      phone asks "Someone new, or a phone replacing one?"; times are always 24-hour.
 
 ### App closed
 
