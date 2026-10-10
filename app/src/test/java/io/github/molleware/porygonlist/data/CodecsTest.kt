@@ -5,6 +5,7 @@ import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ItemId
+import io.github.molleware.porygonlist.data.sync.Records
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -130,7 +131,6 @@ class StateCodecTest {
     assertEquals(original.idCounter, restored.idCounter)
     assertEquals(original.lists.map { it.name }, restored.lists.map { it.name })
     assertEquals(original.activeListId, restored.activeListId)
-    assertEquals(original.online, restored.online)
     assertEquals(original.networks, restored.networks)
   }
 
@@ -205,6 +205,17 @@ class StateCodecTest {
   }
 
   @Test
+  fun `the retired pending column keeps position where older readers look for it`() {
+    val placed = item(1, "Eggs").let { it.copy(position = it.position.set("m", stamp(1_700_000_001_000))) }
+    val fields = Records.itemFields(placed)
+
+    assertEquals("0", fields[13])
+    // A record written by an older build, with `pending` set, still reads its position.
+    val old = fields.toMutableList().also { it[13] = "1" }
+    assertEquals("m", Records.parseItem(old, from = 0)!!.position.value)
+  }
+
+  @Test
   fun `a damaged id counter never hands out an id already in use`() {
     val state = single(item(5, "Sourdough"), item(9, "Butter")).copy(idCounter = 2)
 
@@ -266,7 +277,6 @@ class StateCodecTest {
           )
         ),
       activeListId = ListId("${ME.value}:1"),
-      online = true,
       networks = emptyList(),
       conflict = null,
     )

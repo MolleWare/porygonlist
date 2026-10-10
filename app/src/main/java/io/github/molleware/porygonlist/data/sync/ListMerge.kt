@@ -75,10 +75,8 @@ fun merge(mine: GroceryItem, theirs: GroceryItem): ItemMerge {
         // Where it sits. Two people moving the same item at once is not worth a question: the later
         // move wins, the way a tick does, and nothing is reported.
         position = mine.position.latest(theirs.position),
-        // `origin` is a fact about creation and is the same on both sides. `pending` and `editing`
-        // describe this phone's own situation — whether it still owes the change, and who has the
-        // item open here — so neither is taken from a peer.
-        pending = mine.pending,
+        // `origin` is a fact about creation and is the same on both sides. `editing` is who has the
+        // item open on this phone, so it is never taken from a peer.
         editing = mine.editing,
       ),
     concurrent = concurrent,
@@ -127,8 +125,8 @@ fun merge(mine: GroceryList, theirs: GroceryList): ListMerge {
   theirs.items.forEach { incoming ->
     val here = merged[incoming.id.value]
     if (here == null) {
-      // Arriving from elsewhere: it is not this phone's to hand over, and nobody here has it open.
-      merged[incoming.id.value] = incoming.copy(pending = false, editing = false)
+      // Arriving from elsewhere: nobody here has it open.
+      merged[incoming.id.value] = incoming.copy(editing = false)
     } else {
       val result = merge(here, incoming)
       merged[incoming.id.value] = result.item

@@ -130,14 +130,12 @@ class ItemMergeTest {
 
   @Test
   fun `local-only state is never taken from a peer`() {
-    // `pending` is what this phone still owes; `editing` is who has it open here. A peer's answers
-    // to those are about the peer, not about us.
-    val mine = item().copy(pending = true, editing = false)
-    val theirs = item().copy(pending = false, editing = true)
+    // `editing` is who has it open here. A peer's answer to that is about the peer, not about us.
+    val mine = item().copy(editing = false)
+    val theirs = item().copy(editing = true)
 
     val merged = merge(mine, theirs).item
 
-    assertTrue(merged.pending)
     assertFalse(merged.editing)
   }
 
@@ -214,12 +212,11 @@ class ListMergeTest {
   }
 
   @Test
-  fun `incoming items arrive owing nothing and held by nobody`() {
-    val theirs = list(item(id = "${HUGO.value}:1").copy(pending = true, editing = true))
+  fun `incoming items arrive held by nobody`() {
+    val theirs = list(item(id = "${HUGO.value}:1").copy(editing = true))
 
     val merged = merge(list(), theirs).list
 
-    assertFalse("their outbox is not ours", merged.items.single().pending)
     assertFalse("their presence is not ours", merged.items.single().editing)
   }
 

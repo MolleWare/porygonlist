@@ -125,7 +125,6 @@ fun AppState.Companion.seed(
         GroceryList(listId(3), "Party, Saturday", ListAccent.NEUTRAL, party, listOf(you, ava)),
       ),
     activeListId = listId(1),
-    online = true,
     networks =
       listOf(
         ApprovedNetwork(NetworkFingerprint("seed01"), "Home", "Ava is approved here too", approved = true),
@@ -137,10 +136,7 @@ fun AppState.Companion.seed(
   )
 }
 
-/**
- * The starter shortlist the app used to ship. Kept here so the staples tests still have a populated
- * grid to encode, decode and tick; [Staple.defaults] is empty now.
- */
+/** A populated staples grid for the tests to encode, decode and tick. */
 val SEED_STAPLES: List<Staple> =
   listOf("Oat milk", "Eggs", "Sourdough", "Coffee beans", "Olive oil", "Rice", "Bin bags", "Yoghurt", "Tinned beans")
     .map { Staple(it) }

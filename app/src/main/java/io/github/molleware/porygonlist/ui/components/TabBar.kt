@@ -29,13 +29,7 @@ enum class Tab(val label: String, val iconPath: String) {
   SHARE("Share", IconPaths.TAB_INVITE),
 }
 
-/**
- * The persistent bottom bar.
- *
- * One ground everywhere. It used to take a dark variant, because shopping mode inverted and the
- * bar followed it down; that screen is now on the same cream as the rest and the second set of
- * label colours went with it.
- */
+/** The persistent bottom bar. */
 @Composable
 fun TabBar(current: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) {
   Column(modifier.fillMaxWidth().background(Surface)) {

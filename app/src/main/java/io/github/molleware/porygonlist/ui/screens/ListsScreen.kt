@@ -80,7 +80,6 @@ fun ListsScreen(
   state: AppState,
   networkLabel: String,
   onOpenList: (ListId) -> Unit,
-  onToggleOnline: () -> Unit,
   onGoShare: () -> Unit,
   onOpenSettings: () -> Unit,
   draft: String,
@@ -128,7 +127,7 @@ fun ListsScreen(
       )
     }
 
-    SyncPill(state, networkLabel, onToggleOnline)
+    SyncPill(state, networkLabel)
 
     Row(
       Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 10.dp),
@@ -161,7 +160,6 @@ fun ListsScreen(
         } else {
           ListCard(
             list = list,
-            online = state.online,
             localDevice = state.localDevice,
             delivered = state.deliveredTo,
             needsAnswer = state.openConflict?.let { it.listId == list.id || (it.listId == null && state.activeListId == list.id) } == true,
@@ -350,23 +348,18 @@ private fun ListEditCard(
   }
 }
 
-/**
- * The sync banner. Tapping it flips between in-step and off-the-network — in the design this is the
- * control that lets you see both states; with real sync it would be a status readout.
- */
+/** The sync banner: a status readout, worked out from delivery receipts. */
 @Composable
-private fun SyncPill(state: AppState, networkLabel: String, onToggle: () -> Unit) {
+private fun SyncPill(state: AppState, networkLabel: String) {
   Row(
     Modifier.fillMaxWidth()
       .clip(Shapes.Pill)
-      .background(if (state.online) Accent2100 else Accent100)
-      .clickable(onClick = onToggle)
+      .background(Accent2100)
       .padding(horizontal = 16.dp, vertical = 12.dp),
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(9.dp),
   ) {
-    Dot(if (state.online) Accent2 else Accent)
-    // Both lines come from delivery receipts, not from being online — see syncHeadline.
+    Dot(Accent2)
     Text(syncHeadline(state), style = PorygonType.MetaBold, color = TextInk)
     Text(syncDetail(state, networkLabel), style = PorygonType.Meta, color = TextInk.copy(alpha = 0.72f))
   }
@@ -376,7 +369,6 @@ private fun SyncPill(state: AppState, networkLabel: String, onToggle: () -> Unit
 @OptIn(ExperimentalFoundationApi::class)
 private fun ListCard(
   list: GroceryList,
-  online: Boolean,
   localDevice: DeviceId,
   delivered: DeliveryLog,
   needsAnswer: Boolean,
@@ -395,8 +387,7 @@ private fun ListCard(
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
       Dot(list.accent.color(), size = 11.dp)
       // The name and its pin share the free space as one group, so the avatars stay against the
-      // right edge. Weighting the name and a spacer separately split that space between them and
-      // left the avatars stranded mid-card.
+      // right edge.
       Row(Modifier.padding(start = 11.dp).weight(1f), verticalAlignment = Alignment.CenterVertically) {
         Text(list.name, style = PorygonType.ListName, color = TextInk, modifier = Modifier.weight(1f, fill = false))
         if (list.pinned) {
@@ -419,7 +410,7 @@ private fun ListCard(
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
       Text(itemCountLabel(list), style = PorygonType.Meta, color = Neutral700)
       Text("·", style = PorygonType.Meta, color = Neutral700.copy(alpha = 0.4f))
-      Text(listCardMeta(list, online, localDevice, delivered, needsAnswer), style = PorygonType.Meta, color = Neutral700)
+      Text(listCardMeta(list, localDevice, delivered, needsAnswer), style = PorygonType.Meta, color = Neutral700)
     }
   }
 }

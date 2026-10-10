@@ -45,7 +45,6 @@ class ReplacedPhoneTest {
       clockHead = at(9_000),
       lists = listOf(GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, items.toList(), people)),
       activeListId = ListId("list:1"),
-      online = true,
       networks = emptyList(),
       conflict = null,
     )

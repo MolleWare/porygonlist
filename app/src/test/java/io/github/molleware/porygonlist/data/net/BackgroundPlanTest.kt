@@ -28,7 +28,6 @@ class BackgroundPlanTest {
       clockHead = Hlc(0, 0, me),
       lists = emptyList(),
       activeListId = ListId(""),
-      online = true,
       networks = listOf(ApprovedNetwork(home, "Home", "", approved = true)),
       peers = if (paired) listOf(TrustedPeer(DeviceId("AVAAAAAAAAAAAAAA"), byteArrayOf(1), "Ava", 0)) else emptyList(),
       conflict = null,

@@ -9,7 +9,6 @@ import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.IdFactory
-import io.github.molleware.porygonlist.data.sync.ItemId
 import io.github.molleware.porygonlist.data.sync.ListId
 
 /**
@@ -97,13 +96,10 @@ object StateCodec {
    * Versions 6 to 8 are accepted rather than rejected because what separates them from this one —
    * the owner's name, the staples grid, two sentences about a clash — is not the same kind of hole
    * as a missing identity. Nothing has to be invented: the name comes back blank and first run asks
-   * once, the staples come back as the default set, and the clash sentences are written afresh from
-   * the items. Everything they carry — authorship, stamps, tombstones — is read as before.
+   * once, the staples grid comes back empty, and the clash sentences are written afresh from the
+   * items. Everything they carry — authorship, stamps, tombstones — is read as before.
    */
   private val READABLE = setOf("PLSTATE6", "PLSTATE7", "PLSTATE8", "PLSTATE9", VERSION)
-
-  /** Versions that write a staples record, so an older file can be given the defaults instead. */
-  private val WITH_STAPLES = setOf("PLSTATE8", "PLSTATE9", VERSION)
 
   /**
    * Versions whose list ids are already global.
@@ -123,7 +119,8 @@ object StateCodec {
         state.idCounter.toString(),
         state.clockHead.encode(),
         state.activeListId.value,
-        state.online.bool(),
+        // A retired `online` flag, kept as "1" so the name stays in its column for any older build.
+        "1",
         state.displayName,
       )
     )
@@ -155,8 +152,6 @@ object StateCodec {
       appendLine(record("net", it.fingerprint.value, it.name, it.detail, it.approved.bool()))
     }
 
-    // Written even when empty is impossible to express here, so an absent record is read as "this
-    // file predates staples" and the version is what tells the two apart — see FIRST_WITH_STAPLES.
     state.staples.forEach { appendLine(record("staple", it.name, it.uses.toString())) }
 
     state.lists.forEach { list ->
@@ -209,7 +204,6 @@ object StateCodec {
     // Raw, as written. Old files hold a number and new ones hold `deviceId:counter`; which it is
     // only matters once, in migrateListIds, so everything up to there treats it as opaque text.
     var activeListId = ""
-    var online = true
     var displayName = ""
     var sawConflict = false
     var conflictKind = ConflictKind.DUPLICATE
@@ -240,7 +234,7 @@ object StateCodec {
               idCounter = f[2].toLong()
               clockHead = Hlc.decode(f[3])
               activeListId = f[4]
-              online = f[5] == "1"
+              // f[5] is the retired `online` flag; ignored.
               // Absent in a version 6 file, which simply means this phone has yet to be told.
               displayName = f.getOrNull(6).orEmpty()
             }
@@ -372,13 +366,10 @@ object StateCodec {
         renamed.ids[activeListId]?.takeIf { active -> lists.any { it.id == active } }
           ?: lists.firstOrNull()?.id
           ?: ListId(""),
-      online = online,
       networks = networks,
       // A peer whose key does not hash to its id is not that peer; drop it rather than trust it.
       peers = peers.filter { DeviceIdentity.matches(it.deviceId, it.publicKey) },
-      // An empty grid is a real state someone can reach by removing every tile, so a stored one is
-      // taken at its word. A file written before staples were storable has none to restore.
-      staples = if (version in WITH_STAPLES) staples else Staple.defaults,
+      staples = staples,
       conflict = conflict,
     )
   }

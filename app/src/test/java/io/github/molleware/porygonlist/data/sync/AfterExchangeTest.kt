@@ -45,7 +45,6 @@ class AfterExchangeTest {
       clockHead = Hlc(1_000, 0, ava),
       lists = listOf(list(item("${ava.value}:1", "Milk", Hlc(1_000, 0, ava)))),
       activeListId = listId,
-      online = true,
       networks = emptyList(),
       // Both of them are paired, which is exactly what makes impersonation worth testing.
       peers = listOf(TrustedPeer(hugo, byteArrayOf(1), "Hugo", 0), TrustedPeer(sam, byteArrayOf(2), "Sam", 0)),

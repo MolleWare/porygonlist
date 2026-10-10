@@ -110,8 +110,7 @@ fun ShareScreen(
   modifier: Modifier = Modifier,
 ) {
   val list = state.activeList
-  // Null when nobody else is on this list. "looking for them here" with no "them" is the screen
-  // inventing a person, which is the same thing the Lists banner used to do.
+  // Null when nobody else is on this list, so the screen never says "them" about nobody.
   val partner = list.others(state.localDevice).firstOrNull()?.name
   val discovering = discovery is DiscoveryDecision.Discover
   val here = state.networks.firstOrNull { it.fingerprint == network.fingerprint }
@@ -120,9 +119,7 @@ fun ShareScreen(
     modifier.verticalScroll(rememberScrollState()).padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 88.dp)
   ) {
     BackLink("All lists", onBack, tint = Accent700)
-    // Names the list rather than saying "Sharing", because this screen acts on one list and which
-    // one is not guessable from a heading that does not say. With no list at all there is no name
-    // to give, and the bare word is honest rather than trailing an empty space.
+    // Names the list, because this screen acts on one list.
     Text(
       if (list.name.isBlank()) "Sharing" else "Sharing ${list.name}",
       style = PorygonType.ScreenTitle,
@@ -331,65 +328,6 @@ fun ShareScreen(
           style = PorygonType.BodyLarge,
         )
       }
-    }
-  }
-}
-
-/**
- * The escape hatch for removals that cannot be handed over.
- *
- * States the cost rather than burying it: clearing these gives up the guarantee that a deleted item
- * stays deleted, because a phone that never received the removal will offer the item back. Worth it
- * when the phone in question is switched off in a drawer, and not otherwise.
- */
-@Composable
-private fun StrandedRemovals(
-  count: Int,
-  waitingOn: List<String>,
-  confirming: Boolean,
-  onAsk: () -> Unit,
-  onCancel: () -> Unit,
-  onConfirm: () -> Unit,
-) {
-  Column(
-    Modifier.fillMaxWidth()
-      .clip(Shapes.Card)
-      .background(Accent100)
-      .padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 20.dp)
-  ) {
-    Text(
-      "$count ${if (count == 1) "removal" else "removals"} not handed over",
-      style = PorygonType.CardHeading,
-      color = TextInk,
-      modifier = Modifier.padding(bottom = 4.dp),
-    )
-    Text(
-      if (waitingOn.isEmpty()) "Waiting for another phone."
-      else "Waiting for ${waitingOn.joinToString(" and ")}.",
-      style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
-      color = Accent800,
-      modifier = Modifier.padding(bottom = 14.dp),
-    )
-
-    if (confirming) {
-      Text(
-        "Clear them anyway?",
-        style = PorygonType.RowName.copy(fontSize = PorygonType.BodyLarge.fontSize),
-        color = TextInk,
-        modifier = Modifier.padding(bottom = 4.dp),
-      )
-      Text(
-        "They may come back when you next meet.",
-        style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
-        color = Accent800,
-        modifier = Modifier.padding(bottom = 14.dp),
-      )
-      Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-        PrimaryButton("Clear them", onConfirm, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
-        SecondaryButton("Leave them", onCancel, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
-      }
-    } else {
-      SecondaryButton("Clear them", onAsk, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
     }
   }
 }

@@ -61,13 +61,8 @@ object Elevation {
 }
 
 /**
- * The app is light-only, and now without exception. Shopping mode used to invert onto the
- * neutral-900 ground; it does not any more, so there is no screen left that wants a second set of
- * colours. No dark colour scheme, and no dynamic colour: the green/terracotta palette is the brand.
- *
- * This is a light-only app rather than one whose dark mode is unfinished. Following the system
- * would mean a second scheme for every role here, and the one screen that had a case for dark —
- * a phone held up in a supermarket — turned out to be better served by bigger type.
+ * Light-only by design, not an unfinished dark mode. No dark colour scheme and no dynamic colour:
+ * the green/terracotta palette is the brand.
  *
  * Both accents are dark, so every `on*` role that sits on one is a light tint from the same ramp.
  */

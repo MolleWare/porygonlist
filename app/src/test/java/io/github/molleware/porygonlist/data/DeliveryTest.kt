@@ -182,7 +182,6 @@ class DeliveryTest {
       clockHead = at(9_000),
       lists = lists.toList(),
       activeListId = ListId("list:1"),
-      online = true,
       networks = emptyList(),
       conflict = null,
     )

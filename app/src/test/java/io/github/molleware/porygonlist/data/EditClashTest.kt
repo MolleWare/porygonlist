@@ -49,7 +49,6 @@ class EditClashTest {
       clockHead = Hlc(2_500, 0, me),
       lists = listOf(listWith(item)),
       activeListId = listId,
-      online = true,
       networks = emptyList(),
       peers = listOf(TrustedPeer(other, byteArrayOf(1), other.value, 0)),
       conflict = null,
@@ -171,7 +170,7 @@ class EditClashTest {
 
     assertEquals(
       "a change needs you",
-      listCardMeta(hugos.lists.single(), online = true, localDevice = hugo, delivered = DeliveryLog(), needsAnswer = true),
+      listCardMeta(hugos.lists.single(), localDevice = hugo, delivered = DeliveryLog(), needsAnswer = true),
     )
   }
 

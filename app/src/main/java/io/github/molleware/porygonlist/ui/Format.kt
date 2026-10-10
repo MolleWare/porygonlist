@@ -51,11 +51,8 @@ private fun whenPhrase(epochMillis: Long, now: Long, zone: ZoneId): String {
 /**
  * When a paired phone last confirmed a handover, in words — or that it never has.
  *
- * Replaces a line the design shipped as a fixed string, "Last handover this morning", which said
- * that at any hour of any day and whether or not anything had ever been handed over. [confirmed] is
- * the peer's delivery receipt: the stamp of the newest payload of ours it has acknowledged. So this
- * is when this phone's changes last reached them, which is the half of a handover this phone can
- * actually vouch for.
+ * [confirmed] is the peer's delivery receipt: the stamp of the newest payload of ours it has
+ * acknowledged, so this is when this phone's changes last reached them.
  */
 fun handoverLabel(confirmed: Hlc?, now: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): String =
   if (confirmed == null) "Nothing handed over yet" else "Last handover ${whenPhrase(confirmed.wall, now, zone)}"
@@ -88,12 +85,7 @@ fun GroceryList.others(localDevice: DeviceId) = people.filter { it.present && it
 /** The single other person, for the many places the design assumes a pair. */
 fun GroceryList.partnerName(localDevice: DeviceId): String = others(localDevice).firstOrNull()?.name ?: "them"
 
-/**
- * Several people as running text: "Ava", "Ava & Sam", "Ava, Sam & Léa".
- *
- * The design was drawn for two people, and a list shared three ways read as though one of them did
- * not exist. Everything that names "the others" goes through here.
- */
+/** Several people as running text: "Ava", "Ava & Sam", "Ava, Sam & Léa". */
 fun names(people: List<Person>): String =
   when (people.size) {
     0 -> "nobody"
@@ -115,9 +107,7 @@ fun GroceryList.lastChange(): Hlc =
 /**
  * The others on this list whose phones have not confirmed its latest change.
  *
- * Judged from receipts — the same proof of delivery tombstones are collected on — rather than from
- * being online. Online only means the two phones *could* talk; a receipt is the other phone saying
- * it did.
+ * Judged from receipts — the same proof of delivery tombstones are collected on.
  */
 fun GroceryList.behind(localDevice: DeviceId, delivered: DeliveryLog): List<Person> {
   val latest = lastChange()
@@ -138,7 +128,6 @@ fun itemSubLabel(
 ): String {
   val writer = list.nameFor(item.lastWriter, localDevice)
   return when {
-    item.pending -> "$writer, not sent yet"
     item.editing && item.lastWriter != localDevice -> "$writer, editing now"
     item.origin == Origin.MERGED -> "you and ${list.partnerName(localDevice)}, ${relativeTime(item.at, now)}"
     item.origin == Origin.IMPORTED -> "from a text, ${relativeTime(item.at, now)}"
@@ -162,19 +151,15 @@ fun shopSubLabel(item: GroceryItem, list: GroceryList, localDevice: DeviceId): S
 /**
  * The meta line on a list card: "in step with Ava", or what is still to reach whom.
  *
- * "In step" is said only once every other phone has confirmed the list's latest change. It used to
- * be said whenever this phone was online, and on hardware a card read "in step with Ava" about a
- * list her phone had never received.
+ * "In step" is said only once every other phone has confirmed the list's latest change.
  */
 fun listCardMeta(
   list: GroceryList,
-  online: Boolean,
   localDevice: DeviceId,
   delivered: DeliveryLog,
   /** A "keep which?" or duplicate card is waiting on this list. It is asked only inside the list. */
   needsAnswer: Boolean = false,
 ): String {
-  val waiting = list.items.count { it.pending }
   val others = list.others(localDevice)
   val behind = list.behind(localDevice, delivered)
   return when {
@@ -183,7 +168,6 @@ fun listCardMeta(
     // from a list of your own with the same name.
     list.arrivedFrom != null -> "new, from ${list.nameFor(list.arrivedFrom, localDevice)}"
     others.isEmpty() -> "just you"
-    !online && waiting > 0 -> "$waiting ${if (waiting == 1) "change" else "changes"} waiting"
     list.liveItems.any { it.editing } -> "${others.first().name} is adding to it"
     behind.isEmpty() -> "in step with ${names(others)}"
     behind.none { delivered.confirmedBy(it.device) != null } && behind.size == others.size -> "not handed over yet"
@@ -192,20 +176,13 @@ fun listCardMeta(
 }
 
 /**
- * The line under the edit sheet: where a change goes.
- *
- * "Ava sees this the moment you save" was the design's line for two people with both phones awake.
- * A change reaches the others when their phones are next on the wifi with this one, which is
- * immediately if they are there now.
+ * The line under the edit sheet: where a change goes. It reaches the others when their phones are
+ * next on the wifi with this one, which is immediately if they are there now.
  */
 fun editSyncNote(state: AppState): String {
   val others = state.activeList.others(state.localDevice)
-  return when {
-    // Nobody on the list means nobody to see it, whatever the network is doing.
-    others.isEmpty() -> "Saved on this phone."
-    state.online -> "Goes to ${names(others)} as soon as ${agree(others, "their phone is", "their phones are")} around."
-    else -> "Saved here now, handed over next time you share a network."
-  }
+  return if (others.isEmpty()) "Saved on this phone."
+  else "Goes to ${names(others)} as soon as ${agree(others, "their phone is", "their phones are")} around."
 }
 
 /** Under "Take this off the list?": whose phones the item goes from. */
@@ -266,28 +243,19 @@ fun syncHeadline(state: AppState): String {
   val everyone = shared.flatMap { it.others(state.localDevice) }.distinctBy { it.device }
   val behind = shared.flatMap { it.behind(state.localDevice, state.deliveredTo) }.distinctBy { it.device }
   return when {
-    !state.online -> "Off the network"
     everyone.isEmpty() -> "Nobody to sync with yet"
     behind.isEmpty() -> "In step with ${names(everyone)}"
     else -> "Waiting for ${names(behind)}"
   }
 }
 
-/**
- * The banner's detail: where, and when something last actually reached another phone.
- *
- * It said "a moment ago" whatever had happened, which was the design's placeholder.
- */
+/** The banner's detail: where, and when something last actually reached another phone. */
 fun syncDetail(
   state: AppState,
   networkLabel: String,
   now: Long = System.currentTimeMillis(),
   zone: ZoneId = ZoneId.systemDefault(),
 ): String {
-  if (!state.online) {
-    val waiting = state.visibleLists.sumOf { list -> list.items.count { it.pending } }
-    return "$waiting ${if (waiting == 1) "change" else "changes"} waiting to hand over"
-  }
   val last = state.deliveredTo.receipts.values.maxOrNull()
   return "$networkLabel · " + handoverLabel(last, now, zone).replaceFirstChar { it.lowercase() }
 }

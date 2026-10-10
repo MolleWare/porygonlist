@@ -188,9 +188,6 @@ fun CheckCircle(
   size: Dp = 26.dp,
   iconSize: Dp = 14.dp,
 ) {
-  // One pair of colours everywhere. There used to be a `dark` variant stepping the fill up the
-  // ramp, because a dark-green circle vanished on shopping mode's dark ground (1.4:1); that
-  // ground is gone, and with it the only caller that needed it.
   val fill = Accent
   val mark = Accent100
   val borderColor = if (checked) fill else Neutral400

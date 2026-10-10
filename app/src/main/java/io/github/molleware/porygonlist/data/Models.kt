@@ -93,33 +93,17 @@ data class GroceryItem(
   /**
    * Whether the item has been removed.
    *
-   * A tombstone rather than a deletion, and this is not a UI choice: dropping the row outright is
-   * invisible to the other phone, which would hand the item straight back on the next handover. The
-   * tombstone is what says "this was deliberately taken off the list" as opposed to "this phone has
-   * not heard about it yet".
-   *
-   * Nobody ever sees it. Removal is confirmed at the moment it happens, so the other phone simply
-   * stops showing the item — a grocery list does not warrant being told about every deletion.
-   *
-   * It is kept only until every peer has confirmed receiving it, then collected — see
-   * [GroceryList.pruneDelivered].
-   *
-   * It is a [Field] so that a removal and a re-add of the same item merge like any other edit.
+   * A tombstone rather than a deletion: dropping the row outright is invisible to the other phone,
+   * which would hand the item straight back on the next handover. It is kept until every peer has
+   * confirmed receiving it — see [GroceryList.pruneDelivered]. A [Field] so that a removal and a
+   * re-add of the same item merge like any other edit.
    */
   val removed: Field<Boolean>,
-  /** The change has not been handed to the other phones yet. */
-  val pending: Boolean = false,
-  /**
-   * Someone else has this item open right now. Live presence, never written to disk — it is
-   * meaningless once the app is closed.
-   */
+  /** Someone else has this item open right now. Live presence, never written to disk. */
   val editing: Boolean = false,
   /**
    * Where it sits in the list: an [io.github.molleware.porygonlist.data.sync.OrderKey], shared by
-   * everyone on the list, so sorting the list by aisle on one phone sorts it on the other.
-   *
-   * Empty means never placed — every item from before reordering existed, and anything a list
-   * holds until somebody first moves something in it. Those keep the order they were stored in.
+   * everyone on the list. Empty means never placed; those keep the order they were stored in.
    */
   val position: Field<String> = Field("", Hlc(0, 0, id.device)),
 ) {
@@ -146,12 +130,8 @@ data class GroceryItem(
 
 data class GroceryList(
   /**
-   * Globally unique, because a list crosses phones.
-   *
-   * `deviceId:counter`, minted by [io.github.molleware.porygonlist.data.sync.IdFactory]. It used to
-   * be a local `max + 1`, which meant both phones called their first list `1` — so two unrelated
-   * lists could not be told apart on the wire, and merging them into each other was a data loss
-   * waiting for the transport to land. Derived from a key the way every other id here is.
+   * Globally unique, because a list crosses phones: `deviceId:counter`, minted by
+   * [io.github.molleware.porygonlist.data.sync.IdFactory].
    */
   val id: ListId,
   val name: String,
@@ -159,29 +139,15 @@ data class GroceryList(
   val items: List<GroceryItem>,
   val people: List<Person>,
   /**
-   * When [name] was last set.
-   *
-   * Without it a rename travelled but never landed: the merge has no way to tell whose name is
-   * newer, so it kept its own and the other phone's rename was silently discarded. Kept beside the
-   * name rather than wrapping it, because the name is read all over the interface and only the
-   * merge cares when it was chosen. The default is the beginning of time, so a list nobody has
-   * renamed loses to any rename at all.
+   * When [name] was last set, so a merge can tell whose rename is newer. Kept beside the name rather
+   * than wrapping it in a [Field] because only the merge cares. The default loses to any rename.
    */
   val nameAt: Hlc = Hlc(0, 0, DeviceId("")),
-  /**
-   * Kept at the top of this phone's Lists screen.
-   *
-   * This phone's arrangement and nobody else's: never sent, and a merge keeps whatever this phone
-   * had. The order of the lists is personal for the same reason — each person also has lists the
-   * other never sees, so a shared arrangement of them could not mean anything.
-   */
+  /** Kept at the top of this phone's Lists screen. This phone's own: never sent, kept through merges. */
   val pinned: Boolean = false,
   /**
-   * Who shared this list with this phone, until it is first opened here.
-   *
-   * A shared list used to arrive with no word about it, and one named like a list you already have
-   * looked like a mysterious second copy. This phone's own note, like [pinned]: never sent, kept
-   * through merges, and cleared by opening the list.
+   * Who shared this list with this phone, until it is first opened here. This phone's own note, like
+   * [pinned]: never sent, kept through merges, and cleared by opening the list.
    */
   val arrivedFrom: DeviceId? = null,
 ) {
@@ -280,9 +246,8 @@ data class GroceryList(
   /** Matches a phone someone holds now, or one they used to hold, so old items stay attributed. */
   fun personFor(device: DeviceId): Person? = people.firstOrNull { it.wasEver(device) }
 
-  /** Everyone on this list except the phone asking. */
   /**
-   * The phones still expected to answer.
+   * The phones still expected to answer, other than [localDevice].
    *
    * Retired handsets are deliberately absent: a device that will never confirm another thing would
    * otherwise hold every tombstone on this list open for ever.
@@ -310,19 +275,13 @@ data class GroceryList(
         }
     )
 
-  /** Removes someone from this list entirely, past devices and all. */
-  fun withoutPerson(device: DeviceId): GroceryList = copy(people = people.filterNot { it.wasEver(device) })
-
   /**
    * Marks someone as off the list, rather than forgetting them — whether they left or were removed.
    *
    * Both are news the others need, so the person stays as a stamped tombstone until everyone who has
    * to hear it has confirmed, at which point [pruneDelivered] collects it. Who that is depends on
-   * who decided: see [mustHear].
-   *
-   * Without the stamp this would not survive a single exchange: the other phone's copy still lists
-   * them, and [mergePeople] unions, so they would be added straight back. That is exactly what
-   * removing someone did when it simply dropped them — found on hardware.
+   * who decided: see [mustHear]. Without the stamp, the merge's union of people would add them
+   * straight back on the next exchange.
    */
   fun withPersonLeft(device: DeviceId, at: Hlc): GroceryList =
     copy(people = people.map { if (it.wasEver(device)) it.copy(removed = it.removed.set(true, at)) else it })
@@ -398,7 +357,7 @@ data class GroceryList(
       id = id,
       name = name,
       accent = accent,
-      items = liveItems.map { it.copy(id = newItemId(), pending = false, editing = false) },
+      items = liveItems.map { it.copy(id = newItemId(), editing = false) },
       people = listOf(Person(localDevice, me?.name.orEmpty(), me?.initial.orEmpty())),
       nameAt = nameAt,
       pinned = pinned,
@@ -408,21 +367,13 @@ data class GroceryList(
   companion object {
     /**
      * Stands in when there is no list to show, so a screen reached with none renders empty instead
-     * of throwing. Id 0 is never handed out, so this can never collide with a real list.
+     * of throwing. An empty id is never minted, so this can never collide with a real list.
      */
     val none =
       GroceryList(id = ListId(""), name = "", accent = ListAccent.NEUTRAL, items = emptyList(), people = emptyList())
   }
 }
 
-/**
- * A network the owner has opted into looking for peers on.
- *
- * Keyed by [NetworkFingerprint], which is a discovery hint and nothing more: matching it says only
- * that it is worth listening here, never that the place is safe or that anyone found is who they
- * claim. [name] is whatever the owner called it — the SSID is not read, because that would cost a
- * location permission for a value that is spoofable anyway.
- */
 /**
  * A phone this one has paired with, and the key it is trusted by.
  *
@@ -444,6 +395,13 @@ data class TrustedPeer(val deviceId: DeviceId, val publicKey: ByteArray, val nam
     31 * (31 * (31 * deviceId.hashCode() + publicKey.contentHashCode()) + name.hashCode()) + pairedAt.hashCode()
 }
 
+/**
+ * A network the owner has opted into looking for peers on.
+ *
+ * Keyed by [NetworkFingerprint], which is a discovery hint and nothing more: matching it says only
+ * that it is worth listening here, never that the place is safe or that anyone found is who they
+ * claim. [name] is the SSID when the phone will tell it, or whatever the owner typed.
+ */
 data class ApprovedNetwork(
   val fingerprint: NetworkFingerprint,
   val name: String,
@@ -476,15 +434,6 @@ data class Staple(val name: String, val uses: Int = 0) {
         1 -> "used once"
         else -> "used $uses times"
       }
-
-  companion object {
-    /**
-     * The grid starts empty. A shortlist of things you buy over and over is only worth anything if
-     * it is yours; a shipped one is a guess about a stranger's kitchen, and the screen already says
-     * what it is for while it is empty.
-     */
-    val defaults: List<Staple> = emptyList()
-  }
 }
 
 /**
@@ -559,12 +508,11 @@ data class AppState(
   val deliveredTo: DeliveryLog = DeliveryLog(),
   val lists: List<GroceryList>,
   val activeListId: ListId,
-  val online: Boolean,
   val networks: List<ApprovedNetwork>,
   /** Phones paired with this one, by key. Empty until someone scans a code. */
   val peers: List<TrustedPeer> = emptyList(),
-  /** This phone's one-tap shortlist. Local to the install; never sent anywhere. */
-  val staples: List<Staple> = Staple.defaults,
+  /** This phone's one-tap shortlist. Starts empty; local to the install; never sent anywhere. */
+  val staples: List<Staple> = emptyList(),
   val conflict: Conflict?,
 ) {
   /**
@@ -663,7 +611,6 @@ data class AppState(
                       removed =
                         if (c.yours.removed.value != c.theirs.removed.value) item.removed.set(chosen.removed.value, at)
                         else item.removed,
-                      pending = !online,
                     )
                 }
             )
@@ -727,10 +674,8 @@ data class AppState(
   /**
    * Stops sharing one list with someone.
    *
-   * A stamped tombstone, not a deletion. Dropping them outright — what this used to do — lasted
-   * until their phone next sent its copy, which still named them, and the merge put them back; and
-   * their phone never found out it had been taken off. Now the decision travels: to everyone still
-   * on the list, and to the person removed, whose phone keeps the list as its own private copy.
+   * A stamped tombstone, not a deletion, so the decision travels: to everyone still on the list, and
+   * to the person removed, whose phone keeps the list as its own private copy.
    */
   fun removePersonFrom(listId: ListId, device: DeviceId, at: Hlc): AppState =
     copy(lists = lists.map { if (it.id == listId) it.withPersonLeft(device, at) else it }).pruneDeliveredTombstones()
@@ -787,15 +732,9 @@ data class AppState(
         localDevice = localDevice,
         idCounter = 0,
         clockHead = Hlc(now, 0, localDevice),
-        // Nothing has been handed over yet, so nothing is collectable yet.
-        deliveredTo = DeliveryLog(),
         lists = emptyList(),
-        // No list to be active. An empty id is never minted, so this matches nothing until the
-        // owner makes a list, and [activeList] falls back to [GroceryList.none] until they do.
+        // An empty id is never minted, so [activeList] falls back to [GroceryList.none].
         activeListId = ListId(""),
-        online = true,
-        // A network becomes approved when the owner approves it while standing on it, and carries
-        // that network's real fingerprint. There is nothing honest to put here in advance.
         networks = emptyList(),
         conflict = null,
       )

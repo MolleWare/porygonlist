@@ -61,7 +61,6 @@ class StateMigrationTest {
           ),
         ),
       activeListId = ListId("${me.value}:2"),
-      online = true,
       networks = emptyList(),
       conflict = null,
     )

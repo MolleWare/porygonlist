@@ -9,19 +9,11 @@ import androidx.compose.ui.graphics.Color
  * Radii, shadows and type still come from that handoff; only colour is ours. If a fresh handoff zip
  * ever lands it will carry the old amber tokens and overwrite this file — re-apply these.
  *
- * Unlike the pastel set this replaces, these four span the range: two near-whites for the grounds
- * and two darks that can carry a control on their own. So both accents are **dark, with light
- * labels** — the inverse of the pastel scheme, and closer to how the original design treated its
- * brown second accent.
+ * Two near-whites for the grounds and two darks that can carry a control on their own, so both
+ * accents are **dark, with light labels**. There is one ground everywhere, with no inversion.
  *
- * The ramps extend each source hue along the shared lightness scale the amber ramps used, so the
- * design's tonal rhythm survives the swap. Green and brown both land on step 800, which makes them
- * a matched pair: the same value, distinguished only by hue.
- *
- * There is one ground, and no inversion anywhere. Shopping mode used to be the exception; it is
- * now the same cream as the rest, distinguished by type size and by what it leaves out rather
- * than by colour. So a dark accent is never asked to sit on a dark ground, and the 300/400 rungs
- * are no longer load-bearing for contrast.
+ * The ramps extend each source hue along the shared lightness scale the amber ramps used. Green and
+ * brown both land on step 800: the same value, distinguished only by hue.
  */
 
 // The palette, verbatim.
@@ -42,22 +34,18 @@ val Divider = TextInk.copy(alpha = 0.16f)
 
 // Tonal ramps. Generated in OKLCH on one shared lightness scale, so the same step of any role
 // matches the others in visual value. Step 800 of each accent ramp is a palette colour verbatim.
-val Neutral100 = Color(0xFFFAF4F0)
 val Neutral200 = Color(0xFFF0E6DE)
 val Neutral300 = Color(0xFFDECEC2)
 val Neutral400 = Color(0xFFC1AFA2)
 val Neutral500 = Color(0xFFA29183)
 val Neutral600 = Color(0xFF817267)
 val Neutral700 = Color(0xFF63574D)
-val Neutral800 = Color(0xFF453C35)
 val Neutral900 = Color(0xFF29231F)
 
 val Accent100 = Color(0xFFE6FCF0)
 val Accent200 = Color(0xFFCCF3DE)
 val Accent300 = Color(0xFFA4E2C2)
 val Accent400 = Color(0xFF7CC5A2)
-val Accent500 = Color(0xFF5DA683)
-val Accent600 = Color(0xFF438567)
 val Accent700 = Color(0xFF30664D)
 val Accent800 = PaletteGreen
 val Accent900 = Color(0xFF132A1F)
@@ -66,9 +54,6 @@ val Accent2100 = Color(0xFFFFF0E4)
 val Accent2200 = Color(0xFFFFDDC8)
 val Accent2300 = Color(0xFFFFC0A0)
 val Accent2400 = Color(0xFFEB9E79)
-val Accent2500 = Color(0xFFC97F5B)
-val Accent2600 = Color(0xFFA46343)
-val Accent2700 = Color(0xFF7F4A30)
 val Accent2800 = PaletteBrown
 val Accent2900 = Color(0xFF351E12)
 
@@ -80,7 +65,3 @@ val ShadowInk = Color(0xFF2E2B25)
 
 /** Scrim behind the bottom sheets: the design's neutral-900 at 45%. */
 val SheetScrim = Neutral900.copy(alpha = 0.45f)
-
-// Shop mode used to paint onto a dark ground with white alphas rather than ramp steps, and had
-// five colours of its own for it. It is on the same cream as everything else now, so it uses the
-// same Surface, Neutral and Accent roles and those five are gone.

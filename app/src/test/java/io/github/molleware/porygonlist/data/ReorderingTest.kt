@@ -128,7 +128,6 @@ class ReorderingTest {
       clockHead = Hlc(5_000, 0, ava),
       lists = lists.toList(),
       activeListId = lists.first().id,
-      online = true,
       networks = emptyList(),
       peers = listOf(TrustedPeer(hugo, byteArrayOf(1), "Hugo", 0)),
       conflict = null,

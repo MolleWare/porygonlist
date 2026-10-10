@@ -11,12 +11,12 @@ import java.security.MessageDigest
 import javax.net.ssl.SSLSocket
 
 /**
- * The half of pairing that used to need a second camera.
+ * The return leg of pairing, so one scan is enough.
  *
  * Pairing is symmetric — each phone has to end up holding the other's key — but only the first
  * leg has to travel a channel a person can vouch for. Once the scanner has read the code off the
  * screen it can authenticate the phone that showed it, and that is enough to carry its own key
- * back over the network. So one scan does what two used to.
+ * back over the network.
  *
  * ```
  * she shows a code ──► he scans it ──► he has her key

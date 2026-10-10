@@ -84,7 +84,6 @@ class SyncCoordinatorTest {
           clockHead = Hlc(1_000, 0, me),
           lists = lists,
           activeListId = lists.firstOrNull()?.id ?: ListId(""),
-          online = true,
           networks = emptyList(),
           peers = listOf(peer),
           conflict = null,

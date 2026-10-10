@@ -114,7 +114,6 @@ class RemovalTest {
         clockHead = Hlc(5_000, 0, ava),
         lists = listOf(list(item("Oat milk", removedAt = removal))),
         activeListId = ListId("list:1"),
-        online = true,
         networks = emptyList(),
           conflict = null,
       )

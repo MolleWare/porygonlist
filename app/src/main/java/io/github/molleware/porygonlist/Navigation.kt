@@ -52,7 +52,6 @@ import io.github.molleware.porygonlist.ui.components.Tab
 import io.github.molleware.porygonlist.ui.components.TabBar
 import io.github.molleware.porygonlist.ui.itemSubLabel
 import io.github.molleware.porygonlist.ui.networkLabel
-import io.github.molleware.porygonlist.ui.others
 import io.github.molleware.porygonlist.ui.editSyncNote
 import io.github.molleware.porygonlist.ui.removeNote
 import io.github.molleware.porygonlist.ui.screens.ListDetailScreen
@@ -182,7 +181,6 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                     viewModel.openList(id)
                     backStack.add(ListDetail)
                   },
-                  onToggleOnline = viewModel::toggleOnline,
                   onGoShare = { backStack.goTo(Share) },
                   onOpenSettings = { backStack.add(Settings) },
                   draft = viewModel.listDraft,

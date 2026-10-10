@@ -43,7 +43,6 @@ class LeavingAListTest {
       deliveredTo = delivered,
       lists = listOf(GroceryList(listId, "Weekly shop", ListAccent.ACCENT, emptyList(), people)),
       activeListId = listId,
-      online = true,
       networks = emptyList(),
       peers = listOf(TrustedPeer(hugo, byteArrayOf(1, 2, 3), "Hugo", 0)),
       conflict = null,

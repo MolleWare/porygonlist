@@ -1,7 +1,6 @@
 package io.github.molleware.porygonlist.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
@@ -50,17 +49,8 @@ import io.github.molleware.porygonlist.ui.shopSubLabel
  *
  * Bigger targets and bigger type, for reading at arm's length with a trolley in the other hand.
  * What it leaves out is the point: no add field, no suggestions, no edit pencil, no conflict card.
- * The whole row is the tick target, so hitting it needs no aim.
- *
- * It used to invert onto a dark ground, which was the loudest signal that this was a different
- * mode — and the only one. Now it sits on the same cream as everything else and earns the
- * distinction from its shape instead: the progress bar at the top, and the fact that everything
- * here is one of two verbs, tick and clear.
- *
- * **Clearing lives here too, and that is not a convenience.** Ticking says you have picked
- * something up; clearing is what ends the shop. With clearing only on the list screen, shopping
- * mode was a place you could not finish in — tick everything, leave, then clear. The job now
- * completes where it is done.
+ * The whole row is the tick target, so hitting it needs no aim. Clearing lives here too, because
+ * clearing is what ends the shop and the job should complete where it is done.
  */
 @Composable
 fun ShopScreen(

@@ -41,7 +41,6 @@ class FormatTest {
     at: Long = now,
     origin: Origin = Origin.LOCAL,
     checked: Boolean = false,
-    pending: Boolean = false,
     editing: Boolean = false,
   ): GroceryItem {
     val stamp = Hlc(at, 0, writer)
@@ -53,7 +52,6 @@ class FormatTest {
       checkedAt = stamp,
       removed = Field(false, stamp),
       origin = origin,
-      pending = pending,
       editing = editing,
     )
   }
@@ -92,11 +90,6 @@ class FormatTest {
   @Test
   fun `an unknown peer is not guessed at`() {
     assertEquals("someone", list.nameFor(DeviceId("strangerxx"), me))
-  }
-
-  @Test
-  fun `a waiting change says so instead of giving a time`() {
-    assertEquals("you, not sent yet", itemSubLabel(item("Butter", pending = true), list, me, now))
   }
 
   @Test
@@ -144,22 +137,13 @@ class FormatTest {
   }
 
   @Test
-  fun `a list card counts what is waiting when off the network`() {
-    val waiting = list.copy(items = listOf(item("Butter", pending = true)))
-
-    assertEquals("1 change waiting", listCardMeta(waiting, online = false, localDevice = me, delivered = DeliveryLog()))
-  }
-
-  @Test
   fun `a list nobody else is on says just you`() {
     val solo = list.copy(people = listOf(Person(me, "Ava", "A")))
 
-    assertEquals("just you", listCardMeta(solo, online = true, localDevice = me, delivered = DeliveryLog()))
+    assertEquals("just you", listCardMeta(solo, localDevice = me, delivered = DeliveryLog()))
   }
 
   // ── In step, from receipts ────────────────────────────────────────────────
-  // Found on hardware: a card read "in step with Ava" about a list her phone had never received,
-  // because it only checked that this phone was online.
 
   private val sam = DeviceId("samphone03")
   private val shopping = list.copy(items = listOf(item("Butter", at = now - 60_000)))
@@ -167,18 +151,18 @@ class FormatTest {
   @Test
   fun `in step only once the other phone has confirmed the latest change`() {
     val confirmed = DeliveryLog().record(hugo, Hlc(now, 0, me))
-    assertEquals("in step with Hugo", listCardMeta(shopping, online = true, localDevice = me, delivered = confirmed))
+    assertEquals("in step with Hugo", listCardMeta(shopping, localDevice = me, delivered = confirmed))
   }
 
   @Test
   fun `a phone that never confirmed anything has not been handed the list`() {
-    assertEquals("not handed over yet", listCardMeta(shopping, online = true, localDevice = me, delivered = DeliveryLog()))
+    assertEquals("not handed over yet", listCardMeta(shopping, localDevice = me, delivered = DeliveryLog()))
   }
 
   @Test
   fun `a phone that confirmed an older state is waited for`() {
     val stale = DeliveryLog().record(hugo, Hlc(now - 120_000, 0, me))
-    assertEquals("waiting for Hugo", listCardMeta(shopping, online = true, localDevice = me, delivered = stale))
+    assertEquals("waiting for Hugo", listCardMeta(shopping, localDevice = me, delivered = stale))
   }
 
   @Test
@@ -187,8 +171,8 @@ class FormatTest {
     val oneBehind = DeliveryLog().record(hugo, Hlc(now, 0, me)).record(sam, Hlc(now - 120_000, 0, me))
     val bothIn = oneBehind.record(sam, Hlc(now, 0, me))
 
-    assertEquals("waiting for Sam", listCardMeta(three, online = true, localDevice = me, delivered = oneBehind))
-    assertEquals("in step with Hugo & Sam", listCardMeta(three, online = true, localDevice = me, delivered = bothIn))
+    assertEquals("waiting for Sam", listCardMeta(three, localDevice = me, delivered = oneBehind))
+    assertEquals("in step with Hugo & Sam", listCardMeta(three, localDevice = me, delivered = bothIn))
   }
 
   @Test
@@ -201,14 +185,13 @@ class FormatTest {
     assertEquals("Hugo, Sam & Léa", names(listOf(hugoP, samP, lea)))
   }
 
-  private fun stateWith(l: GroceryList, delivered: DeliveryLog = DeliveryLog(), online: Boolean = true) =
+  private fun stateWith(l: GroceryList, delivered: DeliveryLog = DeliveryLog()) =
     AppState(
       localDevice = me,
       idCounter = 0,
       clockHead = Hlc(now, 0, me),
       lists = listOf(l),
       activeListId = l.id,
-      online = online,
       networks = emptyList(),
       peers = emptyList(),
       conflict = null,
@@ -226,7 +209,6 @@ class FormatTest {
   fun `the banner waits for whoever is behind`() {
     assertEquals("Waiting for Hugo", syncHeadline(stateWith(shopping)))
     assertEquals("In step with Hugo", syncHeadline(stateWith(shopping, DeliveryLog().record(hugo, Hlc(now, 0, me)))))
-    assertEquals("Off the network", syncHeadline(stateWith(shopping, online = false)))
   }
 
   @Test

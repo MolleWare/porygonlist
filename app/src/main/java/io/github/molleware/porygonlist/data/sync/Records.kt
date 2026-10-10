@@ -26,8 +26,9 @@ internal object Records {
       field(item.name) { it } +
       field(item.qty) { it.toString() } +
       field(item.removed) { bool(it) } +
-      listOf(bool(item.checked), item.checkedAt.encode(), item.origin.name, bool(item.pending)) +
-      // Last, so a reader from before reordering, which stops at `pending`, still reads the rest.
+      // The "0" is a retired `pending` column, still written so readers that count columns stay aligned.
+      listOf(bool(item.checked), item.checkedAt.encode(), item.origin.name, "0") +
+      // Last, so a reader from before reordering, which stops at the column above, still reads the rest.
       field(item.position) { it }
 
   /** A field is three columns: the value, the stamp it was written at, and what it was written against. */
@@ -50,7 +51,7 @@ internal object Records {
       checked = f[from + 10] == "1",
       checkedAt = Hlc.decode(f[from + 11]) ?: return null,
       origin = runCatching { Origin.valueOf(f[from + 12]) }.getOrNull() ?: return null,
-      pending = f[from + 13] == "1",
+      // f[from + 13] is the retired `pending` column; ignored.
       // Absent from anything written before reordering, which reads as never placed.
       position =
         (if (f.size >= from + 17) parseField(f, from + 14) { it } else null) ?: Field("", Hlc(0, 0, ItemId(id).device)),

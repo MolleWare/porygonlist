@@ -166,13 +166,12 @@ fun ListDetailScreen(
       Row(
         Modifier.clip(Shapes.Pill)
           .clickable(onClick = onShare)
-          .padding(end = 8.dp, top = 2.dp, bottom = 2.dp)
-          .then(Modifier),
+          .padding(end = 8.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
       ) {
-        Dot(if (state.online) Accent2 else Accent)
-        Text(listStatus(list, state.online, state.localDevice, state.deliveredTo), style = PorygonType.Meta, color = Neutral700)
+        Dot(Accent2)
+        Text(listStatus(list, state.localDevice, state.deliveredTo), style = PorygonType.Meta, color = Neutral700)
         Text(
           if (list.others(state.localDevice).isEmpty()) "Share it" else "Change",
           style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
@@ -195,8 +194,7 @@ fun ListDetailScreen(
       }
     }
 
-    // Only on the list it is about. A card used to follow you to whichever list was open, and its
-    // answer was applied there.
+    // Only on the list it is about.
     state.openConflict?.takeIf { it.listId == null || it.listId == list.id }?.let { conflict ->
       val cardModifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp)
       when (conflict.kind) {
@@ -298,12 +296,11 @@ fun ListDetailScreen(
 }
 
 /** Under the title: who has the list, and whether they have caught up — from receipts, as on its card. */
-private fun listStatus(list: GroceryList, online: Boolean, localDevice: DeviceId, delivered: DeliveryLog): String {
+private fun listStatus(list: GroceryList, localDevice: DeviceId, delivered: DeliveryLog): String {
   val others = list.others(localDevice)
   if (others.isEmpty()) return "Just you"
   val behind = list.behind(localDevice, delivered)
   return when {
-    !online -> "Shared with ${names(others)} · will hand over on wifi"
     behind.isEmpty() -> "Shared with ${names(others)} · in step"
     else -> "Shared with ${names(others)} · waiting for ${names(behind)}"
   }
@@ -478,10 +475,6 @@ private fun ItemRow(
         Avatar(partnerInitial, Accent2, Accent2100, size = 22.dp, fontSize = PorygonType.Tiny.fontSize)
         Text("editing", style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.1), color = Accent2800)
       }
-    }
-
-    if (item.pending) {
-      Text("waiting", style = PorygonType.Tiny, color = Accent700)
     }
 
     if (handle != null) {

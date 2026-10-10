@@ -57,7 +57,6 @@ class RemovingSomeoneTest {
       clockHead = at(1_500, me),
       lists = listOf(list),
       activeListId = list.id,
-      online = true,
       networks = emptyList(),
       peers = listOfNotNull(pairedWith, alsoPairedWith).map { TrustedPeer(it, byteArrayOf(1), it.value, 0) },
       conflict = null,

@@ -36,7 +36,6 @@ class SharedListArrivalTest {
       clockHead = Hlc(1_000, 0, hugo),
       lists = listOf(mine),
       activeListId = mine.id,
-      online = true,
       networks = emptyList(),
       peers = listOf(TrustedPeer(ava, byteArrayOf(1), "Ava", 0)),
       conflict = null,
@@ -50,7 +49,7 @@ class SharedListArrivalTest {
     val shared = arrive().lists.single { it.id == avas.id }
 
     assertEquals(ava, shared.arrivedFrom)
-    assertEquals("new, from Ava", listCardMeta(shared, online = true, localDevice = hugo, delivered = DeliveryLog()))
+    assertEquals("new, from Ava", listCardMeta(shared, localDevice = hugo, delivered = DeliveryLog()))
   }
 
   @Test

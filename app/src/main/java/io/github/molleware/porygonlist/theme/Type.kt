@@ -84,12 +84,8 @@ object PorygonType {
   val ItemName = body(15.5, FontWeight.SemiBold, lineHeight = 1.3)
 
   /**
-   * An item's name in shopping mode — big enough to read at arm's length.
-   *
-   * 22, against 15.5 in the list detail. The gap used to be smaller, and the dark ground was doing
-   * most of the work of saying "this is the mode for a supermarket aisle". With the ground gone,
-   * size is what says it, so it is worth overshooting: this is read glancing down at a phone held
-   * at hip height with a trolley in the other hand, not studied.
+   * An item's name in shopping mode — big enough to read at arm's length. Deliberately oversized
+   * against the list detail's 15.5: size is what marks this as the supermarket-aisle mode.
    */
   val ShopItemName = body(22.0, FontWeight.SemiBold, lineHeight = 1.25)
 

@@ -43,7 +43,6 @@ import io.github.molleware.porygonlist.data.net.discoveryDecision
 import io.github.molleware.porygonlist.data.net.reachablePeers
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
-import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.ItemId
 import kotlinx.coroutines.Dispatchers
@@ -266,45 +265,9 @@ class PorygonViewModel(
     }
   }
 
-  // ── Sync ──────────────────────────────────────────────────────────────────
-
-  /**
-   * Stands in for the real thing. Coming back onto an approved network hands over whatever was
-   * waiting, which is the moment the design is built around.
-   */
-  fun toggleOnline() = repo.update { s, _ ->
-    val comingOnline = !s.online
-    s.copy(
-      online = comingOnline,
-      lists = if (comingOnline) s.lists.map { l -> l.copy(items = l.items.map { it.copy(pending = false) }) } else s.lists,
-    )
-  }
-
   /** Opens a list, which also marks a newly shared one as seen. */
   fun openList(id: ListId) = repo.update { s, _ ->
     s.copy(activeListId = id, lists = s.lists.map { if (it.id == id && it.arrivedFrom != null) it.copy(arrivedFrom = null) else it })
-  }
-
-  /**
-   * What this phone should send a peer: everything it knows, and the point in its own clock that
-   * covers it.
-   *
-   * The stamp is what the peer echoes back as proof of receipt, so it must be read at the same
-   * moment as the payload — a later reading would claim delivery of changes that were never sent.
-   */
-  fun outgoingTo(peer: DeviceId): Pair<AppState, Hlc>? {
-    val current = state.value ?: return null
-    return current to current.clockHead
-  }
-
-  /**
-   * Records a peer's proof of receipt, then collects whatever that makes collectable.
-   *
-   * [upTo] is the stamp this phone sent alongside the payload the peer is confirming — never a
-   * fresh reading of the clock, which would mark unsent changes as delivered.
-   */
-  fun recordDelivery(peer: DeviceId, upTo: Hlc) = repo.update { s, _ ->
-    s.copy(deliveredTo = s.deliveredTo.record(peer, upTo)).pruneDeliveredTombstones()
   }
 
   // ── Pairing ───────────────────────────────────────────────────────────────
@@ -360,12 +323,9 @@ class PorygonViewModel(
   }
 
   /**
-   * Whether the code on screen can actually be scanned once instead of twice.
-   *
-   * An open socket is not enough, which is what this originally said. The QR only carries a way
-   * back if there is an address to put in it as well, so a phone with a port open but no usable
-   * address would have promised "one scan does both" and then quietly needed two. This asks the
-   * same question the invite does, so the screen cannot claim more than the code carries.
+   * Whether the code on screen can actually be scanned once instead of twice. Asks the same question
+   * the invite does — an open port and a usable address — so the screen cannot claim more than the
+   * code carries.
    */
   val reachableForPairing: Boolean
     get() = listeningAt() != null
@@ -545,13 +505,9 @@ class PorygonViewModel(
   /**
    * Gives this phone's own key to the one whose code was just scanned.
    *
-   * This is the leg that used to be a second scan. It runs after the local pairing rather than
-   * before, so that a network that will not carry it costs nothing: the pairing this person asked
-   * for has already happened, and what fails is only the shortcut.
-   *
-   * Every outcome ends in a sentence on the screen, including the good one. "Paired" on its own
-   * would leave the person wondering whether the other phone knows — which is exactly the doubt
-   * that made two scans feel necessary.
+   * Runs after the local pairing rather than before, so a network that will not carry it costs
+   * nothing: what fails is only the shortcut. Every outcome ends in a sentence on the screen,
+   * including the good one, so the person knows whether the other phone has their key too.
    */
   private fun handBackOurKey(link: String, invite: PairingInvite) {
     val me = identity()
@@ -638,10 +594,6 @@ class PorygonViewModel(
     justPaired = null
     replaceDevice(oldDevice, invite)
     pairNote = "${invite.displayName}'s new phone took over."
-  }
-
-  fun dismissJustPaired() {
-    justPaired = null
   }
 
   override fun onCleared() {
@@ -791,19 +743,12 @@ class PorygonViewModel(
     renameDraft = ""
   }
 
-  /**
-   * Renames a list here.
-   *
-   * Note the asymmetry, which is real and known: a list's name is a plain value rather than a
-   * stamped [Field], so two people renaming the same list at once resolve by whoever syncs last
-   * rather than by the clock. Items do better than this; the name has not needed it yet.
-   */
+  /** Renames a list, stamped with [GroceryList.nameAt] so the newer rename wins on merge. */
   fun saveRename() {
     val id = renamingList ?: return
     val name = renameDraft.trim()
     if (name.isNotEmpty()) {
       repo.update { s, node ->
-        // Stamped, so the rename can win against the other phone's copy rather than lose to it.
         s.copy(lists = s.lists.map { if (it.id == id) it.copy(name = name, nameAt = node.clock.tick()) else it })
       }
     }
@@ -919,11 +864,6 @@ class PorygonViewModel(
   }
 
   /**
-   * Ticking something off is a change like any other: it is stamped and queued, so the other phone
-   * learns about it. Note it does not reattribute the item — who put it on the list is part of its
-   * identity, and only the last writer moves.
-   */
-  /**
    * True for as long as the burst on screen has to run. Set by the tick that finishes a list.
    *
    * Consumed by the UI rather than reset on a timer, so nothing depends on the animation's duration
@@ -945,6 +885,10 @@ class PorygonViewModel(
     s.withActiveList { it.withItemMoved(itemId, toIndex, node.clock.tick()) }
   }
 
+  /**
+   * Ticks or unticks an item, stamped like any other change. It does not reattribute the item: who
+   * put it on the list stays, and only the last writer moves.
+   */
   fun toggleChecked(itemId: ItemId) {
     var finishedTheList = false
     repo.update { s, node ->
@@ -955,7 +899,7 @@ class PorygonViewModel(
             .copy(
               items =
                 list.items.map {
-                  if (it.id != itemId) it else it.copy(checked = !it.checked, checkedAt = stamp, pending = !s.online)
+                  if (it.id != itemId) it else it.copy(checked = !it.checked, checkedAt = stamp)
                 }
             )
             .withItemSettled(itemId, stamp)
@@ -1002,7 +946,7 @@ class PorygonViewModel(
         list.copy(
           items =
             list.items.map { item ->
-              if (item.checked && !item.removed.value) item.copy(removed = item.removed.set(true, stamp), pending = !s.online)
+              if (item.checked && !item.removed.value) item.copy(removed = item.removed.set(true, stamp))
               else item
             }
         )
@@ -1047,7 +991,6 @@ class PorygonViewModel(
                   name = if (newName == item.name.value) item.name else item.name.set(newName, stamp),
                   qty = if (d.qty == item.qty.value) item.qty else item.qty.set(d.qty, stamp),
                   editing = false,
-                  pending = !s.online,
                 )
               }
             }
@@ -1082,7 +1025,7 @@ class PorygonViewModel(
           items =
             list.items.map { item ->
               if (item.id != d.itemId) item
-              else item.copy(removed = item.removed.set(true, stamp), pending = !s.online)
+              else item.copy(removed = item.removed.set(true, stamp))
             }
         )
       }
@@ -1158,7 +1101,7 @@ class PorygonViewModel(
   fun mergeConflict() = repo.update { s, node ->
     val c = s.openConflict?.takeIf { it.kind == ConflictKind.DUPLICATE } ?: return@update s
     val stamp = node.clock.tick()
-    val merged = node.newItem(s, c.itemName, qty = c.yours.qty.value + c.theirs.qty.value, origin = Origin.MERGED)
+    val merged = node.newItem(c.itemName, qty = c.yours.qty.value + c.theirs.qty.value, origin = Origin.MERGED)
     val replaced = setOf(c.yours.id, c.theirs.id)
 
     s.copy(conflict = null).withConflictList(c) { list ->
@@ -1282,12 +1225,8 @@ class PorygonViewModel(
   }
 
   /**
-   * Which network is being named, if any.
-   *
-   * Approving one leaves it called "Network a3f91c", because the SSID is deliberately not read —
-   * that would cost a location permission for a value any other network can claim. So the only
-   * name available is the one the owner gives it, and they are asked right after approving, while
-   * they still know which network they meant.
+   * Which network is being named, if any. Asked right after approving one when the phone would not
+   * tell its SSID, while the owner still knows which network they meant.
    */
   var namingNetwork by mutableStateOf<NetworkFingerprint?>(null)
     private set
@@ -1392,7 +1331,7 @@ class PorygonViewModel(
       val fresh = parsed.filterNot { it.name.lowercase() in have }
       // Each pasted item is created here, so it gets this phone's identity and a fresh id: the
       // message carries no identity of its own, by design.
-      val items = fresh.map { node.newItem(s, it.name, qty = it.qty, origin = Origin.IMPORTED) }
+      val items = fresh.map { node.newItem(it.name, qty = it.qty, origin = Origin.IMPORTED) }
       s.withActiveList { list -> items.lastOrNull()?.let { list.withItemsAppended(items, it.name.at) } ?: list }
     }
     importText = ""
@@ -1405,8 +1344,7 @@ class PorygonViewModel(
    * Puts [name] on the open list, or asks for more of what is already there.
    *
    * Wanting two of something is a quantity, not two lines. Every way of adding goes through here —
-   * the field, a suggestion, a staple tile — because they are the same act to the person doing it,
-   * and a staple tapped twice used to leave two identical rows to reconcile by hand.
+   * the field, a suggestion, a staple tile — because they are the same act to the person doing it.
    *
    * Matching is on the folded name, the same comparison `alreadyOn` and the suggestion filter use,
    * so "eggs" finds "Eggs". A **ticked** item is not matched: it is already in the trolley, and
@@ -1424,10 +1362,9 @@ class PorygonViewModel(
     val trimmed = name.trim()
     val folded = WordTrie.fold(trimmed)
     val existing = activeList.liveItems.firstOrNull { !it.checked && WordTrie.fold(it.name.value) == folded }
-    val state = this
 
     if (existing == null) {
-      val item = node.newItem(state, trimmed, qty = qty, origin = origin)
+      val item = node.newItem(trimmed, qty = qty, origin = origin)
       return withActiveList { it.withItemsAppended(listOf(item), item.name.at) }
     }
 
@@ -1437,7 +1374,7 @@ class PorygonViewModel(
         items =
           list.items.map { item ->
             if (item.id != existing.id) item
-            else item.copy(qty = item.qty.set(item.qty.value + qty, stamp), pending = !state.online)
+            else item.copy(qty = item.qty.set(item.qty.value + qty, stamp))
           }
       )
     }
@@ -1447,7 +1384,7 @@ class PorygonViewModel(
    * Mints an item authored by this phone: a fresh id from this device's factory, and one stamp
    * shared by its fields. A newly created value has no `basedOn` — there was nothing before it.
    */
-  private fun LocalNode.newItem(s: AppState, name: String, qty: Int = 1, origin: Origin = Origin.LOCAL): GroceryItem {
+  private fun LocalNode.newItem(name: String, qty: Int = 1, origin: Origin = Origin.LOCAL): GroceryItem {
     val stamp = clock.tick()
     return GroceryItem(
       id = ids.nextItem(),
@@ -1456,7 +1393,6 @@ class PorygonViewModel(
       checkedAt = stamp,
       removed = Field(false, stamp),
       origin = origin,
-      pending = !s.online,
     )
   }
 

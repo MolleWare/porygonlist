@@ -53,28 +53,19 @@ private val QR_SIZE = 232.dp
 /**
  * Two phones agreeing to recognise each other.
  *
- * Pairing is symmetric — each phone has to end up holding the other's key — but that no longer
- * means two scans. While this screen is open the phone is listening, and the QR says where. So the
- * phone that scans can hand its own key straight back over that connection, and both halves are
- * done by one person pointing a camera once. The screen says so only when it is actually true:
- * with no wifi, or a socket that would not bind, it goes back to asking for both.
+ * While this screen is open the phone is listening, and the QR says where, so the phone that scans
+ * can hand its own key straight back and one scan pairs both. With no wifi, or a socket that would
+ * not bind, the screen goes back to asking for both.
  *
- * Nobody is asked to approve the phone that scans. It proved it read this screen — the QR carries
- * a one-time token, and the handshake has to say it back — and the screen is only up because its
- * owner put it there and held it out. So the pairing happens and the screen reports it, with Undo
- * beside it. That is where the weight belongs: on something visible that can be taken back, not on
- * a dialog in front of a thing the person already decided.
+ * Nobody is asked to approve the phone that scans: it proved it read this screen by saying back the
+ * QR's one-time token. The pairing happens and the screen reports it, with Undo beside it.
  *
- * Both halves are still on one screen, because both are still sometimes needed — when the other
- * phone is the one showing a code, or when a code arrived as a text.
+ * There is no camera in this app and no camera permission: what makes pairing trustworthy is the
+ * channel the code travelled, not the format it travelled in.
  *
- * There is no camera in this app and no camera permission. That is the point rather than a gap:
- * what makes pairing trustworthy is the channel the code travelled, not the format it travelled in.
- *
- * **The written code and the QR are not the same string, and that is deliberate.** The written one
- * is a public key and a name, carries no secret, and is safe in a message. The QR adds an address
- * and a token good for one handshake — live things, true for as long as this screen is open, which
- * is exactly why they stay on the screen and out of the clipboard.
+ * **The written code and the QR are deliberately different strings.** The written one is a public
+ * key and a name, carries no secret, and is safe in a message. The QR adds an address and a one-time
+ * token, which is why they stay on the screen and out of the clipboard.
  */
 @Composable
 fun PairScreen(
@@ -115,10 +106,7 @@ fun PairScreen(
       color = TextInk,
       modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
     )
-    // Two different promises, and the screen must not make the wrong one. While the socket is
-    // open, one scan finishes the job in both directions and saying "swap codes" would send
-    // somebody looking for a second step that is not there. Off the air — no wifi, or the socket
-    // would not bind — it really is both ways, and pretending otherwise strands them.
+    // One scan while the socket is open; otherwise it really is both ways.
     Text(
       when {
         listening && sharingList != null -> "They scan this once, and they're on $sharingList."
@@ -138,11 +126,8 @@ fun PairScreen(
         .background(Accent100)
         .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 18.dp)
     ) {
-      // The QR and the text below it deliberately differ, which they did not used to. The QR
-      // carries where to call back and a token good for one handshake; the text carries neither,
-      // because it is the form that gets sent as a message and outlives this screen. Both contain
-      // the same code, so scanning and pasting reach the same place — one just gets there without
-      // a second scan.
+      // The QR carries the callback address and one-time token; the text below carries neither,
+      // because it is the form that gets sent as a message and outlives this screen.
       val qr = rememberQrCode(invite)
       if (qr != null) {
         QrCodeImage(
@@ -179,16 +164,11 @@ fun PairScreen(
           style = PorygonType.BodyLarge,
         )
       }
-      // No line here about it carrying no secret. It is true, and it is the reason this is safe to
-      // send, but a person deciding whether to send it does not read a paragraph first — the one at
-      // the foot of the screen covers it once, for anyone who wonders.
     }
 
     SectionLabel("Their code", Modifier.padding(top = 26.dp, bottom = 6.dp))
     Text(
-      // Still here, and still the way in when the other phone is the one showing a code, when
-      // there is no wifi between them, or when a code arrived as a text. It is no longer the
-      // second half of a chore, which is why it no longer says "and then they do the same".
+      // For when the other phone is the one showing a code, or there is no wifi between them.
       if (listening) "Or scan theirs instead — either direction works." else "Point your camera at theirs.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
       color = Neutral700,
