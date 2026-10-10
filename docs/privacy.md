@@ -1,6 +1,6 @@
 # PorygonList privacy policy
 
-*Applies to PorygonList for Android, version 0.1.0 and later. Last changed 7 October 2026.*
+*Applies to PorygonList for Android, version 0.1.0 and later. Last changed 9 October 2026.*
 
 PorygonList has no server and no account, and the people who make it receive nothing from it.
 There are no analytics, no advertising, no crash reporting and no tracking of any kind.
@@ -36,6 +36,9 @@ it goes wherever you send that message, through the messaging app you choose.
 - **Location (optional)**, only because Android will not tell an app the wifi's name without it. It
   is used to show that name. The app never reads your location, and works fully if you say no.
 - **Run at startup**, so background sync on your approved wifi carries on after a restart.
+- **Alarms (optional)**, to wake on the exact quarter hour, so closed phones sync at the same moment.
+- **Foreground service**, to stay on the wifi for the half minute of a background sync. A quiet
+  notification shows while it runs.
 
 ## Backups
 
