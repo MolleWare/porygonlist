@@ -67,10 +67,19 @@ podman run --rm \
     export PATH="$fdroidserver:$PATH" PYTHONPATH="$fdroidserver:$fdroidserver/examples" PYTHONUNBUFFERED=true
     echo "fdroidserver $(git -C "$fdroidserver" log -1 --format="%h %cs")"
 
+    # Lint checks categories against fdroiddata'"'"'s own list, so fetch its config/
+    # folder — only that, sparsely, rather than the whole repository.
+    git clone --quiet --depth 1 --filter=blob:none --sparse https://gitlab.com/fdroid/fdroiddata.git /tmp/fdroiddata
+    git -C /tmp/fdroiddata sparse-checkout set config
+    cp -r /tmp/fdroiddata/config .
+
     echo; echo "==> fdroid lint"
     fdroid lint "$APPLICATION_ID"
 
     echo; echo "==> fdroid build"
+    # An on-server build expects the source already cloned; fetchsrclibs does
+    # that, as in fdroiddata'"'"'s CI.
+    fdroid fetchsrclibs "$APPLICATION_ID" --verbose
     fdroid build --verbose --test --on-server --no-tarball "$APPLICATION_ID"
 
     unsigned="$(ls tmp/${APPLICATION_ID}_*.apk | head -1)"
