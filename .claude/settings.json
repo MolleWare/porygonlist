@@ -47,7 +47,29 @@
 
       "Bash(podman ps)",
       "Bash(podman ps *)",
-      "Bash(ip addr show)"
+      "Bash(ip addr show)",
+
+      "Bash(ANDROID_SERIAL=* ./scripts/device.sh)",
+      "Bash(ANDROID_SERIAL=* ./scripts/device.sh *)",
+      "Bash(ANDROID_SERIAL=* ./scripts/logs.sh *)",
+      "Bash(adb -s * exec-out cat /sdcard/ui.xml)",
+      "Bash(adb -s * shell dumpsys power)",
+      "Bash(adb -s * shell dumpsys window)",
+      "Bash(adb -s * shell dumpsys activity activities)",
+      "Bash(adb -s * shell dumpsys package io.github.molleware.porygonlist)",
+      "Bash(adb shell dumpsys servicediscovery)",
+      "Bash(adb -s * shell dumpsys servicediscovery)",
+      "Bash(adb shell settings get *)",
+      "Bash(adb -s * shell settings get *)",
+      "Bash(adb shell cmd wifi status)",
+      "Bash(adb -s * shell cmd wifi status)",
+      "Bash(adb shell pidof *)",
+      "Bash(adb -s * shell pidof *)",
+      "Bash(adb shell ip -4 addr show *)",
+      "Bash(adb -s * shell ip -4 addr show *)",
+      "Bash(adb logcat -d *)",
+      "Bash(adb -s * logcat -d *)",
+      "Bash(avahi-browse *)"
     ]
   }
 }

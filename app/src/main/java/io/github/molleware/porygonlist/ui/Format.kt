@@ -34,6 +34,13 @@ fun relativeTime(epochMillis: Long, now: Long = System.currentTimeMillis(), zone
 }
 
 /**
+ * The line under an approved network. It is written once, when the network is approved, and stored,
+ * so it is a date: stored as "Approved just now", it said "just now" for good.
+ */
+fun approvedDetail(now: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): String =
+  "Approved ${Instant.ofEpochMilli(now).atZone(zone).format(DATE)}"
+
+/**
  * A time with the preposition that makes it read as part of a sentence.
  *
  * [relativeTime] returns the bare label because most of the interface sets it beside a name in a

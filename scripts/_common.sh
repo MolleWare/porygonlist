@@ -10,7 +10,9 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT
 
-if [[ -f "$REPO_ROOT/scripts/env.local.sh" ]]; then
+# Inside the development container (scripts/dev.sh) the image sets JAVA_HOME and ANDROID_HOME, and
+# env.local.sh would point them at the host's paths, which do not exist there.
+if [[ -z "${PORYGONLIST_DEV_CONTAINER:-}" && -f "$REPO_ROOT/scripts/env.local.sh" ]]; then
   # shellcheck source=/dev/null
   source "$REPO_ROOT/scripts/env.local.sh"
 fi
@@ -97,6 +99,8 @@ gradlew_signed() {
     gradlew "$@"
     return
   fi
+  [[ -z "${PORYGONLIST_DEV_CONTAINER:-}" ]] || die \
+    "Release signing happens on the host: the development container never sees the release key."
   if grep -qE '^storePassword=.+' "$props"; then
     gradlew --no-configuration-cache "$@"
     return

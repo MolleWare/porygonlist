@@ -50,7 +50,7 @@ import io.github.molleware.porygonlist.ui.components.ExportSheet
 import io.github.molleware.porygonlist.ui.components.ImportSheet
 import io.github.molleware.porygonlist.ui.components.Tab
 import io.github.molleware.porygonlist.ui.components.TabBar
-import io.github.molleware.porygonlist.ui.itemSubLabel
+import io.github.molleware.porygonlist.ui.nameFor
 import io.github.molleware.porygonlist.ui.networkLabel
 import io.github.molleware.porygonlist.ui.editSyncNote
 import io.github.molleware.porygonlist.ui.removeNote
@@ -145,9 +145,6 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
       }
     }
 
-    // Back closes an open sheet before it touches navigation.
-    BackHandler(enabled = viewModel.sheet != null) { viewModel.closeSheet() }
-
     // Everything except the keyboard. The shell is inset for the status and navigation bars and for
     // a cutout, but deliberately *not* for the IME: padding the whole app by the keyboard's height
     // lifts the tab bar into the middle of the screen and leaves a band of ground under it. The bar
@@ -215,7 +212,9 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onAddItem = viewModel::takeSuggestion,
                   onToggleChecked = viewModel::toggleChecked,
                   onEditItem = { item ->
-                    viewModel.openEditSheet(item, itemSubLabel(item, appState.activeList, appState.localDevice))
+                    // The creator, not the last writer: the sheet says "Added by", and a tick or an
+                    // edit from the other phone must not change who that was.
+                    viewModel.openEditSheet(item, appState.activeList.nameFor(item.createdBy, appState.localDevice))
                   },
                   onMoveItem = viewModel::moveItem,
                   onMerge = viewModel::mergeConflict,
@@ -369,6 +368,11 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
         TabBar(current = current.toTab(), onSelect = { tab -> backStack.goTo(tab.toKey()) })
       }
     }
+
+    // Back closes an open sheet before it touches navigation. It has to be composed after NavDisplay:
+    // the most recently added back callback wins, so placed above it, NavDisplay's took the press and
+    // popped the screen behind a sheet that stayed open.
+    BackHandler(enabled = viewModel.sheet != null) { viewModel.closeSheet() }
 
     // The sheets sit above everything, bottom bar included, exactly as the overlay does in the design.
     Box(Modifier.fillMaxSize().safeDrawingPadding()) {

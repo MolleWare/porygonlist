@@ -79,6 +79,11 @@ class FormatTest {
   }
 
   @Test
+  fun `an approved network is stamped with the date, never a relative time`() {
+    assertEquals("Approved 17 Sep", approvedDetail(now, utc))
+  }
+
+  @Test
   fun `a peer is named you only on its own device`() {
     assertEquals("you", list.nameFor(me, me))
     assertEquals("Hugo", list.nameFor(hugo, me))

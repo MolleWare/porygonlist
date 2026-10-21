@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -149,7 +150,6 @@ fun ListsScreen(
             onNameChange = onRenameDraftChange,
             onSave = onSaveRename,
             onCancel = onCancelRename,
-            canDelete = state.visibleLists.size > 1,
             confirmingDelete = confirmingDelete == list.id,
             sharedWith = list.others(state.localDevice).size,
             onShare = { onShareList(list.id) },
@@ -279,14 +279,19 @@ private fun ArrangeRow(list: GroceryList, handle: Modifier, lifted: Boolean, onT
   }
 }
 
-/** A list card turned into its own rename-and-delete form, so the answer is where the question was. */
+/**
+ * A list card turned into its own rename-and-delete form, so the answer is where the question was.
+ *
+ * Delete is always offered, the last list included (see PorygonViewModel.deleteList). The buttons
+ * wrap: four in a row overran the card at a large font size, and the one pushed off was Delete.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ListEditCard(
   name: String,
   onNameChange: (String) -> Unit,
   onSave: () -> Unit,
   onCancel: () -> Unit,
-  canDelete: Boolean,
   confirmingDelete: Boolean,
   sharedWith: Int,
   onShare: () -> Unit,
@@ -310,7 +315,7 @@ private fun ListEditCard(
       imeAction = ImeAction.Done,
       onSubmit = onSave,
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
       PrimaryButton("Save", onSave, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
       SecondaryButton("Cancel", onCancel, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
       if (!confirmingDelete) {
@@ -320,8 +325,6 @@ private fun ListEditCard(
           style = PorygonType.Meta,
           contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
         )
-      }
-      if (canDelete && !confirmingDelete) {
         SecondaryButton(
           "Delete",
           onAskDelete,
@@ -348,19 +351,29 @@ private fun ListEditCard(
   }
 }
 
-/** The sync banner: a status readout, worked out from delivery receipts. */
+/**
+ * The sync banner: a status readout, worked out from delivery receipts.
+ *
+ * The detail drops under the headline when the two do not fit on one line — several names, a large
+ * font — instead of being squeezed into a sliver beside it and broken mid-word. The corners stop at
+ * the Panel radius for the same reason: on one line that is still a full pill, but a pill radius on
+ * a banner two lines tall makes an oval that clips its own text.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun SyncPill(state: AppState, networkLabel: String) {
-  Row(
+  FlowRow(
     Modifier.fillMaxWidth()
-      .clip(Shapes.Pill)
+      .clip(Shapes.Panel)
       .background(Accent2100)
       .padding(horizontal = 16.dp, vertical = 12.dp),
-    verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(9.dp),
+    verticalArrangement = Arrangement.spacedBy(4.dp),
   ) {
-    Dot(Accent2)
-    Text(syncHeadline(state), style = PorygonType.MetaBold, color = TextInk)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+      Dot(Accent2)
+      Text(syncHeadline(state), style = PorygonType.MetaBold, color = TextInk)
+    }
     Text(syncDetail(state, networkLabel), style = PorygonType.Meta, color = TextInk.copy(alpha = 0.72f))
   }
 }

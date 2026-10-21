@@ -29,7 +29,9 @@ require_android_sdk
 # A suspended desktop takes the session with it, and from the phone that is
 # indistinguishable from the network dropping.
 inhibit=()
-if command -v systemd-inhibit >/dev/null 2>&1; then
+if [[ -n "${PORYGONLIST_DEV_CONTAINER:-}" ]]; then
+  : # ./scripts/dev.sh remote holds the inhibitor on the host, which is what suspends.
+elif command -v systemd-inhibit >/dev/null 2>&1; then
   inhibit=(systemd-inhibit --what=idle:sleep --mode=block
            --why="Claude Code Remote Control session: $session_name")
 else

@@ -33,8 +33,8 @@ be true, not how to check it.
       travels and closes the card on the other phone. (`be31359`)
 - [x] **The sync banner's "a moment ago" is hard-coded.** It gives the last confirmed handover.
 - [x] **Copy that assumes exactly two people.** Everyone on the list is named now.
-- [ ] **Dragging a row past the edge of the screen does not scroll.** Written (`512c68d`), not yet
-      tried by hand — see the phone session.
+- [ ] **Dragging a row past the edge of the screen does not scroll.** Written (`512c68d`). It
+      scrolls on the Pixel (session 3, by script); the feel by hand is still to try.
 - [x] **Backups.** Off, by decision (above).
 - [x] **README is out of date.** Updated in `63b366a`.
 - [x] **A shared list arrives silently.** Its card reads "new, from Ava" until first opened.
@@ -55,15 +55,23 @@ ones; the screenshots at the end come from these too.
 S24 FE. Stopped at sync: see *Found in the session* below.
 **Session 2, 2026-10-09:** release rebuilt with the fixes (`aa0755c`), installed over session 1's,
 pairing and lists kept. Two-phone checks continue from here.
+**Session 3, 2026-10-16:** the Pixel alone (Ava's phone away). Release rebuilt from `7e07c67` plus
+the uncommitted Delete-button and "Added by" fixes, installed over session 2's, pairing kept.
 
 ### One phone at a time
 
 - [x] First run on a clean install: naming, first list, nothing left over from development. Both
       phones, session 1.
-- [ ] About: the version reads 0.1.0, both links open the browser.
+- [x] About: the version reads 0.1.0, both links open the browser. *Pixel, session 3: Source code
+      and Report a problem both open in Brave.*
 - [ ] Edit order on a 30-item list: drag end to end, the screen scrolls along at the edges, the
-      speed feels right, and the bottom zone sits above the tab bar.
-- [ ] Pin and unpin lists; list order stays as arranged after a restart.
+      speed feels right, and the bottom zone sits above the tab bar. *Session 3, Pixel, by script
+      (`device.sh drag`): Row01 held just above the tab bar scrolled the list to the end and dropped
+      below Row30 — about 22 rows in 3 s. Whether that speed feels right is left for a hand; the
+      list "Thirty" is on the Pixel for it.*
+- [x] Pin and unpin lists; list order stays as arranged after a restart. *Pixel, session 3: stuff
+      pinned to the top, still pinned after a cold restart; unpinned, it went back below Spare;
+      dragged above Spare by its handle, still there after another restart.*
 - [ ] The list card's avatars sit against the right edge (`d679f81`).
 - [ ] TalkBack through every screen, then the largest font size: nothing unlabelled, nothing clipped.
 - [x] `adb shell bmgr backupnow io.github.molleware.porygonlist` reports the app as not eligible.
@@ -116,8 +124,8 @@ pairing and lists kept. Two-phone checks continue from here.
       four of Hugo's items read "Ava, just now". Fixed: the sub-label ignores position (`94d6ace`).
 - [x] **Something added after a tick lands below the trolley.** Jam, added after Milk was ticked,
       sat under Milk on both phones: adding keyed after the highest position, which is the
-      trolley's. Fixed: new items go above the first ticked one (`645010e`). *Needs a release
-      rebuild to see on phones.*
+      trolley's. Fixed: new items go above the first ticked one (`645010e`). *Session 3, Pixel:
+      Parmesan ticked, then Jam added — Jam lands above it.*
 - [ ] **An item added before the other phone's first tick arrives jumps to the top.** Butter was
       added on the Pixel while its copy was still unarranged, so it had no position, and unplaced
       items always sort first. Only happens in the window around a list's first arrangement.
@@ -125,6 +133,27 @@ pairing and lists kept. Two-phone checks continue from here.
       Fixed with an injectable IO dispatcher (`3c199c1`); five full runs green.
 - [ ] Copy: Share with no list says "Nobody else has this list yet."; pairing an already-paired
       phone asks "Someone new, or a phone replacing one?"; times are always 24-hour.
+- [ ] **The Delete button disappeared from a list's edit card.** Two ways: the card hid it with
+      only one list left, though the view model has deleted the last list since `26ea4c3`; and four
+      buttons in one row overran the card at a large font size or on the narrower S24 FE, pushing
+      Delete off the end. Fixed in code, not yet committed: Delete is always offered and the
+      buttons wrap. *Session 3, Pixel: at font scale 2, Delete wraps onto a second row. The
+      one-list case is still to see.*
+- [ ] **At the largest font the sync banner breaks.** The headline took the row and the detail was
+      squeezed into a sliver beside it, broken mid-word ("noth/ing", "han/ded"), and the pill radius
+      turned the tall banner into an oval that clipped it. Fixed in code, not yet committed: the
+      detail wraps under the headline, and the corners stop at the panel radius. *Needs a rebuild.*
+- [ ] **Back with a sheet open popped the screen behind it.** On a list, the edit sheet open, Back
+      went to All lists and left the sheet up over it. The sheet's back handler was composed before
+      NavDisplay's, which therefore took the press. Fixed in code, not yet committed: the handler
+      sits after NavDisplay. *Needs a rebuild.*
+- [ ] **"Approved just now" under Home, a week after approving it.** The label was stored as a
+      sentence. Fixed in code, not yet committed: it is stored as a date ("Approved 16 Oct"), and
+      the stored "Approved just now" reads back as "Approved". *Needs a rebuild.*
+- [ ] **Open: background sync was off after a reboot.** On 2026-10-16 the Pixel had no job, no
+      alarm and no wifi callback registered, after a reboot on 2026-10-13 with the app unopened since
+      2026-10-10. Opening the app armed all three at once. The boot path is meant to do it without
+      the app; to rerun with a controlled reboot.
 
 ### App closed
 
@@ -196,3 +225,18 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 - [ ] Content rating questionnaire, target audience, store category.
 - [ ] Upload an app bundle (`bundleRelease`) to internal testing first, then production. The
       bundle builds (2026-10-06, 3.5 MB unsigned); it signs itself once `keystore.properties` exists.
+
+## After 0.1.0
+
+Features for the next release. Nothing here holds up the `v0.1.0` tag.
+
+- [ ] **Clock and date up top.** The current time and date shown at the top of the screen.
+- [ ] **Gamification, with a geo option.** The geo option is switched on and off in Settings. The
+      privacy policy and Play's location declaration say location only reads the wifi's name; a geo
+      option means updating both.
+- [ ] **List history.**
+- [ ] **Recipes beside staples.** A recipe is a sublist of its ingredients. One tap on it adds
+      them all to the list, tagged, and each added item says which recipe it is an ingredient for.
+- [ ] **Sync is one switch in Settings.** Turning it on needs alarms allowed; without them it stays
+      off. This replaces today's two modes, "on the quarter hour" with alarms and "around the
+      quarter hour" without, so sync is simple and predictable: on and on time, or off.

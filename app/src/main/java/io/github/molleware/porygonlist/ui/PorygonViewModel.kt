@@ -1184,7 +1184,7 @@ class PorygonViewModel(
       // The network's own name if the phone will tell us it, so the common case needs no typing at
       // all. Blank without the location permission, which is what the naming prompt is for.
       name = wifiName.value.orEmpty(),
-      detail = "Approved just now",
+      detail = approvedDetail(),
       approved = true,
     )
 

@@ -76,11 +76,17 @@ class is worth re-reading after any copy change.
 
 Make one list, then press and hold it and delete it.
 
+- The card offers **Delete** with one list left, not only with two or more.
 - The list goes. The app lands on the same empty Lists screen as check 1, and
   does not crash on the Shop tab afterwards.
+- At the largest font size, on a shared list (its button reads "Sharing"),
+  Save, Cancel, Sharing and Delete all show; they wrap onto a second line rather
+  than run off the card. Try it on the S24 FE, the narrower screen.
 
 *Why:* this used to be refused, on the grounds that the app had no state showing
-no list at all. It has one now — it is where every install starts.
+no list at all. It has one now — it is where every install starts. The view
+model changed, but the card kept hiding Delete with one list until 2026-10-10,
+and its one-line row could push Delete off the end.
 
 ## 5. A staple tapped twice asks for two — *verified 2026-09-21*
 

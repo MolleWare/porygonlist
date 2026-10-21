@@ -1,0 +1,34 @@
+# The development container: what it takes to build PorygonList and drive the phones, and none of
+# the host's files but the ones scripts/dev.sh mounts in. Built and started by that script.
+#
+# Debian trixie, Debian's own JDK 21 and F-Droid's sdkmanager, because that is what F-Droid's build
+# server runs (see scripts/fdroid-check.sh): a build here uses the toolchain that decides whether
+# F-Droid publishes our signed APK.
+#
+# The SDK belongs to root, so the user the container runs as can read it but not change it. Gradle
+# cannot quietly download a missing package into it: a package the build needs is added below, and
+# this file stays the whole record of what the build runs on.
+
+FROM docker.io/library/debian:trixie
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      openjdk-21-jdk-headless sdkmanager \
+      ca-certificates curl git less procps unzip \
+      python3 qrencode \
+ && rm -rf /var/lib/apt/lists/*
+
+# The container is on the host's network, for wireless adb and the app's own discovery, so an adb
+# server on the default port would fight the host's. ANDROID_ADB_SERVER_PORT moves this one; adb and
+# Gradle's device code both honour it.
+ENV LANG=C.UTF-8 \
+    JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
+    ANDROID_HOME=/opt/android-sdk \
+    ANDROID_ADB_SERVER_PORT=5038 \
+    PORYGONLIST_DEV_CONTAINER=1
+
+RUN test -x "$JAVA_HOME/bin/java" \
+ && sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
+ && ln -s "$ANDROID_HOME/platform-tools/adb" /usr/local/bin/adb \
+ && adb version \
+ && rm -rf /root/.cache/sdkmanager

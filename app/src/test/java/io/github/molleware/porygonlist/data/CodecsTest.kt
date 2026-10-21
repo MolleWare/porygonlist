@@ -1,5 +1,6 @@
 package io.github.molleware.porygonlist.data
 
+import io.github.molleware.porygonlist.data.net.NetworkFingerprint
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.Field
@@ -132,6 +133,19 @@ class StateCodecTest {
     assertEquals(original.lists.map { it.name }, restored.lists.map { it.name })
     assertEquals(original.activeListId, restored.activeListId)
     assertEquals(original.networks, restored.networks)
+  }
+
+  @Test
+  fun `a network stored as approved just now reads back without the frozen time`() {
+    val home = NetworkFingerprint("aaaaaa")
+    val work = NetworkFingerprint("bbbbbb")
+    val state =
+      AppState.seed(localDevice = ME, partner = THEM)
+        .copy(networks = listOf(ApprovedNetwork(home, "Home", "Approved just now", true), ApprovedNetwork(work, "Work", "Approved 9 Oct", true)))
+
+    val restored = StateCodec.decode(StateCodec.encode(state))!!
+
+    assertEquals(listOf("Approved", "Approved 9 Oct"), restored.networks.map { it.detail })
   }
 
   @Test

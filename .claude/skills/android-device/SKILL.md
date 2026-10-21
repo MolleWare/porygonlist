@@ -27,6 +27,26 @@ invisible to the JVM suite.
 almost always to see what happened. Screenshots land in `captures/`, which is
 gitignored; read them with the Read tool.
 
+**Tap by name, not by coordinates.** Coordinates differ between the phones and move whenever a
+list scrolls; names do not. The app labels its controls for TalkBack, so nearly everything can be
+found by its text or label:
+
+```bash
+./scripts/device.sh -s <serial> tap-on "Save"            # exact text or label, then substring
+./scripts/device.sh -s <serial> tap-on "Milk" --scroll   # page down until it shows
+./scripts/device.sh -s <serial> hold-on "Weekend shop"   # long press: rename, edit sheet
+./scripts/device.sh -s <serial> wait-for "in step" 30    # poll until it appears, or fail
+./scripts/device.sh -s <serial> read                     # every visible text and label
+```
+
+`-s <serial>` picks a phone when both are attached; give it first. Prefer it to an
+`ANDROID_SERIAL=` prefix, which stops the call matching the permission allowlist. Keep each call a
+single command — no `cd … &&`, no pipes — for the same reason.
+
+Two traps: an item's checkbox is labelled with the item's name, so `tap-on "Milk"` ticks it, and
+every pencil is labelled "Edit item", so `wait-for "Edit item"` passes on the list itself. Wait for
+something only the sheet shows ("How many").
+
 | Need | Command |
 | --- | --- |
 | Deploy and launch | `./scripts/install.sh debug` |

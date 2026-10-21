@@ -260,7 +260,11 @@ object StateCodec {
                   name = f[3],
                   pairedAt = f[4].toLong(),
                 )
-            "net" -> networks += ApprovedNetwork(NetworkFingerprint(f[1]), f[2], f[3], f[4] == "1")
+            // "Approved just now" was written down at approval and then read for good; the date is
+            // lost, so it becomes plain "Approved".
+            "net" ->
+              networks +=
+                ApprovedNetwork(NetworkFingerprint(f[1]), f[2], f[3].takeUnless { it == "Approved just now" } ?: "Approved", f[4] == "1")
             "staple" -> staples += Staple(f[1], f[2].toIntOrNull() ?: 0)
             "list" -> {
               val id = f[1]
