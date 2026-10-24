@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.concurrent.Callable
 
 plugins {
   alias(libs.plugins.android.application)
@@ -109,6 +110,8 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  // mDNS for the laptop fake phone (scripts/fakephone.sh). Tests only; never in the APK.
+  testImplementation(libs.jmdns)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
@@ -126,4 +129,15 @@ dependencies {
   implementation(libs.androidx.navigation3.ui)
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+}
+
+// A laptop standing in for a second phone, for device tests with only one phone at hand. It runs the
+// app's own sync code on the JVM, from the unit-test classpath; scripts/fakephone.sh drives it.
+tasks.register<JavaExec>("fakePhone") {
+  description = "Runs the laptop fake phone. Use scripts/fakephone.sh rather than this directly."
+  val unitTests = tasks.named<Test>("testDebugUnitTest")
+  // A Callable rather than the task's provider: the classpath's own build dependencies come along,
+  // while depending on the provider would run the whole unit-test suite first.
+  classpath(Callable { unitTests.get().classpath })
+  mainClass = "io.github.molleware.porygonlist.fakephone.FakePhoneKt"
 }
