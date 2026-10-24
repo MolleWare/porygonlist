@@ -57,6 +57,9 @@ S24 FE. Stopped at sync: see *Found in the session* below.
 pairing and lists kept. Two-phone checks continue from here.
 **Session 3, 2026-10-16:** the Pixel alone (Ava's phone away). Release rebuilt from `7e07c67` plus
 the uncommitted Delete-button and "Added by" fixes, installed over session 2's, pairing kept.
+**Session 4, 2026-10-21:** the Pixel, on session 3's build, against the laptop standing in as the
+other phone — `./scripts/fakephone.sh`, the app's own sync code on the JVM. It proves the protocol
+and the Pixel's half; the S24 FE's own discovery and screens still need her phone.
 
 ### One phone at a time
 
@@ -72,8 +75,13 @@ the uncommitted Delete-button and "Added by" fixes, installed over session 2's, 
 - [x] Pin and unpin lists; list order stays as arranged after a restart. *Pixel, session 3: stuff
       pinned to the top, still pinned after a cold restart; unpinned, it went back below Spare;
       dragged above Spare by its handle, still there after another restart.*
-- [ ] The list card's avatars sit against the right edge (`d679f81`).
+- [x] The list card's avatars sit against the right edge (`d679f81`). *Pixel, 2026-10-21: "Fake shop"
+      shared from the laptop fake phone, L and H flush right on the card.*
 - [ ] TalkBack through every screen, then the largest font size: nothing unlabelled, nothing clipped.
+      *Pixel, 2026-10-21: every screen's controls dumped (lists, a list, its edit sheet, Edit
+      order, Shop, Staples, Share, Settings, pairing) — one unlabelled, the sheet's backdrop; and
+      every screen at font 2 — avatars and "Change" broke. All three fixed below; recheck on the
+      next build, and listen to TalkBack itself once by hand.*
 - [x] `adb shell bmgr backupnow io.github.molleware.porygonlist` reports the app as not eligible.
       Both phones: "Backup is not allowed", session 1.
 
@@ -83,7 +91,9 @@ the uncommitted Delete-button and "Added by" fixes, installed over session 2's, 
 - [x] Share a list: it arrives reading "new, from …"; edits both ways; tick and untick; remove;
       rename. *Session 1: arrives "new, from Hugo" in under 5 s. Session 2: add, tick, untick
       (Ava), remove and rename (Pixel), each on the other phone in under 5 s.*
-- [ ] A shared list named like one the other phone already has: two cards, told apart.
+- [x] A shared list named like one the other phone already has: two cards, told apart. *Pixel and
+      the laptop fake phone, 2026-10-21: "groceries · 3 items · just you" (H) beside "groceries ·
+      1 item · new, from Laptop" (L H).*
 - [x] Item order travels; list order and pins stay on each phone. *Session 2: Jam dragged to the
       top on Ava's phone, same order on the Pixel in under 5 s; "Weekend shop" pinned on the Pixel
       shows no pin on Ava's, and the Pixel's private "Spare" never reached her.*
@@ -91,18 +101,37 @@ the uncommitted Delete-button and "Added by" fixes, installed over session 2's, 
       *Session 2: Ava in airplane mode — the Pixel said "waiting for Ava", Ava "waiting for Hugo";
       both "in step" within 20 s of her coming back.* (Turning wifi off alone does not hold on the
       S24 FE: it turned itself back on within seconds. Use airplane mode.)
-- [ ] Same item changed on both phones while one is off the wifi: "keep which?" on both, the answer
+- [x] Same item changed on both phones while one is off the wifi: "keep which?" on both, the answer
       on one closes the other's card. Then the same with a removal against a rename. *Session 2:
       Milk ×3 (Pixel) against Milk ×1 (Ava, offline) — the card on both, worded from each side;
       "Keep Hugo's" on Ava closed the Pixel's card in under 5 s. Removal (Ava, offline) against
       rename to Sourdough (Pixel): the card on both, worded right; "Keep yours" on the Pixel only
       reached Ava once the Pixel's screen woke — fixed below, rerun on the next build to tick.*
-- [ ] Remove the other person from a list: it sticks, and their phone keeps a private copy.
-- [ ] Leave a list, and be added back.
-- [ ] Unpair: sync stops, and a third copy of the list does not bring them back.
+      *2026-10-21, Pixel and the laptop fake phone: removal (Pixel) against rename to Salted butter
+      (laptop, offline) — the card on both, worded right; "Keep yours" on the Pixel went out at
+      once, but the laptop's card never closed. Found below; rerun on the next build.*
+      *Rerun on the 22:48 build: removal (Sam, offline) against rename to Brown rice (Pixel), a
+      minute for both to confirm the removal, then "Keep Sam's" on the Pixel — Sam's card closed
+      within 3 s and Rice was gone on both.*
+- [x] Remove the other person from a list: it sticks, and their phone keeps a private copy. *Pixel
+      and the laptop fake phone, 2026-10-21: the laptop took Hugo off its "groceries"; the Pixel
+      kept it as "1 item · just you", and Ham added on the laptop afterwards never reached it.*
+- [x] Leave a list, and be added back. *Pixel and the laptop fake phone, 2026-10-21: Delete on the
+      Pixel took Hugo off the laptop's "Fake shop"; shared again from the laptop, it came back in
+      2 s as "new, from Laptop" — with its rename card still open, found below.*
+- [x] Unpair: sync stops, and a third copy of the list does not bring them back. *Pixel and two
+      laptop fake phones, Laptop and Sam, all three on "Trio", 2026-10-21: the Pixel unpaired
+      Laptop; Laptop's calls then came back "no exchange", about one a minute until they stopped;
+      Sam, still syncing with Laptop, took it off "Trio" from the Pixel's tombstone and never
+      handed it back; Laptop kept its own copy, and Toast added there stayed there. The Pixel's
+      card then reads "new, from someone" — the sender is no longer anyone it knows. Wording to
+      consider, not a fault.*
 - [x] Off the wifi and back: edits from both sides merge. *Session 2: Oil added on the Pixel and
       Tea on Ava's phone while she was offline; both on both phones after she came back.*
-- [ ] A 200-item list: how long the handover takes, and whether either phone stutters.
+- [x] A 200-item list: how long the handover takes, and whether either phone stutters. *Pixel and
+      the laptop fake phone, 2026-10-21, release build: shared, it read "200 items" on the Pixel
+      about 2 s later, in one exchange. Scrolling it: 1 janky frame of 577, 99th percentile 13 ms;
+      scrolling while 50 more arrived: 3 of 527, 14 ms. The S24 FE's side is still unmeasured.*
 
 ### Found in the session
 
@@ -119,6 +148,29 @@ the uncommitted Delete-button and "Added by" fixes, installed over session 2's, 
       process, so after the update Ava knew nowhere to call, and the Pixel — which saw Ava at
       23:23:45 — had not called her five minutes later. An edit on the Pixel started it at once.
       A closed app's background window starts with no memory the same way.
+      *2026-10-21, Pixel and the laptop fake phone: does not happen between them — restarting
+      either one, it called the other within 1–3 s with no edit. Both discover each other fine,
+      which the S24 FE did not; still to see with her phone.*
+- [x] **Keeping a removal never closed the other phone's "keep which?" card.** Both phones confirm
+      the removal while the card waits, so its tombstone is collected; keeping the removal then had
+      nothing to rewrite, nothing travelled, and the other card stayed open for good — offering to
+      bring the item back against the answer already given. Found with the laptop fake phone,
+      2026-10-21. Fixed in code, not yet committed: a tombstone an open card is about is held until
+      the card is answered (`EditClashTest`). *Verified on the 22:48 build, see the rerun above.*
+- [x] **A list shared again came back with its rename card open.** Delete is pressed from the rename
+      card, and leaving the list never closed it, so the card was still waiting on that list's id.
+      Fixed in code, not yet committed: deleting closes it (`PorygonViewModelTest`). *22:48 build:
+      left Trio by its card's Delete, Sam shared it again — back as a plain card, "new, from Sam".*
+- [ ] **A closed app went on announcing itself.** The open app's discovery belongs to the graph and
+      was turned off only by its gate, which dies with the view model; so after the app closed the
+      phone kept advertising a port that timed out, until the process died, and background windows,
+      finding it "already listening", left it. Fixed in code, not yet committed: `onCleared` stops
+      discovery as it already stopped pairing (`PorygonViewModelTest`). *Not seen on the phone:
+      swiping the app away kills its whole process on the Pixel, which ends the advert either way,
+      and "Don't keep activities" did not take effect, so the screen-gone-process-alive case could
+      not be made by hand.* **Open question for Hugo:** with
+      the app merely sent Home (view model alive) it still announces — keep that, or stop discovery
+      whenever the app leaves the screen and let the background windows do the rest?
 - [x] **Ticking an item reattributes every item in the list.** In a never-arranged list the tick
       places every item, and the sub-label followed the newest stamp, position included, so all
       four of Hugo's items read "Ava, just now". Fixed: the sub-label ignores position (`94d6ace`).
@@ -136,36 +188,85 @@ the uncommitted Delete-button and "Added by" fixes, installed over session 2's, 
 - [ ] **The Delete button disappeared from a list's edit card.** Two ways: the card hid it with
       only one list left, though the view model has deleted the last list since `26ea4c3`; and four
       buttons in one row overran the card at a large font size or on the narrower S24 FE, pushing
-      Delete off the end. Fixed in code, not yet committed: Delete is always offered and the
-      buttons wrap. *Session 3, Pixel: at font scale 2, Delete wraps onto a second row. The
-      one-list case is still to see.*
-- [ ] **At the largest font the sync banner breaks.** The headline took the row and the detail was
+      Delete off the end. Fixed (`825b6f9`): Delete is always offered and the buttons wrap.
+      *Session 3, Pixel: at font scale 2, Delete wraps onto a second row; again on the 2026-10-21
+      build. The one-list case is still to see — it means deleting every other list on a phone.*
+- [x] **At the largest font the sync banner breaks.** The headline took the row and the detail was
       squeezed into a sliver beside it, broken mid-word ("noth/ing", "han/ded"), and the pill radius
-      turned the tall banner into an oval that clipped it. Fixed in code, not yet committed: the
-      detail wraps under the headline, and the corners stop at the panel radius. *Needs a rebuild.*
-- [ ] **Back with a sheet open popped the screen behind it.** On a list, the edit sheet open, Back
+      turned the tall banner into an oval that clipped it. Fixed (`825b6f9`): the detail wraps under
+      the headline, and the corners stop at the panel radius. *Pixel, 2026-10-21 build, font 2:
+      "In step with Sam" over "Home · last handover at 23:02", nothing broken or clipped.*
+- [x] **Back with a sheet open popped the screen behind it.** On a list, the edit sheet open, Back
       went to All lists and left the sheet up over it. The sheet's back handler was composed before
-      NavDisplay's, which therefore took the press. Fixed in code, not yet committed: the handler
-      sits after NavDisplay. *Needs a rebuild.*
-- [ ] **"Approved just now" under Home, a week after approving it.** The label was stored as a
-      sentence. Fixed in code, not yet committed: it is stored as a date ("Approved 16 Oct"), and
-      the stored "Approved just now" reads back as "Approved". *Needs a rebuild.*
+      NavDisplay's, which therefore took the press. Fixed (`825b6f9`): the handler sits after
+      NavDisplay. *Pixel, 2026-10-21 build: Back closed Honey's sheet and stayed on Trio.*
+- [x] **"Approved just now" under Home, a week after approving it.** The label was stored as a
+      sentence. Fixed (`825b6f9`): it is stored as a date ("Approved 16 Oct"), and the stored
+      "Approved just now" reads back as "Approved". *Pixel, 2026-10-21 build: "Home · Approved".*
+- [ ] **At the largest font, more of the same.** Found 2026-10-21 on the Pixel at font 2. Fixed in
+      code, not yet committed; *needs a rebuild*:
+      - the initial in a list card's avatars spilled out of its circle — the letter now keeps to
+        the circle's size, not the font setting;
+      - a list's "Change" button broke into "Cha / nge" — the status beside it wraps instead.
+- [ ] **The Shop screen marked every item from someone else with the same person's initial** — the
+      first other person on the list, not whoever added it. On Trio, Jam added by the unpaired
+      laptop read "someone added this" beside Sam's S. Now the adder's own initial, and no mark
+      when the adder is unknown. Fixed in code, not yet committed. *Needs a rebuild.*
+- [ ] **Revoking alarms stops background sync until the app is opened.** With alarms allowed the
+      quarter-hour jobs are cancelled and the alarm alone carries the schedule. Revoking the
+      permission makes Android cancel the app's exact alarms and kill the process ("schedule_exact_alarm
+      revoked", 23:30:36) — and the state-changed broadcast is only sent on a grant, so nothing books
+      the jobs again. From 23:30 to 23:48 the Pixel had no job and no alarm; opening the app at
+      23:48 restored both. A wifi join would too, through WifiWatch. **Not fixed — for Hugo:** keep a
+      job booked beside the alarm as a backstop (and have it stand aside while the alarm is armed),
+      or a slow watchdog job that only re-checks the schedule, or accept it until "Sync is one
+      switch" lands after 0.1.0.
+- [ ] **The sheet's backdrop was an unlabelled button to a screen reader**, the size of the screen
+      (found by a dump of every screen's controls, 2026-10-21; every other screen had none). Now
+      labelled "Close". Fixed in code, not yet committed. *Needs a rebuild.*
 - [ ] **Open: background sync was off after a reboot.** On 2026-10-16 the Pixel had no job, no
       alarm and no wifi callback registered, after a reboot on 2026-10-13 with the app unopened since
       2026-10-10. Opening the app armed all three at once. The boot path is meant to do it without
       the app; to rerun with a controlled reboot.
+      *Rerun 2026-10-21, after Hugo rebooted the Pixel and unlocked it without opening the app: the
+      boot broadcast reached WifiWatch (22:52:45, process started for it), the persisted sync job
+      was there and ran at 23:02 — exchanging with the fake phone Sam, unopened — but **no wifi
+      listener**. Opening the app registered it at once (`LISTEN … VALIDATED → PendingIntent`). Why
+      the boot registration is missing is not known: `register` swallows its exception and nothing
+      logs listens. Worked round, not yet committed: every background window registers it again.
+      To verify: rebuild, reboot, unlock without opening, wait one window, check the listener.*
 
 ### App closed
 
 The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 
-- [ ] A forced background window advertises and exchanges, then goes quiet.
-- [ ] On a wifi that is not approved, nothing is announced.
-- [ ] Joining the home wifi starts the schedule and runs a window; joining another stops it.
-- [ ] Reboot: the phone comes back on the approved wifi and catches up without being opened.
+- [ ] A forced background window advertises and exchanges, then goes quiet. *2026-10-21, Pixel
+      with the app sent Home, and the laptop fake phone Sam: Sam's call timed out while the app was
+      away; the forced job (id now 20578, not 20569) exchanged with Sam within 1 s, and its port
+      was closed after the 30 s window. But the advert the open app had started at 22:20 was still
+      registered at 22:43 — found below. Rerun on the next build with the app swiped away.*
+      *22:48 build: swiped away, the process went entirely and the advert with it; the forced
+      window itself was already seen to exchange and close its port. What is left is the
+      mid-case in "a closed app went on announcing itself" below.*
+- [x] On a wifi that is not approved, nothing is announced. *Pixel, by hand, Hugo, 2026-10-21.*
+- [x] Joining the home wifi starts the schedule and runs a window; joining another stops it.
+      *Pixel, by hand, Hugo, 2026-10-21.*
+- [x] Reboot: the phone comes back on the approved wifi and catches up without being opened.
+      *Pixel, 2026-10-21: rebooted, unlocked, never opened; the persisted job's window at 23:02
+      exchanged with the fake phone Sam, which had added Rice while the Pixel was closed. The wifi
+      listener did not come back with it — see "background sync was off after a reboot" above.*
 - [ ] Alarms allowed on both: two closed phones, in Doze, exchange at the next :00/:15/:30/:45.
-- [ ] Allowing alarms in system settings, app closed, moves the schedule onto the quarter hour.
+      *Pixel side, 2026-10-21: app closed, screen off, `dumpsys battery unplug` and `deviceidle
+      force-idle` (deep IDLE) at 23:20; at 23:30:00 exactly it called the fake phone Sam. Sam never
+      sleeps, so "two closed phones" waits for Ava's phone.*
+- [x] Allowing alarms in system settings, app closed, moves the schedule onto the quarter hour.
+      *Pixel, 2026-10-21, 23:19: app sent Home, alarms allowed by `appops` (the same switch as the
+      system setting) — within 5 s an exact RTC_WAKEUP for 23:30:00, `window=0`,
+      `exactAllowReason=permission`; before, no alarm at all.*
 - [ ] Alarms not allowed: a window still runs at the quarter hour while awake or charging, and
+      *Pixel, 2026-10-21: Settings offers "Allow alarms" (seen at 23:07). But revoking alarms at
+      23:30 left no window at all — see "revoking alarms stops background sync" below. Rerun from a
+      phone that never had alarms, once that is decided.*
       Settings offers "Allow alarms".
 - [ ] Updating from a build with the old periodic job replaces it rather than running both.
 
@@ -176,6 +277,10 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 ### To finish
 
 - [ ] Phone screenshots, 3–6, into `fastlane/metadata/android/en-US/images/phoneScreenshots/`.
+      *Drafts, 2026-10-21, in `captures/store-draft/` (git-ignored): a shared list, the Shop view, the
+      Share screen, a "keep which?" card — "Weekend shop" with the fake phone Sam, SystemUI demo
+      mode. Not copied into fastlane yet: GrapheneOS kept the notification icons in demo mode, and
+      the next build changes the avatars. Hugo to choose; retake on the final build.*
 
 ## Store preparation
 
@@ -193,6 +298,9 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 - [x] Store text, changelog and icon in `fastlane/metadata/android/en-US/` (icon from
       `./scripts/icon.sh store`).
 - [ ] Reread the store text after the phone session; it describes the app as that leaves it.
+      *Reread 2026-10-21 against the session: accurate. "Run at startup, so background sync carries
+      on after a restart" holds only once the wifi-listener workaround is built and seen after a
+      reboot. Read again before the tag.*
 - [x] Merge `list-identity` into `main` (fast-forward, pushed `63b366a`). Work continues on `main`.
 - [ ] Tag `v0.1.0` on `main` once everything above is ticked.
 
