@@ -19,6 +19,8 @@ import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PairingCodec
 import io.github.molleware.porygonlist.data.net.NetworkMonitor
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
+import io.github.molleware.porygonlist.data.net.PeerDiscovery
+import io.github.molleware.porygonlist.data.net.ServiceRecord
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.HybridClock
@@ -123,6 +125,39 @@ class PorygonViewModelTest {
 
   private fun state() = repo.state.value!!
 
+  // ── Closing ───────────────────────────────────────────────────────────────
+
+  @Test
+  fun `closing the app stops announcing it`() = runTest(dispatcher) {
+    // Discovery belongs to the graph and outlives the screen. Left running, a closed app went on
+    // advertising a port that timed out (Pixel, 2026-10-21).
+    var stops = 0
+    val discovery =
+      object : PeerDiscovery {
+        override val found = MutableStateFlow(emptySet<ServiceRecord>())
+
+        override fun start(port: Int) = Unit
+
+        override fun stop() {
+          stops++
+        }
+      }
+    val store = ViewModelStore()
+    ViewModelProvider(
+      store,
+      viewModelFactory {
+        initializer {
+          PorygonViewModel(repo, OfflineMonitor, this@PorygonViewModelTest.store::identity, {}, discovery, io = dispatcher)
+        }
+      },
+    )[PorygonViewModel::class.java]
+    val before = stops
+
+    store.clear()
+
+    assertTrue("discovery stopped when the screen went", stops > before)
+  }
+
   // ── First run ─────────────────────────────────────────────────────────────
 
   @Test
@@ -194,6 +229,19 @@ class PorygonViewModelTest {
     // either way, which is what this is about.
     assertEquals(emptyList<GroceryList>(), state().visibleLists)
     assertTrue("nothing is open", state().visibleLists.none { it.id == state().activeListId })
+  }
+
+  @Test
+  fun `deleting a list from its rename card closes the card`() = runTest(dispatcher) {
+    repo.load()
+    val list = state().activeList
+
+    // Delete sits on the rename card, so that is where it is always pressed from.
+    vm.startRename(list)
+    vm.deleteList(list.id)
+
+    // Otherwise the card reopens on the list if somebody shares it with you again.
+    assertNull(vm.renamingList)
   }
 
   @Test

@@ -603,6 +603,12 @@ class PorygonViewModel(
     // The socket outlives this object otherwise: it belongs to the graph, and nothing else would
     // think to close the pairing half of it.
     stopPairing()
+    // Nor the discovery half: the gate that turns it off is collected in this object's scope, which
+    // is ending. Left on, the phone went on announcing a closed app until the process died — and each
+    // background window, finding it "already listening", left that announcement alone. Seen on the
+    // Pixel, 2026-10-21: the advert from an open app still up with the app closed, its port timing out.
+    peerDiscovery?.stop()
+    endpoint?.stop(ListenReason.DISCOVERY)
     super.onCleared()
   }
 
@@ -803,6 +809,9 @@ class PorygonViewModel(
       )
     }
     confirmingListDelete = null
+    // Delete is offered from the rename card, so that card is open on this list. Left open, it came
+    // back with the list when someone shared it again — seen on the Pixel, 2026-10-21.
+    if (renamingList == id) cancelRename()
   }
 
   /** Arranges this phone's Lists screen. Not stamped and never sent: the order is the owner's own. */
