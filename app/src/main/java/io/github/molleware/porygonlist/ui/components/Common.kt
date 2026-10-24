@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +41,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -82,7 +84,13 @@ fun Avatar(
     modifier.size(size).clip(CircleShape).background(background).then(if (ringColor != null) Modifier.border(2.dp, ringColor, CircleShape) else Modifier),
     contentAlignment = Alignment.Center,
   ) {
-    Text(initial, color = contentColor, style = PorygonType.MetaBold.copy(fontSize = fontSize))
+    // The letter is part of the badge, so it keeps to the circle's size rather than the font setting:
+    // at the largest font it spilled out of the circle (Pixel, 2026-10-21). The person is named in
+    // full wherever it matters; this is a mark, not text to read.
+    val density = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1f)) {
+      Text(initial, color = contentColor, style = PorygonType.MetaBold.copy(fontSize = fontSize))
+    }
   }
 }
 
@@ -291,6 +299,12 @@ fun SheetGrabber(modifier: Modifier = Modifier) {
 /** Full-bleed tap target that dismisses a sheet when the scrim above it is touched. */
 @Composable
 fun ScrimDismissArea(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-  Box(modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss))
+  Box(
+    modifier
+      .fillMaxSize()
+      .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
+      // A screen reader lands on it too, and announced an unlabelled button the size of the screen.
+      .semantics { contentDescription = "Close" }
+  )
 }
 

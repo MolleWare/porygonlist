@@ -171,11 +171,19 @@ fun ListDetailScreen(
         horizontalArrangement = Arrangement.spacedBy(7.dp),
       ) {
         Dot(Accent2)
-        Text(listStatus(list, state.localDevice, state.deliveredTo), style = PorygonType.Meta, color = Neutral700)
+        // The status wraps and the button never does: at the largest font the status took the row
+        // and broke the button into "Cha / nge" (Pixel, 2026-10-21).
+        Text(
+          listStatus(list, state.localDevice, state.deliveredTo),
+          style = PorygonType.Meta,
+          color = Neutral700,
+          modifier = Modifier.weight(1f, fill = false),
+        )
         Text(
           if (list.others(state.localDevice).isEmpty()) "Share it" else "Change",
           style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
           color = Accent900,
+          softWrap = false,
           modifier = Modifier.clip(Shapes.Pill).background(Accent300).padding(horizontal = 10.dp, vertical = 4.dp),
         )
       }
