@@ -40,6 +40,13 @@ class SyncWindow(private val context: Context) {
     repo.load()
     val state = repo.state.filterNotNull().first()
 
+    // The wifi listener again, every window. The boot path registers it, but on the Pixel after the
+    // reboots of 2026-10-13 and 2026-10-20 it was missing until the app was opened, while this job —
+    // persisted by the system — survived and ran. Registering the same PendingIntent replaces the
+    // old request, so repeating it costs nothing. Before the plan, so a window that stops the
+    // schedule on a strange wifi still leaves the listener that restarts it at home.
+    if (state.peers.isNotEmpty()) WifiWatch.register(context)
+
     // Read in one go, not off the monitor's flow — whose first value has no fingerprint yet, which
     // made every window on hardware give up as "unidentifiable" before announcing anything.
     val snapshot = AndroidNetworkMonitor(context).current()
