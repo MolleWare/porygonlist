@@ -333,13 +333,24 @@ data class GroceryList(
    * Once the removal has reached all of them, no phone still holds the live item, so there is
    * nothing left for the tombstone to contradict and it can go. Until then it stays, however old
    * it is — age is not evidence of delivery.
+   *
+   * [asked] is the item a "keep which?" card is about, and its tombstone stays while the card does.
+   * Keeping the removal rewrites it as a fresh edit, and that edit is what closes the card on the
+   * other phone; with the tombstone collected there would be nothing to write, and the other card
+   * would stay open for good, offering to bring the item back.
    */
-  fun pruneDelivered(log: DeliveryLog, localDevice: DeviceId, reachable: Set<DeviceId>? = null): GroceryList {
+  fun pruneDelivered(
+    log: DeliveryLog,
+    localDevice: DeviceId,
+    reachable: Set<DeviceId>? = null,
+    asked: ItemId? = null,
+  ): GroceryList {
     val peers = peersOf(localDevice)
     return copy(
       // With nobody to deliver to there is nothing to wait for, and a solo list keeps no tombstones.
       items =
-        if (peers.isEmpty()) liveItems else items.filterNot { it.removed.value && log.deliveredToAll(it.removed.at, peers) },
+        if (peers.isEmpty()) liveItems
+        else items.filterNot { it.id != asked && it.removed.value && log.deliveredToAll(it.removed.at, peers) },
       // Someone off the list is collected on the same terms as a removed item: once everyone who has
       // to hear it has confirmed, nobody is left holding a copy that says otherwise.
       people =
@@ -726,7 +737,10 @@ data class AppState(
     copy(
       lists =
         lists
-          .map { it.pruneDelivered(deliveredTo, localDevice, reachable = peers.map { p -> p.deviceId }.toSet()) }
+          .map { list ->
+            val asked = openConflict?.takeIf { it.kind == ConflictKind.EDITED && (it.listId ?: activeListId) == list.id }?.yours?.id
+            list.pruneDelivered(deliveredTo, localDevice, reachable = peers.map { p -> p.deviceId }.toSet(), asked = asked)
+          }
           // A list this phone has left is kept, and kept being sent, for exactly as long as its own
           // leaving tombstone survives — that is what carries the news. Once the tombstone has been
           // collected above, everyone has heard, and the list can finally go. Dropping it any

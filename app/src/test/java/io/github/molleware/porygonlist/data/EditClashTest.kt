@@ -110,6 +110,33 @@ class EditClashTest {
   }
 
   @Test
+  fun `keeping a removal closes the other phone's card, though both confirmed the removal first`() {
+    // Seen on the Pixel against the laptop fake phone: both phones confirmed the removal while the
+    // card waited, the tombstone was collected, keeping the removal then had nothing to write, and
+    // the other phone's card stayed open for good — offering to bring the item back.
+    val avaRemoved = base.copy(removed = base.removed.set(true, Hlc(2_000, 0, ava)))
+    val hugoRenamed = base.copy(name = base.name.set("Oat drink", Hlc(2_100, 0, hugo)))
+    val confirmed = Hlc(2_300, 0, hugo)
+
+    val avas =
+      phone(ava, avaRemoved, hugo).receiving(hugo, hugoRenamed, 2_200).let {
+        it.copy(deliveredTo = DeliveryLog().record(hugo, confirmed)).pruneDeliveredTombstones()
+      }
+    val hugos =
+      phone(hugo, hugoRenamed, ava).receiving(ava, avaRemoved, 2_200).let {
+        it.copy(deliveredTo = DeliveryLog().record(ava, confirmed)).pruneDeliveredTombstones()
+      }
+    assertEquals("held while the card is open", 1, avas.lists.single().items.size)
+    assertEquals("held while the card is open", 1, hugos.lists.single().items.size)
+
+    val answered = avas.withVersionKept(yours = true, at = Hlc(3_000, 0, ava))
+    val after = hugos.receiving(ava, answered.lists.single().items.single(), 3_100)
+
+    assertNull("answered elsewhere, so not asked again", after.openConflict)
+    assertEquals(emptyList<GroceryItem>(), after.lists.single().liveItems)
+  }
+
+  @Test
   fun `a duplicate card is tied to its list too`() {
     val avasRice =
       GroceryItem(ItemId("${ava.value}:7"), Field("Rice", Hlc(2_000, 0, ava)), Field(1, Hlc(2_000, 0, ava)), checkedAt = Hlc(2_000, 0, ava), removed = Field(false, Hlc(2_000, 0, ava)))
