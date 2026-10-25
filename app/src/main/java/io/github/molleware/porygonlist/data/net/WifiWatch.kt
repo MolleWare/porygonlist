@@ -88,7 +88,11 @@ class WifiWatch : BroadcastReceiver() {
         when (backgroundPlan(AndroidNetworkMonitor(app).current(network), state)) {
           BackgroundPlan.RUN -> {
             BackgroundSync.ensureScheduled(app)
-            BackgroundSync.runSoon(app)
+            // Not while a window is under way: it is doing what one soon would, and this is very
+            // likely its own registration firing for the wifi already joined. Booked anyway, Doze
+            // held it and ran it as a second window at the next maintenance slot (Pixel, 22:16,
+            // 2026-10-24) — after every window that started a fresh process.
+            if (!SyncWindow.isRunning) BackgroundSync.runSoon(app)
           }
           BackgroundPlan.STOP -> BackgroundSync.cancel(app)
           BackgroundPlan.LEAVE -> Unit

@@ -78,8 +78,16 @@ leave her phone only what is hers. Needs the next build on the Pixel.
       behaviour `debf796` removes); at 21:30:00 the firewall lifted, the Pixel called Sam at
       21:30:08 and 21:30:16, and the item crossed. Worth a look: the first call came 8 s into the
       window, the length of the connect timeout, as if a stale address for Sam was tried first.*
-- [ ] Alarms allowed, the Pixel's app closed and in deep Doze: its window reads a usable network
-      and calls the fake phone (the 5 s settle in `8c3b4c5`).
+- [x] Alarms allowed, the Pixel's app closed and in deep Doze: its window reads a usable network
+      and calls the fake phone (the 5 s settle in `8c3b4c5`). *2026-10-24, build of 20:27: app
+      killed, screen off, `dumpsys battery unplug`, `deviceidle force-idle deep` (IDLE) at 22:07,
+      Sam added Doze item 8. At 22:15:00.8 the firewall lifted, Sam reached the Pixel on its new
+      port at 22:15:02 and the Pixel called Sam back; the item crossed, and 22:30 was armed while
+      still in Doze. Noticed: each fresh process registers the wifi listener, which fires at once
+      and books a "sync now" — held by Doze here, it ran at 22:16:56 once idle was lifted, a
+      second window after every window that started a fresh process. Fixed in code: no "sync now"
+      while a window is under way. To see on the next build: after an alarm window from a closed
+      app, no job 20576 pending.*
 - [x] The Pixel rebooted, with alarms allowed and then without, unlocked, never opened: the
       listener and the schedule come back, the first window runs, an edit from the fake phone lands.
       *2026-10-24, build of 20:27 (`2270e83`), Proton always-on with PorygonList excluded. Alarms

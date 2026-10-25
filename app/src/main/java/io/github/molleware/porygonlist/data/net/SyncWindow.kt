@@ -132,5 +132,9 @@ class SyncWindow(private val context: Context) {
     private const val SETTLE_STEP_MS = 250L
 
     private val busy = AtomicBoolean(false)
+
+    /** Whether a window is open in this process right now. */
+    val isRunning: Boolean
+      get() = busy.get()
   }
 }
