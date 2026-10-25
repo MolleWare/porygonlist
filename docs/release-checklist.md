@@ -61,16 +61,6 @@ one. Everything here is a rerun, on the next build, of a check that failed or wa
 - [ ] Both rebooted with alarms allowed, unlocked, never opened: the first window runs on both and
       an edit made before the reboot crosses (the Pixel stood aside in 25 ms on 2026-10-24).
 - [ ] Alarms never allowed on her phone: her window still runs around the quarter hour.
-- [ ] Overnight battery: **one night, the Pixel alone, before the two-phone session** (Hugo,
-      2026-10-25). Unplugged, screen off, alarms allowed, Proton on with PorygonList excluded, Sam
-      running on the laptop; PorygonList's share in Settings → Battery in the morning. Around 1–2%
-      is fine. A night with sync off, as a baseline, only if it reads higher.
-      *Pixel, night of 2026-10-24/25, build of 20:27, read by Hugo in the morning: PorygonList
-      under 1% of battery, with 1 h 42 of screen time and 3 h 41 in the background. Not the real
-      test: the phone was on USB with stay-awake for most of the night, which Android's per-app
-      figure leaves out, and the night was test traffic (three reboots, alarm windows every quarter
-      hour, a forced Doze). Still to do on the next build: a night unplugged, screen off, alarms
-      allowed, then one with sync off.*
 - [ ] Anything from *Decisions* below that changes how two phones merge — several cards, an order
       for unarranged items — checked on both phones, since the fake phone shares the Pixel's code.
 - [ ] Put back: her lists compared with the backup, test lists deleted, her settings as before.
@@ -81,8 +71,9 @@ The Pixel is firewalled in the background just as hers is (`blocked=APP_BACKGROU
 2026-10-21), and `./scripts/fakephone.sh` never sleeps, so these prove the Pixel's half now and
 leave her phone only what is hers. Needs the next build on the Pixel.
 
-**On the next build** (`2ec442b`…`833d0c9`, none of it on a phone yet), Pixel and Sam, no Hugo
-needed except to install. Proton stays on, with PorygonList excluded:
+**On the next build** (`2ec442b`…`e565a78`, installed 2026-10-25 at 15:53), Pixel and Sam, no
+Hugo needed except to install. Proton stays on, with PorygonList excluded. The battery night is
+under *Overnight battery*, further down.
 
 - [x] Sent Home: no PorygonList client in `dumpsys servicediscovery`; Sam's call refused until the
       next window, which then exchanges. *Build of 15:53, 2026-10-25: Home at 15:56; the app's
@@ -692,10 +683,18 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       phone that never had alarms, once that is decided.*
       Settings offers "Allow alarms".
 
-### Overnight
+### Overnight battery (the Pixel alone)
 
-- [ ] One night with background sync, one without: battery used by PorygonList on both phones.
-      *Now one night, the Pixel alone — see "Needs her phone" at the top.*
+- [ ] **One night, the Pixel alone, before the two-phone session** (Hugo, 2026-10-25; it was a
+      night with sync and one without, on both phones). Unplugged, screen off, alarms allowed,
+      Proton on with PorygonList excluded, Sam running on the laptop; PorygonList's share in
+      Settings → Battery in the morning. Around 1–2% is fine. A night with sync off, as a baseline,
+      only if it reads higher.
+      *Pixel, night of 2026-10-24/25, build of 20:27, read by Hugo in the morning: PorygonList
+      under 1% of battery, with 1 h 42 of screen time and 3 h 41 in the background. Not the real
+      test: the phone was on USB with stay-awake for most of the night, which Android's per-app
+      figure leaves out, and the night was test traffic (three reboots, alarm windows every quarter
+      hour, a forced Doze).*
 
 ### To finish
 
