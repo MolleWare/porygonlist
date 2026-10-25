@@ -81,10 +81,13 @@ leave her phone only what is hers. Needs the next build on the Pixel.
 **On the next build** (`2ec442b`…`833d0c9`, none of it on a phone yet), Pixel and Sam, no Hugo
 needed except to install. Proton stays on, with PorygonList excluded:
 
-- [ ] Sent Home: no PorygonList client in `dumpsys servicediscovery`; Sam's call refused until the
-      next window, which then exchanges.
+- [x] Sent Home: no PorygonList client in `dumpsys servicediscovery`; Sam's call refused until the
+      next window, which then exchanges. *Build of 15:53, 2026-10-25: Home at 15:56; the app's
+      mDNS client stayed connected with no requests (nothing advertised or browsed), and its socket
+      closed when the start-up "sync now" window ended, 4 s later. The 16:15 window exchanged.*
 - [ ] The same port in two windows in a row (`/proc/net/tcp6`), and a fresh process's first call
-      going straight to Sam's kept address.
+      going straight to Sam's kept address. *Same port: yes — 37151 at 15:55 and again at 16:15.
+      The kept-address call still to see from a killed process.*
 - [ ] Alarms allowed: the alarm and a quarter-hour job both booked; the job's runs end in
       milliseconds; after an alarm window from a closed app, no job 20576 left pending.
 - [ ] Revoke alarms: a quarter-hour job is booked without anything else happening.
@@ -93,8 +96,11 @@ needed except to install. Proton stays on, with PorygonList excluded:
       unanswered survives an app restart.
 - [ ] Items added on the Pixel and on Sam to a fresh list: the same order on both.
 - [ ] PorygonList put inside Proton's tunnel: the banner says "VPN is on", and a tap opens the fix.
-- [ ] Alarms not allowed: the "Allow alarms" card on the Lists screen; app closed, a job window
+- [x] Alarms not allowed: the "Allow alarms" card on the Lists screen; app closed, a job window
       started by 5 past the quarter hour (`dumpsys jobscheduler`: the job shows a deadline).
+      *Build of 15:53: the card shows under the banner. Job 20569 booked with Delay to 16:00 and
+      Deadline to 16:05; it ran at 16:00:32. The next, 20578, ran at 16:15:02, listened on the
+      same port and called Sam within a second; Home item 10 crossed.*
 - [ ] **By hand (Hugo):** no "Edit order" any more (`e565a78`). On a list, hold an item's name:
       the edit sheet; hold its right side: it lifts with a tick and drags, Thirty end to end. On
       the Lists screen, the same with a list card, and Pin to top / Unpin in its card. Taps on
