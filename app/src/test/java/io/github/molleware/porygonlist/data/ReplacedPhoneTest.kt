@@ -111,14 +111,15 @@ class ReplacedPhoneTest {
   }
 
   @Test
-  fun `unpairing removes the person entirely`() {
+  fun `unpairing takes the person off the list, and keeps the record of it`() {
     val before = state(item("Sourdough", author = hugoOld), people = pair)
 
     val after = before.retireDevice(hugoOld, at(10_000))
 
-    assertEquals(listOf("Ava"), after.lists.first().people.map { it.name })
-    // Nothing left to attribute the old items to, which is honest rather than invented.
-    assertNull(after.lists.first().personFor(hugoOld))
+    assertEquals(listOf("Ava"), after.lists.first().people.filter { it.present }.map { it.name })
+    // Kept, so pairing the same phone again starts fresh rather than bringing the list back — and
+    // what they added still says who added it.
+    assertEquals("Hugo", after.lists.first().personFor(hugoOld)?.name)
   }
 
   @Test

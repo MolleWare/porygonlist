@@ -15,6 +15,7 @@ import io.github.molleware.porygonlist.data.sync.receive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -163,11 +164,34 @@ class RemovingSomeoneTest {
   }
 
   @Test
-  fun `an unpaired phone is never waited for`() {
+  fun `an unpaired phone's removal is kept until that phone has heard it`() {
     val hugos = phone(hugo, shared(hugo, ava, sam), ava, sam).retireDevice(ava, at(2_000))
 
     val samConfirmed = hugos.copy(deliveredTo = DeliveryLog().record(sam, at(3_000))).pruneDeliveredTombstones()
 
-    assertNull("nobody can ever ask Ava again, so only Sam is waited for", samConfirmed.lists.single().personFor(ava))
+    val kept = samConfirmed.lists.single().personFor(ava)
+    assertNotNull("kept for when Ava is paired again", kept)
+    assertFalse(kept!!.present)
+  }
+
+  @Test
+  fun `pairing again after unpairing starts fresh`() {
+    // Seen 2026-10-24: the Pixel unpaired Ava, her phone kept trusting it, and pairing again
+    // brought every shared list back with both people on it — the Pixel's record of her removal
+    // had been collected at once, so her copy naming them both was all there was.
+    val hugos = phone(hugo, shared(hugo, ava), ava).retireDevice(ava, at(2_000)).pruneDeliveredTombstones()
+    val avas = phone(ava, shared(hugo, ava), hugo)
+
+    // Paired again, then a first exchange each way.
+    val hugosAgain = hugos.copy(peers = hugos.peers + TrustedPeer(ava, byteArrayOf(1), "Ava", 0))
+    val fromAva = SyncPayload(ava, at(3_000, ava), avas.lists)
+    val onHugo = (hugosAgain.receive(fromAva, HybridClock(hugo), IdFactory(hugo, start = 200)) as SyncResult.Merged).state
+    val fromHugo = SyncPayload(hugo, at(3_100), onHugo.lists)
+    val onAva = (avas.receive(fromHugo, HybridClock(ava), IdFactory(ava, start = 300)) as SyncResult.Merged).state
+
+    assertFalse("not back on Hugo's list", onHugo.visibleLists.single().personFor(ava)!!.present)
+    val hers = onAva.visibleLists.single()
+    assertTrue("Ava keeps her own copy, shared with nobody", hers.people.filter { it.present }.map { it.device } == listOf(ava))
+    assertFalse("under a new id, not the shared one", hers.id == onHugo.visibleLists.single().id)
   }
 }

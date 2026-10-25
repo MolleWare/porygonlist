@@ -316,7 +316,8 @@ fun ShareScreen(
         Text(
           // Says the distinction out loud, because it is the one that makes the removal above look
           // like it did nothing: taking Ava off this list does not take her phone off the others.
-          "Taking someone off a list leaves their phone paired. Unpairing drops the phone, and takes them off every list.",
+          "Taking someone off a list leaves their phone paired. Unpairing drops the phone, and takes them off every " +
+            "list — pairing again starts fresh, with nothing shared until you share it.",
           style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
           color = Neutral700,
           modifier = Modifier.padding(bottom = 14.dp),

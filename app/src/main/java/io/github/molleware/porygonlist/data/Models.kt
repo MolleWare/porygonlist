@@ -347,7 +347,6 @@ data class GroceryList(
   fun pruneDelivered(
     log: DeliveryLog,
     localDevice: DeviceId,
-    reachable: Set<DeviceId>? = null,
     asked: Set<ItemId> = emptySet(),
   ): GroceryList {
     val peers = peersOf(localDevice)
@@ -360,7 +359,7 @@ data class GroceryList(
       // to hear it has confirmed, nobody is left holding a copy that says otherwise.
       people =
         people.filterNot { person ->
-          person.removed.value && log.deliveredToAll(person.removed.at, peers + listOfNotNull(mustHear(person, localDevice, reachable)))
+          person.removed.value && log.deliveredToAll(person.removed.at, peers + listOfNotNull(mustHear(person, localDevice)))
         },
     )
   }
@@ -370,15 +369,20 @@ data class GroceryList(
    *
    * Someone who left decided it on their own phone, so it already knows. Someone *removed* did not:
    * their phone still holds the list and would hand them straight back, and would go on believing
-   * the list was shared. So their own confirmation is waited for too — unless they are no longer a
-   * phone this one talks to at all, as after unpairing, when there is nobody to wait for.
+   * the list was shared. So their own confirmation is waited for too.
+   *
+   * That includes a phone that has been unpaired, which may never confirm: its removal is then
+   * kept for good, a single line. Collected at once, as it was, pairing the same phone again
+   * brought every shared list back with both people on it, because the other phone still named
+   * them both and nothing here said otherwise (2026-10-24). Kept, it reaches that phone on the
+   * first exchange after pairing again, and each side is left with its own private copy: pairing
+   * again starts fresh (Hugo, 2026-10-25).
    *
    * Null when nothing extra is owed.
    */
-  private fun mustHear(person: Person, localDevice: DeviceId, reachable: Set<DeviceId>?): DeviceId? {
+  private fun mustHear(person: Person, localDevice: DeviceId): DeviceId? {
     val decidedByThemselves = person.wasEver(person.removed.at.device)
     if (decidedByThemselves || person.device == localDevice) return null
-    if (reachable != null && person.device !in reachable) return null
     return person.device
   }
 
@@ -748,8 +752,8 @@ data class AppState(
    * Unpairs a phone: off every list it is on, and no longer trusted.
    *
    * Off the lists by tombstone, for the same reason as [removePersonFrom] — anyone else on a list
-   * would otherwise hand them back. Their own confirmation is not waited for: an unpaired phone is
-   * never spoken to again, so there is nobody to wait for.
+   * would otherwise hand them back. The tombstone is kept until that phone itself has heard, which
+   * may be never; see `mustHear` for why that is what makes pairing again start fresh.
    */
   fun retireDevice(device: DeviceId, at: Hlc): AppState =
     copy(
@@ -770,7 +774,7 @@ data class AppState(
         lists
           .map { list ->
             val asked = openConflictsOn(list.id).filter { it.kind == ConflictKind.EDITED }.map { it.yours.id }.toSet()
-            list.pruneDelivered(deliveredTo, localDevice, reachable = peers.map { p -> p.deviceId }.toSet(), asked = asked)
+            list.pruneDelivered(deliveredTo, localDevice, asked = asked)
           }
           // A list this phone has left is kept, and kept being sent, for exactly as long as its own
           // leaving tombstone survives — that is what carries the news. Once the tombstone has been
