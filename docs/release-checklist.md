@@ -87,10 +87,18 @@ needed except to install. Proton stays on, with PorygonList excluded:
       closed when the start-up "sync now" window ended, 4 s later. The 16:15 window exchanged.*
 - [ ] The same port in two windows in a row (`/proc/net/tcp6`), and a fresh process's first call
       going straight to Sam's kept address. *Same port: yes — 37151 at 15:55 and again at 16:15.
-      The kept-address call still to see from a killed process.*
-- [ ] Alarms allowed: the alarm and a quarter-hour job both booked; the job's runs end in
-      milliseconds; after an alarm window from a closed app, no job 20576 left pending.
-- [ ] Revoke alarms: a quarter-hour job is booked without anything else happening.
+      The kept-address call still to see from a killed process.* *16:30, alarms allowed, app killed
+      at 16:23: the alarm started a fresh process at 16:30:00.04; Sam reached it at 16:30:01 on
+      37151 — the port it had kept — and the Pixel called Sam back at 16:30:03. Which of the two
+      addresses the Pixel used first is not visible (Sam's call taught it one too); the window
+      exchanged within a second either way, which is the point.*
+- [x] Alarms allowed: the alarm and a quarter-hour job both booked; the job's runs end in
+      milliseconds; after an alarm window from a closed app, no job 20576 left pending. *Alarm for
+      16:30:00 and job 20569 both booked on the grant. At 16:30 the job started and returned at
+      once ("onStartJob returned false", 30 ms) while the alarm's window exchanged; its successor
+      20578 booked with no deadline; no 20576 pending after.*
+- [x] Revoke alarms: a quarter-hour job is booked without anything else happening. *Revoked at
+      16:32: the app killed, as Android does, and job 20578 still booked for 16:45.*
 - [x] Paste 200 items: "Add to …" in reach. *Build of 15:53: the field stops at its cap and scrolls,
       "Add to T Clash" and Cancel above the keyboard; added, and Sam had all 204.*
 - [x] Two clashes at once against Sam: two cards on Trio, answered one at a time; one left
