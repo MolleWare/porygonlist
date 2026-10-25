@@ -109,7 +109,12 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
 - [ ] Two clashes at once → **several cards**: every clash its own card, on its own list, nothing
       settled silently. A state-format change, so a migration and its tests.
 - [ ] Unarranged items order differently → **a position when added**: every new item gets a shared
-      position at once. Also fixes "an item added before the first tick jumps to the top".
+      position at once. Also fixes "an item added before the first tick jumps to the top". *In
+      code: adding no longer skips the key in a list nobody has arranged; the first add places the
+      list in the order it is shown, as a first move does, without making the adder the author
+      (`ReorderingTest`, three new tests that fail on the old code). Lists from before keep their
+      unplaced items until something is added or moved. To see on both phones: items added on
+      each to a new list, same order on both.*
 - [ ] Revoking alarms stops sync → **a backup job**: the quarter-hour job stays booked beside the
       alarm and stands aside while the alarm is armed, so there are never two windows. *In code:
       `BackgroundSync.ensureScheduled` books the job in both modes; a quarter-hour job returns at

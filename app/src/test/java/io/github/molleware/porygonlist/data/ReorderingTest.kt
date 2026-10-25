@@ -133,6 +133,42 @@ class ReorderingTest {
   }
 
   @Test
+  fun `something added to a list nobody has arranged gets a position, and keeps the order`() {
+    val added = list(1, 2, 3).withItemsAppended(listOf(item(9)), Hlc(3_000, 0, ava))
+
+    assertEquals(listOf(1, 2, 3, 9), added.names())
+    assertTrue("every item placed", added.liveItems.all { it.position.value.isNotEmpty() })
+    assertEquals("and nobody made the author of the others", listOf(1_000L, 1_000L, 1_000L), added.liveItems.take(3).map { it.at })
+  }
+
+  @Test
+  fun `items added on two phones to an unarranged list draw in the same order on both`() {
+    // Seen in session 5: the same 8 items, the last three in a different order on each phone,
+    // because unplaced items sort in each phone's own arrival order.
+    val base = list(1, 2)
+    val avas = base.withItemsAppended(listOf(item(8)), Hlc(2_000, 0, ava))
+    val hugos = base.withItemsAppended(listOf(item(9).copy(id = ItemId("${hugo.value}:9"))), Hlc(2_100, 0, hugo))
+
+    val onAva = merge(avas, hugos).list
+    val onHugo = merge(hugos, avas).list
+
+    assertEquals(onAva.orderedItems.map { it.id }, onHugo.orderedItems.map { it.id })
+  }
+
+  @Test
+  fun `an item added before the other phone's first tick arrives does not jump to the top`() {
+    // Seen on hardware: Butter, added on the Pixel while its copy was still unarranged, had no
+    // position, and unplaced items always sort first — so it went to the top once Ava's tick landed.
+    val base = list(1, 2, 3)
+    val avaTicked = base.ticked(1, 2_000)
+    val hugoAdded = base.withItemsAppended(listOf(item(9).copy(id = ItemId("${hugo.value}:9"))), Hlc(2_100, 0, hugo))
+
+    val onHugo = merge(hugoAdded, avaTicked).list
+
+    assertFalse("not first", onHugo.orderedItems.first().id == ItemId("${hugo.value}:9"))
+  }
+
+  @Test
   fun `two people moving different items both keep their move`() {
     // A shared starting point where everything already has a position: 2 up, then 1 back above it.
     val base =

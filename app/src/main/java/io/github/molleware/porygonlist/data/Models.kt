@@ -103,7 +103,8 @@ data class GroceryItem(
   val editing: Boolean = false,
   /**
    * Where it sits in the list: an [io.github.molleware.porygonlist.data.sync.OrderKey], shared by
-   * everyone on the list. Empty means never placed; those keep the order they were stored in.
+   * everyone on the list. Empty means never placed — an item from before every add was given one —
+   * and those keep the order they were stored in.
    */
   val position: Field<String> = Field("", Hlc(0, 0, id.device)),
 ) {
@@ -228,16 +229,20 @@ data class GroceryList(
   }
 
   /**
-   * Adds new items at the bottom of what is still to get, above the trolley.
+   * Adds new items at the bottom of what is still to get, above the trolley, each with a position.
    *
-   * In a list nobody has arranged, appending is enough: unplaced items keep their stored order. Once
-   * anything is placed, a new item needs a key between the last unticked item and the first ticked
-   * one below it — a key after everything would put it under the trolley. Where there is no clean
-   * gap to key into, the list is given fresh positions first, as [withItemMoved] does.
+   * A new item gets a key between the last unticked item and the first ticked one below it — a key
+   * after everything would put it under the trolley. Where there is no clean gap to key into, the
+   * list is given fresh positions first, as [withItemMoved] does; that includes the first add to a
+   * list whose items were never placed.
+   *
+   * Always a position, even in a list nobody has arranged (Hugo, 2026-10-25). Unplaced items sort
+   * in each phone's own storage order, which is arrival order, so two phones drew the same list in
+   * two orders (session 5), and one added while the other phone's first tick was on its way jumped
+   * to the top once that tick arrived.
    */
   fun withItemsAppended(added: List<GroceryItem>, at: Hlc): GroceryList {
     if (added.isEmpty()) return this
-    if (liveItems.none { it.position.value.isNotEmpty() || it.checked }) return copy(items = items + added)
 
     val order = orderedItems
     val anchor = order.indexOfLast { !it.checked }
