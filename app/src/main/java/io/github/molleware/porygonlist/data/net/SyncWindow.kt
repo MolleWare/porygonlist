@@ -64,12 +64,13 @@ class SyncWindow(private val context: Context) {
 
     val endpoint = Graph.syncEndpoint()
     val discovery = Graph.peerDiscovery(context)
-    Graph.syncCoordinator(context).apply {
-      start()
-      // A window exists to exchange, so it calls everyone once: owing nothing is no reason to miss
-      // what a peer has been holding for this phone while it could not be reached.
-      callEveryoneOnce()
-    }
+    val coordinator =
+      Graph.syncCoordinator(context).apply {
+        start()
+        // A window exists to exchange, so it calls everyone once: owing nothing is no reason to miss
+        // what a peer has been holding for this phone while it could not be reached.
+        callEveryoneOnce()
+      }
 
     // The open app may already be listening — a frozen process wakes up into this window with its
     // discovery still set up. Then the window only has to keep the process awake; starting a second
@@ -79,7 +80,14 @@ class SyncWindow(private val context: Context) {
     opened = Opened(socket = true)
     if (!appListening) discovery.start(port)
 
-    delay(WINDOW_MS)
+    // Two more looks inside the window. The first call can land before the other phone, woken by
+    // the same quarter hour, has its socket up; the coordinator's own retry is a minute away.
+    val step = WINDOW_MS / (LOOKS + 1)
+    repeat(LOOKS) {
+      delay(step)
+      coordinator.lookAgain()
+    }
+    delay(step)
   }
 
   /** Safe to call more than once, and from Android's "stop now" as well as from the end of [run]. */
@@ -96,6 +104,9 @@ class SyncWindow(private val context: Context) {
   companion object {
     /** Long enough to find a peer, resolve it and exchange; short enough to cost next to nothing. */
     const val WINDOW_MS = 30_000L
+
+    /** How many times the window looks again, evenly spread, so the last still has time to land. */
+    private const val LOOKS = 2
 
     /**
      * The network, once the system lets this process see it, or offline after [SETTLE_MS].

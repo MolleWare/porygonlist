@@ -150,7 +150,13 @@ class SyncCoordinatorTest {
   private var gateOpen = true
 
   /** A coordinator whose calls run the other phone's listener over a pair of pipes. */
-  private fun coordinator(me: Phone, callingInto: () -> Phone, asKey: ByteArray, port: Int = 4_000) =
+  private fun coordinator(
+    me: Phone,
+    callingInto: () -> Phone,
+    asKey: ByteArray,
+    port: Int = 4_000,
+    addresses: PeerAddressBook = PeerAddressBook(),
+  ) =
     SyncCoordinator(
       repo = me.repo.also { me.port = port },
       identity = { error("no TLS in this test") },
@@ -181,6 +187,7 @@ class SyncCoordinatorTest {
       },
       now = { clockMs },
       callbackPort = { me.port.takeIf { gateOpen } },
+      addresses = addresses,
     )
 
   private fun reach(id: DeviceId, key: ByteArray, name: String) = ReachablePeer(TrustedPeer(id, key, name, 0), "10.0.0.1", 1)
@@ -366,6 +373,64 @@ class SyncCoordinatorTest {
     unreachable.pushIfOwed(ava, hugo.repo.now)
 
     assertTrue(unreachable.callable(emptyList(), hugo.repo.now).isEmpty())
+  }
+
+  @Test
+  fun `a fresh process calls the address the last one reached, without waiting for discovery`() {
+    // Seen on hardware, 2026-10-24: both phones closed, in Doze, each woke into a new process at
+    // 18:45 with nothing remembered, and had to find the other by mDNS inside the same 30 s.
+    val (ava, hugo) = pair()
+    val book = PeerAddressBook()
+    hugo.coordinator = coordinator(hugo, callingInto = { ava }, asKey = hugoKey, port = HUGO_PORT, addresses = book)
+    strictAddresses = true
+    hugo.coordinator.pushAll(listOf(ServiceRecord(avaId, ava.host, ava.port)), hugo.repo.now)
+    assertTrue(ava.has("Ice"))
+
+    // A night later, a new process: nothing in memory, nothing discovered yet.
+    clockMs += 8 * 60 * 60_000L
+    hugo.coordinator = coordinator(hugo, callingInto = { ava }, asKey = hugoKey, port = HUGO_PORT, addresses = book)
+    hugo.adds("Night item", hugoId, 400)
+    hugo.coordinator.pushAll(emptyList(), hugo.repo.now)
+
+    assertTrue("called straight away, at the kept address", ava.has("Night item"))
+  }
+
+  @Test
+  fun `a call that fails keeps the address for the next window`() {
+    // The other phone is as likely asleep as moved; forgetting would empty the book every night.
+    val (ava, hugo) = pair()
+    val book = PeerAddressBook()
+    hugo.coordinator = coordinator(hugo, callingInto = { ava }, asKey = hugoKey, port = HUGO_PORT, addresses = book)
+    hugo.coordinator.pushAll(listOf(ServiceRecord(avaId, ava.host, ava.port)), hugo.repo.now)
+
+    val asleep =
+      SyncCoordinator(
+        repo = hugo.repo,
+        identity = { error("no TLS in this test") },
+        found = emptyFlow(),
+        scope = CoroutineScope(Dispatchers.Unconfined),
+        dial = { _, _ -> null },
+        now = { clockMs },
+        callbackPort = { HUGO_PORT },
+        addresses = book,
+      )
+    hugo.adds("Tea", hugoId, 401)
+    asleep.pushAll(emptyList(), hugo.repo.now)
+
+    assertEquals(listOf(ServiceRecord(avaId, ava.host, ava.port)), book.entries().map { it.record })
+  }
+
+  @Test
+  fun `a kept address runs out after a day`() {
+    val (ava, hugo) = pair()
+    val book = PeerAddressBook()
+    hugo.coordinator = coordinator(hugo, callingInto = { ava }, asKey = hugoKey, port = HUGO_PORT, addresses = book)
+    hugo.coordinator.pushAll(listOf(ServiceRecord(avaId, ava.host, ava.port)), hugo.repo.now)
+
+    clockMs += 25 * 60 * 60_000L
+    val fresh = coordinator(hugo, callingInto = { ava }, asKey = hugoKey, port = HUGO_PORT, addresses = book)
+
+    assertTrue(fresh.callable(emptyList(), hugo.repo.now).isEmpty())
   }
 
   @Test

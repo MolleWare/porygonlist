@@ -111,6 +111,9 @@ class SyncEndpoint(
    */
   @Volatile var syncHandler: SyncAnswerer? = null
 
+  /** Where the last port is kept, so a new socket asks for it again. Set alongside [syncHandler]. */
+  @Volatile var addresses: PeerAddressBook? = null
+
   /** The port in use, or null when not listening. */
   val port: Int?
     get() = synchronized(lock) { socket?.localPort?.takeIf { it > 0 && socket?.isClosed == false } }
@@ -169,9 +172,16 @@ class SyncEndpoint(
   private fun openLocked(): Int? {
     val factory = PinnedTls.serverFactory(identity()) ?: return null
 
-    // Port 0 asks the system for a free one, on every interface: the peer arrives over wifi and
-    // which local address that is depends on the link.
-    val bound = runCatching { factory.createServerSocket(0) as SSLServerSocket }.getOrNull() ?: return null
+    // The last port first, so a peer that remembers this phone's address still finds it after the
+    // process has gone and come back — see [PeerAddressBook]. Failing that, port 0 asks the system
+    // for a free one. Either way on every interface: the peer arrives over wifi and which local
+    // address that is depends on the link.
+    val book = addresses
+    val bound =
+      book?.port?.let { last -> runCatching { factory.createServerSocket(last) as SSLServerSocket }.getOrNull() }
+        ?: runCatching { factory.createServerSocket(0) as SSLServerSocket }.getOrNull()
+        ?: return null
+    book?.rememberPort(bound.localPort)
     // Asked for, not required: a pairing caller has no certificate yet, and a sync caller must
     // present one. Which kind arrived is decided per connection, in [handle].
     runCatching { bound.wantClientAuth = true }

@@ -55,6 +55,11 @@ import kotlinx.coroutines.launch
  * [REMEMBER_MS] after it was last found, and a caller says which port to call it back on, which the
  * phone it called remembers too. Remembered addresses are used only while [callbackPort] says sync
  * is allowed on this network, so they never walk round the gate.
+ *
+ * **Those memories die with the process, so the last good address is also kept on disk** — the
+ * one that answered, or that a caller gave. A closed phone wakes into a fresh process for every
+ * window, and without it two phones in Doze had to find each other by mDNS inside the same 30
+ * seconds (2026-10-24). See [PeerAddressBook].
  */
 class SyncCoordinator(
   private val repo: ListRepository,
@@ -66,6 +71,8 @@ class SyncCoordinator(
   private val now: () -> Long = System::currentTimeMillis,
   /** The port peers may call this phone back on; null while sync is not allowed on this network. */
   private val callbackPort: () -> Int? = { null },
+  /** Where each peer was last reached, kept across process death. In memory unless given a file. */
+  private val addresses: PeerAddressBook = PeerAddressBook(),
 ) : SyncAnswerer {
 
   /** What each peer last acknowledged, by content. In memory only: a restart simply pushes again. */
@@ -128,6 +135,16 @@ class SyncCoordinator(
     learned.value++
   }
 
+  /**
+   * Looks again now, rather than at the next minute's tick: calls whoever is still owed something.
+   *
+   * For inside a background window, which is shorter than the tick. Two phones woken by the same
+   * quarter hour can each call before the other's socket is up; a second and third look catch it.
+   */
+  fun lookAgain() {
+    learned.value++
+  }
+
   fun stop() {
     synchronized(this) {
       job?.cancel()
@@ -168,7 +185,8 @@ class SyncCoordinator(
 
   /**
    * Every address worth trying, best first: where a peer last told us to call it, then where
-   * discovery finds it now, then where discovery found it within [REMEMBER_MS].
+   * discovery finds it now, then the last address that worked, kept on disk for [KEPT_MS], then
+   * where discovery found it within [REMEMBER_MS].
    *
    * Any of them can be stale — a phone reopens its socket on a new port whenever it comes back onto
    * the wifi — so a caller tries a peer's addresses in turn, and one that fails is forgotten. Seen on
@@ -178,7 +196,8 @@ class SyncCoordinator(
   internal fun callable(records: Collection<ServiceRecord>, state: AppState): List<ReachablePeer> {
     val t = now()
     records.forEach { seen[it.deviceId] = Known(it, t) }
-    val candidates = if (callbackPort() == null) records.toList() else heard.fresh(t) + records + seen.fresh(t)
+    val kept = addresses.entries().filter { t - it.at <= KEPT_MS }.map { it.record }
+    val candidates = if (callbackPort() == null) records.toList() else heard.fresh(t) + records + kept + seen.fresh(t)
     val byId = state.peers.associateBy { it.deviceId }
     return candidates
       .filter { it.deviceId != state.localDevice }
@@ -207,6 +226,7 @@ class SyncCoordinator(
     if (acknowledged[id] == content) return true
 
     val exchange = (dial ?: ::callOverTls)(peer, payload) ?: return false.also { forget(peer) }
+    addresses.remember(ServiceRecord(id, peer.host, peer.port), now())
     repo.update { s, node -> s.afterExchange(id, exchange.theirs, exchange.ackOfMine, payload, node.clock, node.ids) }
     if (exchange.ackOfMine == payload.at) acknowledged[id] = content
     return true
@@ -216,6 +236,9 @@ class SyncCoordinator(
     val failed = ServiceRecord(peer.peer.deviceId, peer.host, peer.port)
     heard.computeIfPresent(failed.deviceId) { _, known -> known.takeUnless { it.record == failed } }
     seen.computeIfPresent(failed.deviceId) { _, known -> known.takeUnless { it.record == failed } }
+    // The kept address stays. A call fails just as often because the other phone is asleep as
+    // because it moved, and forgetting it here would empty the book exactly when the next window
+    // needs it. It is replaced by the next address that works, and runs out after [KEPT_MS].
   }
 
   override fun answer(peerKey: ByteArray, socket: SSLSocket) {
@@ -249,7 +272,9 @@ class SyncCoordinator(
 
     val port = exchange.theirs.callback
     if (from != null && port != null) {
-      heard[peer.deviceId] = Known(ServiceRecord(peer.deviceId, from, port), now())
+      val record = ServiceRecord(peer.deviceId, from, port)
+      heard[peer.deviceId] = Known(record, now())
+      addresses.remember(record, now())
       learned.value++
     }
   }
@@ -307,5 +332,10 @@ class SyncCoordinator(
     const val FORGET_AFTER_MS = 30_000L
     /** Long, because an address that stops answering is dropped on the first failed call anyway. */
     const val REMEMBER_MS = 30 * 60_000L
+    /**
+     * Longer still for the address kept on disk: it is what a phone waking from a night in Doze
+     * has to go on, and a wrong one costs one refused call before it is forgotten.
+     */
+    const val KEPT_MS = 24 * 60 * 60_000L
   }
 }

@@ -113,7 +113,14 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
 - [ ] Revoking alarms stops sync → **a backup job**: the quarter-hour job stays booked beside the
       alarm and stands aside while the alarm is armed, so there are never two windows.
 - [ ] Two phones in Doze miss each other → **remember addresses**: each peer's last address kept
-      across process death, so a fresh window calls at once instead of waiting on mDNS.
+      across process death, so a fresh window calls at once instead of waiting on mDNS. *In code,
+      three parts: the last good address of each peer kept in a file beside the state for a day
+      (`PeerAddressBook`), and not dropped when a call fails, since the peer may only be asleep;
+      the socket asks for its last port again, since a remembered address was useless while every
+      window listened on a new port (41389 at 21:04, 37667 at 21:15); and the window looks again
+      at 10 s and 20 s, for two phones woken by the same quarter hour. Tests in `SyncCoordinatorTest`
+      and `PeerAddressBookTest`. To see on the next build: the Pixel's port the same in two
+      windows; then the two-phone Doze test with Ava's phone.*
 - [ ] The app sent Home goes on announcing → **stop when it leaves the screen**: discovery stops
       when the app is no longer visible, and the windows do the rest. *In code: the screen tells
       the view model on start and stop, and off screen the gate lets the socket go and stops the

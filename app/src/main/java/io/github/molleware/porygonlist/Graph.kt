@@ -7,6 +7,7 @@ import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.net.AndroidNetworkMonitor
 import io.github.molleware.porygonlist.data.net.NetworkMonitor
 import io.github.molleware.porygonlist.data.net.NsdPeerDiscovery
+import io.github.molleware.porygonlist.data.net.PeerAddressBook
 import io.github.molleware.porygonlist.data.net.PeerDiscovery
 import io.github.molleware.porygonlist.data.net.SyncCoordinator
 import io.github.molleware.porygonlist.data.net.SyncEndpoint
@@ -25,6 +26,7 @@ import kotlinx.coroutines.SupervisorJob
  */
 object Graph {
   private const val STATE_FILE = "porygonlist.state"
+  private const val ADDRESS_FILE = "porygonlist.peers"
 
   @Volatile private var repository: ListRepository? = null
 
@@ -37,6 +39,8 @@ object Graph {
   @Volatile private var endpoint: SyncEndpoint? = null
 
   @Volatile private var coordinator: SyncCoordinator? = null
+
+  @Volatile private var addresses: PeerAddressBook? = null
 
   private val identityStore = AndroidKeystoreIdentityStore()
 
@@ -73,6 +77,9 @@ object Graph {
       coordinator = null
       endpoint?.stopAll()
       endpoint = null
+      // Where the old key's peers were last reached: they are not this key's peers.
+      addresses?.forgetAll()
+      addresses = null
 
       identityStore.forget()
       identity = null
@@ -115,11 +122,20 @@ object Graph {
               found = peerDiscovery(context).found,
               scope = networkScope,
               callbackPort = { syncEndpoint().syncPort },
+              addresses = peerAddresses(context),
             )
             .also {
               syncEndpoint().syncHandler = it
+              syncEndpoint().addresses = peerAddresses(context)
               coordinator = it
             }
+      }
+
+  /** Where paired phones were last reached, kept across process death. Reads nothing until used. */
+  fun peerAddresses(context: Context): PeerAddressBook =
+    addresses
+      ?: synchronized(this) {
+        addresses ?: PeerAddressBook(File(context.applicationContext.filesDir, ADDRESS_FILE)).also { addresses = it }
       }
 
   fun listRepository(context: Context): ListRepository =
