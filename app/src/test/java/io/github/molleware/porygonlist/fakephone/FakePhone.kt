@@ -20,6 +20,7 @@ import javax.net.ssl.SSLSocket
 import io.github.molleware.porygonlist.data.net.NetworkFingerprint
 import io.github.molleware.porygonlist.data.net.NetworkMonitor
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
+import io.github.molleware.porygonlist.data.net.PeerAddressBook
 import io.github.molleware.porygonlist.data.net.PeerDiscovery
 import io.github.molleware.porygonlist.data.net.SERVICE_TYPE
 import io.github.molleware.porygonlist.data.net.ServiceRecord
@@ -88,6 +89,10 @@ fun main(args: Array<String>) {
   val wifi = FakeWifi(address.hostAddress)
   val discovery = JmdnsDiscovery(address, { identity.deviceId })
   val endpoint = SyncEndpoint(scope) { identity }
+  // Kept on disk as a phone keeps it, so a restarted fake phone listens on its old port and still
+  // knows where its peers were — the case a real phone's window wakes into.
+  val addresses = PeerAddressBook(File(dir, "porygonlist.peers"))
+  endpoint.addresses = addresses
   val coordinator =
     SyncCoordinator(
         repo = repo,
@@ -98,6 +103,7 @@ fun main(args: Array<String>) {
         // can, so it is told.
         dial = { peer, payload -> if (wifi.isOnline) dial(identity, peer, payload) else null },
         callbackPort = { endpoint.syncPort },
+        addresses = addresses,
       )
   // Said aloud, because "the phone called by itself" is often the thing under test.
   endpoint.syncHandler = SyncAnswerer { key, socket ->
@@ -115,6 +121,9 @@ fun main(args: Array<String>) {
         },
       )[PorygonViewModel::class.java]
     }
+  // A fake phone is an app that is always open: without this it never announces or listens, since
+  // discovery runs only while the screen is shown (debf796).
+  runBlocking(main) { vm.onScreenChanged(true) }
 
   val console = Console(vm, wifi, discovery, name)
   runBlocking(main) { console.firstRun() }
