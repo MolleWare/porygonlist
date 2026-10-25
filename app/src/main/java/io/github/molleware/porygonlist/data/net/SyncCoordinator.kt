@@ -286,7 +286,7 @@ class SyncCoordinator(
         val socket = plain as SSLSocket
         PinnedTls.harden(socket)
         socket.soTimeout = TIMEOUT_MS
-        socket.connect(InetSocketAddress(peer.host, peer.port), TIMEOUT_MS)
+        socket.connect(InetSocketAddress(peer.host, peer.port), CONNECT_TIMEOUT_MS)
         socket.startHandshake()
         SyncExchange.call(payload, socket.outputStream, socket.inputStream)
       }
@@ -327,6 +327,14 @@ class SyncCoordinator(
 
   private companion object {
     const val TIMEOUT_MS = 8_000
+    /**
+     * Shorter, for reaching the other phone at all. On a home wifi a connect is answered within
+     * milliseconds or refused at once; only a phone that is asleep or firewalled lets it run out,
+     * and peers are called one after another, so each such phone held up everyone behind it by the
+     * whole timeout — 8 s of a 30 s window on the Pixel at 21:30 on 2026-10-24, with Ava's phone
+     * asleep and Sam waiting behind it.
+     */
+    const val CONNECT_TIMEOUT_MS = 3_000
     const val SETTLE_MS = 1_500L
     const val RETRY_MS = 60_000L
     const val FORGET_AFTER_MS = 30_000L

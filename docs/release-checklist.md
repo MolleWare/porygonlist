@@ -72,7 +72,12 @@ The Pixel is firewalled in the background just as hers is (`blocked=APP_BACKGROU
 2026-10-21), and `./scripts/fakephone.sh` never sleeps, so these prove the Pixel's half now and
 leave her phone only what is hers. Needs the next build on the Pixel.
 
-- [ ] The Pixel's app sent Home, the fake phone edits, the Pixel's next natural window collects it.
+- [x] The Pixel's app sent Home, the fake phone edits, the Pixel's next natural window collects it.
+      *2026-10-24, build of 20:27, alarms allowed: sent Home at 21:17; Sam added Home item 7 at
+      21:18 and its calls timed out every minute (the Home'd app still advertised port 36507 — the
+      behaviour `debf796` removes); at 21:30:00 the firewall lifted, the Pixel called Sam at
+      21:30:08 and 21:30:16, and the item crossed. Worth a look: the first call came 8 s into the
+      window, the length of the connect timeout, as if a stale address for Sam was tried first.*
 - [ ] Alarms allowed, the Pixel's app closed and in deep Doze: its window reads a usable network
       and calls the fake phone (the 5 s settle in `8c3b4c5`).
 - [x] The Pixel rebooted, with alarms allowed and then without, unlocked, never opened: the
