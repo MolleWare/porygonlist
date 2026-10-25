@@ -42,6 +42,85 @@ be true, not how to check it.
 - [x] **Accessibility, in code.** Checkboxes named for their item, Shop rows state ticked, tabs state
       selected. The TalkBack pass on a phone is in the session below.
 
+## Until the next session with Ava's phone
+
+Planned 2026-10-25. The details of each item are further down; this is the order to take them in.
+
+### Needs her phone
+
+Her S24 FE is the only stock-Android phone, and the only peer that sleeps and reboots like a real
+one. Everything here is a rerun, on the next build, of a check that failed or was left half-done.
+
+- [ ] Before anything: her lists backed up read-only (the scratch backup script, counts only), the
+      new build installed over hers with `install-all.sh release --no-launch`, both phones on USB.
+- [ ] Her app sent Home, then her next natural quarter-hour window: it exchanges with the Pixel
+      without being opened (fix `8c3b4c5`, failed 2026-10-24). Use a natural window — a forced
+      `jobscheduler run -f` does not lift her firewall.
+- [ ] Alarms allowed on both, both apps closed (`am kill`), both in deep Doze: they exchange at
+      the next quarter hour (failed 2026-10-24; both fixes in `8c3b4c5` bear on it).
+- [ ] Both rebooted with alarms allowed, unlocked, never opened: the first window runs on both and
+      an edit made before the reboot crosses (the Pixel stood aside in 25 ms on 2026-10-24).
+- [ ] Alarms never allowed on her phone: her window still runs around the quarter hour.
+- [ ] Overnight battery, both phones: one night with background sync, one without.
+- [ ] Anything from *Decisions* below that changes how two phones merge — several cards, an order
+      for unarranged items — checked on both phones, since the fake phone shares the Pixel's code.
+- [ ] Put back: her lists compared with the backup, test lists deleted, her settings as before.
+
+### Meanwhile: the Pixel and the laptop fake phone
+
+The Pixel is firewalled in the background just as hers is (`blocked=APP_BACKGROUND`, seen
+2026-10-21), and `./scripts/fakephone.sh` never sleeps, so these prove the Pixel's half now and
+leave her phone only what is hers. Needs the next build on the Pixel.
+
+- [ ] The Pixel's app sent Home, the fake phone edits, the Pixel's next natural window collects it.
+- [ ] Alarms allowed, the Pixel's app closed and in deep Doze: its window reads a usable network
+      and calls the fake phone (the 5 s settle in `8c3b4c5`).
+- [ ] The Pixel rebooted, with alarms allowed and then without, unlocked, never opened: the
+      listener and the schedule come back, the first window runs, an edit from the fake phone lands.
+- [ ] Alarms not allowed on the Pixel: a window still runs around the quarter hour (rerun of the
+      item under *App closed*, from a schedule booked by opening the app after revoking).
+- [ ] Updating from a build with the old periodic job replaces it — needs a signed build of an
+      older commit, so a second password.
+- [ ] Store screenshots on the final build, with the fake phone as the other person: demo mode,
+      throwaway lists, 3–6 into `fastlane/…/phoneScreenshots/`.
+
+### Meanwhile: by hand (Hugo)
+
+- [ ] Drag a row of the 30-item list "Thirty" end to end: does the edge scroll feel right?
+- [ ] TalkBack on, once through every screen by ear.
+- [ ] The release key and its password backed up off this machine.
+- [ ] Play Console: account, app entry, Play App Signing with our key, data safety form, location
+      declaration, content rating.
+
+### Meanwhile: decisions (Hugo), then code (Claude)
+
+Each is written up under *Found in the session*. Once decided, the fix and its tests land in a
+day; the merge ones then go on the two-phone list above.
+
+- [ ] A second clash while a card is open is settled silently: cards as a list (a state-format
+      change), the newer edit clash takes the slot, or accept one card for 0.1.0.
+- [ ] Unarranged items order differently on each phone: give every item a position when added, or
+      order unplaced items by something both phones share.
+- [ ] Revoking alarms stops background sync until the app is opened: keep a job beside the alarm,
+      a slow watchdog job, or accept until "Sync is one switch".
+- [ ] Two closed phones in Doze have 30 s to find each other: remembered addresses across process
+      death, a longer window when alarms align, or a retry inside the window.
+- [ ] The app sent Home goes on announcing a phone that cannot be reached: stop discovery when the
+      app leaves the screen, and leave it to the windows?
+- [ ] Small ones: a long paste pushes "Add to …" off the sheet; "Stop sharing …?" opens under the
+      tab bar; a kept private copy reads exactly like a same-named list of one's own; an
+      already-paired code still asks "Someone new, or a phone replacing one?"; "new, from someone"
+      once the sender is unpaired.
+
+### Meanwhile: release preparation
+
+- [ ] Push `main` from the host.
+- [ ] `./scripts/fdroid-check.sh` on the pushed HEAD now, before any tag: lint, F-Droid's own
+      build and its comparison with our APK — a difference found now costs nothing.
+- [ ] Reread the store text once the decisions above have landed.
+- [ ] When every box above the store section is ticked: the release steps under *F-Droid*,
+      `release.sh` first.
+
 ## The two-phone session
 
 Release build (`assembleRelease`, R8 on), not debug — minification has to be proven, not assumed.
@@ -326,15 +405,16 @@ first window, and Doze item (or any edit) crossing without either app opened.
 - [x] **"Approved just now" under Home, a week after approving it.** The label was stored as a
       sentence. Fixed (`825b6f9`): it is stored as a date ("Approved 16 Oct"), and the stored
       "Approved just now" reads back as "Approved". *Pixel, 2026-10-21 build: "Home · Approved".*
-- [ ] **At the largest font, more of the same.** Found 2026-10-21 on the Pixel at font 2. Fixed in
-      code, not yet committed; *needs a rebuild*:
+- [x] **At the largest font, more of the same.** Found 2026-10-21 on the Pixel at font 2. Fixed
+      (`7c620b8`):
       - the initial in a list card's avatars spilled out of its circle — the letter now keeps to
         the circle's size, not the font setting;
       - a list's "Change" button broke into "Cha / nge" — the status beside it wraps instead.
-- [ ] **The Shop screen marked every item from someone else with the same person's initial** — the
+      *Seen fixed on both phones, 2026-10-24 build.*
+- [x] **The Shop screen marked every item from someone else with the same person's initial** — the
       first other person on the list, not whoever added it. On Trio, Jam added by the unpaired
       laptop read "someone added this" beside Sam's S. Now the adder's own initial, and no mark
-      when the adder is unknown. Fixed in code, not yet committed. *Needs a rebuild.*
+      when the adder is unknown. Fixed (`7c620b8`). *Seen on the Pixel, 2026-10-24 build.*
 - [ ] **A window started from the background can read "offline" and do nothing.** Pixel, 19:30:00
       after the reboot: the alarm started SyncWindowService, which stopped 25 ms later and armed
       19:45. The app was still firewalled as a background app (`blocked=APP_BACKGROUND`), and
@@ -387,9 +467,9 @@ first window, and Doze item (or any edit) crossing without either app opened.
       job booked beside the alarm as a backstop (and have it stand aside while the alarm is armed),
       or a slow watchdog job that only re-checks the schedule, or accept it until "Sync is one
       switch" lands after 0.1.0.
-- [ ] **The sheet's backdrop was an unlabelled button to a screen reader**, the size of the screen
+- [x] **The sheet's backdrop was an unlabelled button to a screen reader**, the size of the screen
       (found by a dump of every screen's controls, 2026-10-21; every other screen had none). Now
-      labelled "Close". Fixed in code, not yet committed. *Needs a rebuild.*
+      labelled "Close" (`7c620b8`). *Seen on both phones, 2026-10-24 build.*
 - [ ] **Open: background sync was off after a reboot.** On 2026-10-16 the Pixel had no job, no
       alarm and no wifi callback registered, after a reboot on 2026-10-13 with the app unopened since
       2026-10-10. Opening the app armed all three at once. The boot path is meant to do it without
