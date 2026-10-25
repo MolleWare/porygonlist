@@ -239,7 +239,9 @@ fun ImportSheet(
       value = text,
       onValueChange = onTextChange,
       placeholder = "PL1 · Weekly shop · 2 milk, bread…",
-      modifier = Modifier.fillMaxWidth(),
+      // Capped, as the export sheet's text is: a long message scrolls inside the field instead of
+      // pushing "Add to …" off the bottom of the screen (200 items, Pixel, 2026-10-24).
+      modifier = Modifier.fillMaxWidth().heightIn(max = 190.dp),
       textStyle = PorygonType.BodyLarge,
       minHeight = 110.dp,
       shape = Shapes.Panel,
