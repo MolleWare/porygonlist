@@ -10,7 +10,7 @@ Called by device.sh, not meant to be run by hand. Standard library only.
 
 A label is an element's text or its accessibility label (content-desc). The app names its
 controls for TalkBack, so nearly everything can be found this way: a checkbox by its item's
-name, the pencil as "Edit item", a drag handle as "Move Jam". Each element's attributes are
+name, the right side of an item's row as "Move Jam". Each element's attributes are
 read on their own, because an empty `text=""` routinely sits in front of the label that matters.
 """
 

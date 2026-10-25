@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,19 +24,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -63,8 +64,7 @@ import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
 import io.github.molleware.porygonlist.ui.components.Avatar
 import io.github.molleware.porygonlist.ui.components.Dot
-import io.github.molleware.porygonlist.ui.components.DragHandle
-import io.github.molleware.porygonlist.ui.components.EditOrderToggle
+import io.github.molleware.porygonlist.ui.components.GripMark
 import io.github.molleware.porygonlist.ui.components.ReorderableColumn
 import io.github.molleware.porygonlist.ui.components.IconActionButton
 import io.github.molleware.porygonlist.ui.components.IconPaths
@@ -112,9 +112,6 @@ fun ListsScreen(
   onExplainVpn: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
-  // Edit order: cards grow a pin and a handle, and stop opening on a tap so a grab cannot also
-  // open a list. The screen's own mode, put away by leaving it.
-  var arranging by rememberSaveable { mutableStateOf(false) }
   val scrollState = rememberScrollState()
 
   Column(
@@ -144,42 +141,49 @@ fun ListsScreen(
       AllowAlarmsCard(Modifier.padding(top = 12.dp))
     }
 
-    Row(
-      Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 10.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      SectionLabel("Lists", Modifier.weight(1f))
-      if (state.visibleLists.size > 1 || arranging) {
-        EditOrderToggle(arranging, onClick = { arranging = !arranging })
-      }
-    }
+    SectionLabel("Lists", Modifier.padding(top = 24.dp, bottom = 10.dp))
 
-    if (arranging) {
-      ArrangeLists(state, scrollState, onMoveList, onSetPinned)
-    } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      state.orderedVisibleLists.forEach { list ->
-        if (renamingList == list.id) {
-          ListEditCard(
-            name = renameDraft,
-            onNameChange = onRenameDraftChange,
-            onSave = onSaveRename,
-            onCancel = onCancelRename,
-            confirmingDelete = confirmingDelete == list.id,
-            sharedWith = list.others(state.localDevice).size,
-            onShare = { onShareList(list.id) },
-            onAskDelete = { onAskDelete(list.id) },
-            onCancelDelete = onCancelDelete,
-            onDelete = { onDelete(list.id) },
-          )
-        } else {
-          ListCard(
-            list = list,
-            localDevice = state.localDevice,
-            delivered = state.deliveredTo,
-            needsAnswer = state.openConflictsOn(list.id).isNotEmpty(),
-            onClick = { onOpenList(list.id) },
-            onLongClick = { onStartRename(list) },
-          )
+    // Pinned and unpinned lists are arranged as two groups. A list cannot be dragged from one to the
+    // other — it would only snap back — because the pin, in its card, is what moves it between them.
+    val (pinned, rest) = state.orderedVisibleLists.partition { it.pinned }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      listOf(pinned to 0, rest to pinned.size).forEach { (group, offset) ->
+        if (group.isEmpty()) return@forEach
+        // Indexes count from the top of the whole screen, so the unpinned group starts after the pins.
+        ReorderableColumn(
+          group,
+          keyOf = { it.id.value },
+          onMove = { list, to -> onMoveList(list.id, offset + to) },
+          spacing = 12.dp,
+          scrollState = scrollState,
+        ) { list, handle, dragging ->
+          if (renamingList == list.id) {
+            ListEditCard(
+              name = renameDraft,
+              onNameChange = onRenameDraftChange,
+              onSave = onSaveRename,
+              onCancel = onCancelRename,
+              confirmingDelete = confirmingDelete == list.id,
+              sharedWith = list.others(state.localDevice).size,
+              onShare = { onShareList(list.id) },
+              pinned = list.pinned,
+              onTogglePin = { onSetPinned(list.id, !list.pinned) },
+              onAskDelete = { onAskDelete(list.id) },
+              onCancelDelete = onCancelDelete,
+              onDelete = { onDelete(list.id) },
+            )
+          } else {
+            ListCard(
+              list = list,
+              localDevice = state.localDevice,
+              delivered = state.deliveredTo,
+              needsAnswer = state.openConflictsOn(list.id).isNotEmpty(),
+              onClick = { onOpenList(list.id) },
+              onLongClick = { onStartRename(list) },
+              handle = handle,
+              lifted = dragging,
+            )
+          }
         }
       }
     }
@@ -200,96 +204,14 @@ fun ListsScreen(
       IconActionButton(IconPaths.PLUS, contentDescription = "Make the list", onClick = onCreateList)
     }
     Text(
-      "Press and hold a list to rename or delete it.",
-      style = PorygonType.Fine,
+      "Hold a list on the left to rename, pin or delete it, on the right to move it. The order is yours " +
+        "alone — it doesn't change anyone else's phone.",
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
       color = Neutral700,
       modifier = Modifier.padding(top = 10.dp),
     )
 
     ShareCallToAction(onGoShare, Modifier.padding(top = 22.dp))
-  }
-}
-
-/**
- * The Lists screen in edit-order mode.
- *
- * Pinned and unpinned lists are arranged as two groups. A list cannot be dragged across from one to
- * the other — it would only snap back — because the pin is what moves it between them.
- */
-@Composable
-private fun ArrangeLists(
-  state: AppState,
-  scrollState: ScrollState,
-  onMoveList: (ListId, Int) -> Unit,
-  onSetPinned: (ListId, Boolean) -> Unit,
-) {
-  val (pinned, rest) = state.orderedVisibleLists.partition { it.pinned }
-  Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    if (pinned.isNotEmpty()) {
-      ReorderableColumn(
-        pinned,
-        keyOf = { it.id.value },
-        onMove = { list, to -> onMoveList(list.id, to) },
-        spacing = 12.dp,
-        scrollState = scrollState,
-      ) {
-        list,
-        handle,
-        dragging ->
-        ArrangeRow(list, handle, dragging, onTogglePin = { onSetPinned(list.id, false) })
-      }
-    }
-    if (rest.isNotEmpty()) {
-      // Indexes count from the top of the whole screen, so the unpinned group starts after the pins.
-      ReorderableColumn(
-        rest,
-        keyOf = { it.id.value },
-        onMove = { list, to -> onMoveList(list.id, pinned.size + to) },
-        spacing = 12.dp,
-        scrollState = scrollState,
-      ) { list, handle, dragging ->
-        ArrangeRow(list, handle, dragging, onTogglePin = { onSetPinned(list.id, true) })
-      }
-    }
-    Text(
-      "Pinned lists stay at the top. The order is yours alone — it doesn't change anyone else's phone.",
-      style = PorygonType.Fine,
-      color = Neutral700,
-    )
-  }
-}
-
-@Composable
-private fun ArrangeRow(list: GroceryList, handle: Modifier, lifted: Boolean, onTogglePin: () -> Unit) {
-  Row(
-    Modifier.fillMaxWidth()
-      .shadow(if (lifted) Elevation.Sm * 2 else Elevation.Sm, Shapes.Card, ambientColor = ShadowInk, spotColor = ShadowInk)
-      .clip(Shapes.Card)
-      .background(Surface)
-      .padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Dot(list.accent.color(), size = 11.dp)
-    Text(
-      list.name,
-      style = PorygonType.ListName,
-      color = TextInk,
-      modifier = Modifier.padding(start = 11.dp).weight(1f),
-    )
-    Box(
-      Modifier.size(44.dp)
-        .clip(CircleShape)
-        .toggleable(value = list.pinned, role = Role.Switch, onValueChange = { onTogglePin() }),
-      contentAlignment = Alignment.Center,
-    ) {
-      StrokeIcon(
-        IconPaths.PIN,
-        contentDescription = if (list.pinned) "Unpin ${list.name}" else "Pin ${list.name} to the top",
-        size = 19.dp,
-        tint = if (list.pinned) Accent else Neutral600.copy(alpha = 0.6f),
-      )
-    }
-    DragHandle(handle, contentDescription = "Move ${list.name}")
   }
 }
 
@@ -309,6 +231,9 @@ private fun ListEditCard(
   confirmingDelete: Boolean,
   sharedWith: Int,
   onShare: () -> Unit,
+  /** Pinned lists stay at the top. The pin lives here now that there is no edit-order mode. */
+  pinned: Boolean,
+  onTogglePin: () -> Unit,
   onAskDelete: () -> Unit,
   onCancelDelete: () -> Unit,
   onDelete: () -> Unit,
@@ -336,6 +261,12 @@ private fun ListEditCard(
         SecondaryButton(
           if (sharedWith > 0) "Sharing" else "Share",
           onShare,
+          style = PorygonType.Meta,
+          contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
+        )
+        SecondaryButton(
+          if (pinned) "Unpin" else "Pin to top",
+          onTogglePin,
           style = PorygonType.Meta,
           contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
         )
@@ -458,26 +389,54 @@ private fun ListCard(
   needsAnswer: Boolean,
   onClick: () -> Unit,
   onLongClick: () -> Unit,
+  /** Held to move the card; goes on its right side, where the avatars and the grip are. */
+  handle: Modifier,
+  lifted: Boolean,
 ) {
-  Column(
+  // Two halves with one tap between them: either half opens the list, the left one held opens its
+  // card, the right one held picks it up to move.
+  Row(
     Modifier.fillMaxWidth()
-      .shadow(Elevation.Sm, Shapes.Card, ambientColor = ShadowInk, spotColor = ShadowInk)
+      .height(IntrinsicSize.Min)
+      .shadow(if (lifted) Elevation.Sm * 2 else Elevation.Sm, Shapes.Card, ambientColor = ShadowInk, spotColor = ShadowInk)
       .clip(Shapes.Card)
-      .background(Surface)
-      .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-      .padding(horizontal = 18.dp, vertical = 17.dp),
-    verticalArrangement = Arrangement.spacedBy(9.dp),
+      .background(Surface),
   ) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-      Dot(list.accent.color(), size = 11.dp)
-      // The name and its pin share the free space as one group, so the avatars stay against the
-      // right edge.
-      Row(Modifier.padding(start = 11.dp).weight(1f), verticalAlignment = Alignment.CenterVertically) {
-        Text(list.name, style = PorygonType.ListName, color = TextInk, modifier = Modifier.weight(1f, fill = false))
+    Column(
+      Modifier.weight(1f)
+        .fillMaxHeight()
+        .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+        .padding(start = 18.dp, top = 17.dp, bottom = 17.dp, end = 8.dp),
+      verticalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Dot(list.accent.color(), size = 11.dp)
+        Text(
+          list.name,
+          style = PorygonType.ListName,
+          color = TextInk,
+          modifier = Modifier.padding(start = 11.dp).weight(1f, fill = false),
+        )
         if (list.pinned) {
           StrokeIcon(IconPaths.PIN, contentDescription = "Pinned", size = 14.dp, tint = Neutral600, modifier = Modifier.padding(start = 6.dp))
         }
       }
+      Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text(itemCountLabel(list), style = PorygonType.Meta, color = Neutral700)
+        Text("·", style = PorygonType.Meta, color = Neutral700.copy(alpha = 0.4f))
+        Text(listCardMeta(list, localDevice, delivered, needsAnswer), style = PorygonType.Meta, color = Neutral700)
+      }
+    }
+    // At least a thumb's width, so a list shared with nobody — one avatar — is still easy to hold.
+    Row(
+      Modifier.fillMaxHeight()
+        .widthIn(min = 104.dp)
+        .clickable(onClick = onClick)
+        .then(handle)
+        .padding(end = 10.dp),
+      horizontalArrangement = Arrangement.End,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
       // Negative spacing gives the same tucked-under stack as `margin-left:-7px` in the design.
       Row(horizontalArrangement = Arrangement.spacedBy((-7).dp)) {
         list.people.filter { it.present }.forEach { person ->
@@ -490,11 +449,7 @@ private fun ListCard(
           )
         }
       }
-    }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-      Text(itemCountLabel(list), style = PorygonType.Meta, color = Neutral700)
-      Text("·", style = PorygonType.Meta, color = Neutral700.copy(alpha = 0.4f))
-      Text(listCardMeta(list, localDevice, delivered, needsAnswer), style = PorygonType.Meta, color = Neutral700)
+      GripMark(Modifier.padding(start = 4.dp))
     }
   }
 }

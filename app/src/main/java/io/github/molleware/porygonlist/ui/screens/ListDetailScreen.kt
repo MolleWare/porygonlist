@@ -29,7 +29,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -71,8 +70,7 @@ import io.github.molleware.porygonlist.ui.components.Avatar
 import io.github.molleware.porygonlist.ui.components.BackLink
 import io.github.molleware.porygonlist.ui.components.CheckCircle
 import io.github.molleware.porygonlist.ui.components.Dot
-import io.github.molleware.porygonlist.ui.components.DragHandle
-import io.github.molleware.porygonlist.ui.components.EditOrderToggle
+import io.github.molleware.porygonlist.ui.components.GripMark
 import io.github.molleware.porygonlist.ui.components.ReorderableColumn
 import io.github.molleware.porygonlist.ui.components.IconActionButton
 import io.github.molleware.porygonlist.ui.components.IconPaths
@@ -125,10 +123,6 @@ fun ListDetailScreen(
 ) {
   val list = state.activeList
   val scrollState = rememberScrollState()
-
-  // Edit order: the rows grow handles and ticking pauses, so a grab cannot also tick. A screen's
-  // own mode rather than app state — leaving the list puts it away, and nothing else reads it.
-  var arranging by rememberSaveable(list.id.value) { mutableStateOf(false) }
 
   // A new item lands at the end of the list, which is below the fold once the list is long enough.
   // Follow it down, so you can see what you just added and the field is still under your thumb for
@@ -190,18 +184,12 @@ fun ListDetailScreen(
         )
       }
       Spacer(Modifier.padding(bottom = 16.dp))
-      Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-          if (arranging) "Drag an item by its handle to move it." else "Hold an item to edit it.",
-          style = PorygonType.Fine,
-          color = Neutral700,
-          modifier = Modifier.weight(1f),
-        )
-        // Only worth offering once there are two things to put in an order.
-        if (list.liveItems.size > 1 || arranging) {
-          EditOrderToggle(arranging, onClick = { arranging = !arranging })
-        }
-      }
+      Text(
+        if (list.liveItems.size > 1) "Hold an item on the left to edit it, on the right to move it." else "Hold an item to edit it.",
+        style = PorygonType.Fine,
+        color = Neutral700,
+        modifier = Modifier.padding(bottom = 14.dp),
+      )
     }
 
     // Only on the list each is about, every one its own card, oldest first.
@@ -251,7 +239,7 @@ fun ListDetailScreen(
         partnerInitial = list.others(state.localDevice).firstOrNull()?.initial ?: "?",
         onToggle = { onToggleChecked(item.id) },
         onEdit = { onEditItem(item) },
-        handle = if (arranging) handle else null,
+        handle = handle,
         lifted = dragging,
       )
     }
@@ -435,8 +423,8 @@ private fun ItemRow(
   partnerInitial: String,
   onToggle: () -> Unit,
   onEdit: () -> Unit,
-  /** Present in edit-order mode: the grip replaces the pencil, and ticking pauses. */
-  handle: Modifier? = null,
+  /** Held to move the row; goes on its right side, where the grip is. */
+  handle: Modifier,
   /** Being dragged right now. */
   lifted: Boolean = false,
 ) {
@@ -459,7 +447,7 @@ private fun ItemRow(
     Box(
       Modifier.size(44.dp)
         .clip(CircleShape)
-        .toggleable(value = item.checked, enabled = handle == null, role = Role.Checkbox, onValueChange = { onToggle() })
+        .toggleable(value = item.checked, role = Role.Checkbox, onValueChange = { onToggle() })
         .semantics { contentDescription = item.label },
       contentAlignment = Alignment.Center,
     ) {
@@ -489,15 +477,16 @@ private fun ItemRow(
       }
     }
 
-    if (handle != null) {
-      DragHandle(handle, contentDescription = "Move ${item.name.value}")
-    } else {
-      Box(
-        Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onEdit),
-        contentAlignment = Alignment.Center,
-      ) {
-        StrokeIcon(IconPaths.PENCIL, contentDescription = "Edit item", size = 17.dp, tint = Neutral600)
-      }
+    // The right side, held to move the row. A part of the row's width rather than the grip alone,
+    // so the hold does not have to be aimed; the grip only says it is there.
+    Box(
+      Modifier.fillMaxWidth(RIGHT_SIDE).then(handle).semantics { contentDescription = "Move ${item.name.value}" },
+      contentAlignment = Alignment.CenterEnd,
+    ) {
+      GripMark()
     }
   }
 }
+
+/** How much of a row, from the right, is held to move it. */
+private const val RIGHT_SIDE = 0.3f

@@ -43,9 +43,12 @@ found by its text or label:
 `ANDROID_SERIAL=` prefix, which stops the call matching the permission allowlist. Keep each call a
 single command — no `cd … &&`, no pipes — for the same reason.
 
-Two traps: an item's checkbox is labelled with the item's name, so `tap-on "Milk"` ticks it, and
-every pencil is labelled "Edit item", so `wait-for "Edit item"` passes on the list itself. Wait for
-something only the sheet shows ("How many").
+Two traps: an item's checkbox is labelled with the item's name, so `tap-on "Milk"` ticks it; and
+there is no pencil and no "Edit order" any more (2026-10-25). An item is edited with `hold-on` on
+its name (the left of the row), and a row is moved by holding its right side — "Move Milk" — and
+only then dragging. `input swipe` moves at once and so never lifts a row; it takes
+`input motionevent DOWN x y`, a pause of about a second, `MOVE`s, then `UP`. Wait for something
+only the sheet shows ("How many").
 
 | Need | Command |
 | --- | --- |

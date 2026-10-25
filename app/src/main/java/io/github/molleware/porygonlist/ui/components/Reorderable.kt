@@ -1,16 +1,12 @@
 package io.github.molleware.porygonlist.ui.components
 
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,8 +20,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
@@ -33,54 +29,38 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import io.github.molleware.porygonlist.theme.Accent200
-import io.github.molleware.porygonlist.theme.Accent300
-import io.github.molleware.porygonlist.theme.Accent900
 import io.github.molleware.porygonlist.theme.Neutral600
-import io.github.molleware.porygonlist.theme.PorygonType
-import io.github.molleware.porygonlist.theme.Shapes
 
-/** The switch into and out of arranging a screen's rows. */
+/**
+ * The faint grip on the right of a row, saying the right side is where a row is held to move it.
+ * Only a sign: the hold itself is on whatever part of the row carries [ReorderableColumn]'s handle.
+ */
 @Composable
-fun EditOrderToggle(arranging: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-  Text(
-    if (arranging) "Done" else "Edit order",
-    style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.2),
-    color = Accent900,
-    modifier =
-      modifier
-        .clip(Shapes.Pill)
-        .background(if (arranging) Accent300 else Accent200)
-        .clickable(role = Role.Button, onClick = onClick)
-        .padding(horizontal = 12.dp, vertical = 6.dp),
-  )
-}
-
-/** The grip a row is dragged by. [handle] is what [ReorderableColumn] hands each row. */
-@Composable
-fun DragHandle(handle: Modifier, contentDescription: String) {
-  Box(Modifier.size(44.dp).then(handle), contentAlignment = Alignment.Center) {
-    StrokeIcon(IconPaths.GRIP, contentDescription = contentDescription, size = 20.dp, strokeWidth = 3.4f, tint = Neutral600)
+fun GripMark(modifier: Modifier = Modifier) {
+  Box(modifier.size(width = 28.dp, height = 44.dp), contentAlignment = Alignment.CenterEnd) {
+    StrokeIcon(IconPaths.GRIP, contentDescription = null, size = 18.dp, strokeWidth = 3.2f, tint = Neutral600.copy(alpha = 0.45f))
   }
 }
 
 /**
- * A column whose rows can be dragged into a new order by a handle.
+ * A column whose rows can be put in a new order by holding them and dragging.
  *
  * The row under your finger follows it, and the others swap past it as it crosses their midpoints,
  * so what you see while dragging is the order you will get. Nothing is written until you let go:
  * [onMove] is called once, with where the row ended up, rather than once per swap — each call is a
  * stamped edit that travels to the other phones, and a drag across six rows is one decision.
  *
- * Only the handle starts a drag. The rest of the row keeps its own taps and long-presses, and a
- * swipe anywhere else still scrolls the screen.
+ * Only the handle starts a drag, and only after a long press, so there is no mode to switch into:
+ * each row puts the handle on its right side, and keeps its left for its own long press — editing
+ * an item, or a list's card (Hugo, 2026-10-25). A swipe that does not wait still scrolls the screen,
+ * and a tap on the handle still reaches whatever else is on that part of the row.
  *
  * The handle also carries "Move up" and "Move down" as accessibility actions, because a drag is
  * the one gesture a screen reader cannot perform.
@@ -102,6 +82,7 @@ fun <T> ReorderableColumn(
   row: @Composable (item: T, handle: Modifier, dragging: Boolean) -> Unit,
 ) {
   val density = LocalDensity.current
+  val haptics = LocalHapticFeedback.current
   val spacingPx = with(density) { spacing.toPx() }
   val topEdgePx = with(density) { topEdge.toPx() }
   val bottomEdgePx = with(density) { bottomEdge.toPx() }
@@ -187,8 +168,10 @@ fun <T> ReorderableColumn(
 
         val handle =
           Modifier.pointerInput(k) {
-              detectDragGestures(
+              detectDragGesturesAfterLongPress(
                 onDragStart = {
+                  // Felt as well as seen: the row lifts under a finger that is covering it.
+                  haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                   draggingKey = k
                   offset = 0f
                 },
