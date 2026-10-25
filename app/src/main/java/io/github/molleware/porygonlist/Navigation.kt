@@ -3,6 +3,7 @@ package io.github.molleware.porygonlist
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -44,6 +46,7 @@ import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.WifiWatch
 import io.github.molleware.porygonlist.theme.Bg
+import io.github.molleware.porygonlist.ui.ClockFormat
 import io.github.molleware.porygonlist.ui.PorygonViewModel
 import io.github.molleware.porygonlist.ui.Sheet
 import io.github.molleware.porygonlist.ui.components.Confetti
@@ -89,6 +92,11 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
   LifecycleStartEffect(viewModel) {
     viewModel.onScreenChanged(true)
     onStopOrDispose { viewModel.onScreenChanged(false) }
+  }
+  // 9:30 PM or 21:30, as the phone is set; read again on every return, since it is changed there.
+  LifecycleResumeEffect(Unit) {
+    ClockFormat.is24Hour = DateFormat.is24HourFormat(context)
+    onPauseOrDispose {}
   }
   val state by viewModel.state.collectAsStateWithLifecycle()
   val networkSnapshot by viewModel.network.collectAsStateWithLifecycle()

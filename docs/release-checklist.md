@@ -150,7 +150,9 @@ needed except to install. Proton stays on, with PorygonList excluded:
       2026-10-25.*
 - [x] ~~TalkBack on, once through every screen by ear.~~ *Not for 0.1.0 (Hugo, 2026-10-25); moved
       to After 0.1.0.*
-- [ ] The release key and its password backed up off this machine.
+- [ ] The release key and its password backed up off this machine. *2026-10-25: the password
+      is backed up; the key itself — the `.jks` file named in `keystore.properties`, on the host —
+      is not yet. Both are needed.*
 - [ ] Play Console: account, app entry, Play App Signing with our key, data safety form, location
       declaration, content rating.
 
@@ -414,7 +416,12 @@ for every test; Ava's real lists only come into it for the unpairing test, which
       Pixel ("Add Ava"; her phone had never stopped trusting it): within 20 s every shared S5 list
       had both people again, in step, with no sharing again needed — S5 Alpha had all 8 items on
       both, both after-unpair edits and the stuck Window item included. Note for Hugo: pairing
-      again undoes an unpairing entirely, lists and all.*
+      again undoes an unpairing entirely, lists and all.* *Decided (Hugo, 2026-10-25): pairing
+      again starts fresh. The cause: the unpaired person's removal was collected at once, so her
+      copy naming them both was all there was. It is now kept until that phone has heard it, and
+      reaches it on the first exchange after pairing again; each side keeps its own private copy
+      (`RemovingSomeoneTest`). The Share tab says so. To see with her phone: unpair, pair again,
+      nothing shared until shared.*
 - [x] Ava's lists match the backup — the backup script run again, and the two compared; anything
       missing pasted back from the PL1 lines. *2026-10-25, after the unpair test and again after
       the cleanup: the same 8 lists, same order, same names, items, quantities and ticks. Nothing
@@ -480,6 +487,8 @@ first window, and Doze item (or any edit) crossing without either app opened.
       Fixed with an injectable IO dispatcher (`3c199c1`); five full runs green.
 - [ ] Copy: Share with no list says "Nobody else has this list yet."; pairing an already-paired
       phone asks "Someone new, or a phone replacing one?"; times are always 24-hour.
+      *Times: decided (Hugo, 2026-10-25) to follow the phone's 12/24-hour setting; in code, read
+      again on every return to the app (`FormatTest`). The other two are under After 0.1.0.*
 - [ ] **The Delete button disappeared from a list's edit card.** Two ways: the card hid it with
       only one list left, though the view model has deleted the last list since `26ea4c3`; and four
       buttons in one row overran the card at a large font size or on the narrower S24 FE, pushing

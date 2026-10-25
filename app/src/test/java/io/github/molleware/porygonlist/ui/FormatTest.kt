@@ -15,6 +15,7 @@ import io.github.molleware.porygonlist.data.sync.ItemId
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FormatTest {
@@ -66,6 +67,17 @@ class FormatTest {
     val thisMorning = ZonedDateTime.of(2026, 9, 17, 9, 12, 0, 0, utc).toInstant().toEpochMilli()
 
     assertEquals("9:12", relativeTime(thisMorning, now, utc))
+  }
+
+  @Test
+  fun `the time follows the phone's 12 or 24 hour setting`() {
+    val evening = ZonedDateTime.of(2026, 9, 17, 21, 30, 0, 0, utc).toInstant().toEpochMilli()
+    val later = evening + 3_600_000L
+
+    assertEquals("21:30", relativeTime(evening, later, utc, is24Hour = true))
+    // The AM/PM marker is the phone's language's own; the hour is what the setting decides.
+    val twelve = relativeTime(evening, later, utc, is24Hour = false)
+    assertTrue(twelve, twelve.startsWith("9:30") && !twelve.contains("21"))
   }
 
   @Test

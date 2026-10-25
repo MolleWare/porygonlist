@@ -11,6 +11,9 @@ import io.github.molleware.porygonlist.data.net.NetworkSnapshot
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Hlc
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -19,15 +22,32 @@ import java.time.format.DateTimeFormatter
  * The design writes provenance as ready-made strings ("you, 9:12"). Those are stored structured and
  * rendered here instead, so a restart does not leave "just now" frozen under an item added days ago.
  */
-private val TIME = DateTimeFormatter.ofPattern("H:mm")
+private val TIME_24 = DateTimeFormatter.ofPattern("H:mm")
+private val TIME_12 = DateTimeFormatter.ofPattern("h:mm a")
 private val DATE = DateTimeFormatter.ofPattern("d MMM")
 
-fun relativeTime(epochMillis: Long, now: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): String {
+/**
+ * Whether times read "21:30" or "9:30 PM": the phone's own 12/24-hour setting (Hugo, 2026-10-25).
+ *
+ * Set by the screen on every return, since the owner changes it in system settings, and held as
+ * state so that anything already showing a time redraws. 24-hour until told, which is what every
+ * time read before this.
+ */
+object ClockFormat {
+  var is24Hour by mutableStateOf(true)
+}
+
+fun relativeTime(
+  epochMillis: Long,
+  now: Long = System.currentTimeMillis(),
+  zone: ZoneId = ZoneId.systemDefault(),
+  is24Hour: Boolean = ClockFormat.is24Hour,
+): String {
   if (now - epochMillis < 60_000) return "just now"
   val then = Instant.ofEpochMilli(epochMillis).atZone(zone)
   val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
   return when (then.toLocalDate()) {
-    today -> then.format(TIME)
+    today -> then.format(if (is24Hour) TIME_24 else TIME_12)
     today.minusDays(1) -> "yesterday"
     else -> then.format(DATE)
   }
