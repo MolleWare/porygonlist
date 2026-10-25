@@ -86,6 +86,9 @@ needed except to install. Proton stays on, with PorygonList excluded:
 - [ ] Two clashes at once against Sam: two cards on Trio, answered one at a time; one left
       unanswered survives an app restart.
 - [ ] Items added on the Pixel and on Sam to a fresh list: the same order on both.
+- [ ] PorygonList put inside Proton's tunnel: the banner says "VPN is on", and a tap opens the fix.
+- [ ] Alarms not allowed: the "Allow alarms" card on the Lists screen; app closed, a job window
+      started by 5 past the quarter hour (`dumpsys jobscheduler`: the job shows a deadline).
 
 - [x] The Pixel's app sent Home, the fake phone edits, the Pixel's next natural window collects it.
       *2026-10-24, build of 20:27, alarms allowed: sent Home at 21:17; Sam added Home item 7 at
