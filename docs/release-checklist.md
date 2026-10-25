@@ -87,6 +87,9 @@ and the Pixel's half; the S24 FE's own discovery and screens still need her phon
 
 ### Both phones
 
+Ticks dated 2026-10-21 came from the Pixel against the laptop fake phone, not from Ava's S24 FE.
+They prove the protocol and the Pixel's side; the reruns on her phone are under *Session 5* below.
+
 - [x] Pair from scratch, both directions. One scan each way, session 1 — Ava's new key carries TLS.
 - [x] Share a list: it arrives reading "new, from …"; edits both ways; tick and untick; remove;
       rename. *Session 1: arrives "new, from Hugo" in under 5 s. Session 2: add, tick, untick
@@ -132,6 +135,118 @@ and the Pixel's half; the S24 FE's own discovery and screens still need her phon
       the laptop fake phone, 2026-10-21, release build: shared, it read "200 items" on the Pixel
       about 2 s later, in one exchange. Scrolling it: 1 janky frame of 577, 99th percentile 13 ms;
       scrolling while 50 more arrived: 3 of 527, 14 ms. The S24 FE's side is still unmeasured.*
+
+### Session 5: both real phones
+
+Both phones on USB to the laptop, reached through the host's adb, stay-awake on. Throwaway lists
+for every test; Ava's real lists only come into it for the unpairing test, which runs last.
+
+**Before**
+
+- [x] Ava's lists backed up, read-only, from the screen: 8 lists, every title and item count
+      checked against its card, with screenshots and a paste-able PL1 line each. Kept outside the
+      repo, in the dev container's `~/porygonlist-backups/ava-2026-10-24/` (2026-10-24).
+- [x] New release build installed over the current one on both phones, lists and pairing kept.
+      *`install-all.sh release` from `d784102`, 2026-10-24 16:58, both still paired to each other.
+      The Pixel's wifi was found switched off and turned back on for the session.*
+
+**What the fake phone ticked, rerun with her phone**
+
+- [x] A same-named list arriving on the S24 FE: two cards, told apart, on her narrower screen.
+      *Her "S5 Twin · A · 1 item · just you" beside the Pixel's "S5 Twin · H A · 1 item · new,
+      from Hugo".*
+- [x] Remove the other person, both directions: the removed phone keeps a private copy, and an edit
+      made afterwards on the remaining phone never reaches it. *Pixel took Ava off its S5 Twin: she
+      kept "His item", never "After removal". Ava took Hugo off her S5 Beta: the Pixel kept Cheese
+      and Grapes, never "Late item". Both confirmations sit below the tab bar until scrolled to,
+      and the copy kept reads exactly like her own same-named list — found below.*
+- [x] Leave a list and be added back, both directions: it returns as a plain card, rename card
+      closed. *Ava left S5 Alpha, the Pixel added her back: "new, from Hugo", no editor open. The
+      Pixel left S5 Beta, Ava added Hugo back: "new, from Ava", no editor open.*
+- [x] "Keep which?" with a removal against a rename, both directions, a minute for both phones to
+      confirm the removal, then keep the removal: the other card closes within 5 s. Then the same
+      with two quantities. *Bread: removed by Ava (airplane mode), renamed Rye bread on the Pixel;
+      the card on both, worded from each side; "Keep Ava's" on the Pixel, her card gone in 4.8 s.
+      Eggs: removed on the Pixel (wifi off), Duck eggs on hers; "Keep Hugo's" on hers, the Pixel's
+      gone in 2.6 s. Tea ×2 (her) against ×3 (Pixel): "Keep Hugo's" on hers, gone in 2.6 s, ×3 on
+      both. The first attempt, Milk, never asked on the Pixel at all — found below.*
+- [x] A 200-item list from the Pixel: how long until her phone shows it, and her phone's frame
+      stats while scrolling it and while 50 more arrive. *"200 items · new, from Hugo" on her card
+      7.9 s after Add (screen reads included). Her S24 FE scrolling it: 0 janky of 125 frames,
+      99th percentile 5 ms; scrolling while 50 more arrived: 29 janky of 1014 (2.9%), 99th
+      percentile 10 ms; 250 on both, in step. Made with Paste a list — which is where the next
+      finding came from.*
+
+**Only her phone can prove**
+
+- [x] Her edits go out on their own, with no edit on the Pixel to prompt them (the S24 FE's mDNS
+      flicker, `aa0755c`). *Tea added on her phone, on the Pixel 3.6 s later.*
+- [x] A stale address: her phone off the wifi and back, so her port changes; the Pixel reaches the
+      new port without waiting for her to call (`a304778`). *Airplane mode 75 s: her listening
+      port 34803 → none → 36303 (read from `/proc/net/tcp6`); Honey, added on the Pixel while she
+      was away, on her phone 7.8 s after airplane mode went off, both "in step". Which phone made
+      the call is not visible — the app logs nothing — but nothing waited.*
+- [x] After an app restart, the first exchange does not wait for an edit — restart the app on her
+      phone, then on the Pixel. *Her app force-stopped, Rice added on the Pixel, 70 s, her app
+      started: Rice there 8.2 s later. The same the other way with Oats: 8.4 s. Nothing edited to
+      prompt either.*
+- [ ] A forced background window on her phone exchanges, then goes quiet. *Failed 2026-10-24 —
+      found below: with her app sent Home, neither a forced window (17:51) nor her own at 18:01
+      exchanged, though the Pixel had Window item waiting. Fixed in code; rerun on the next build.*
+- [ ] Alarms allowed on both: two closed phones, both in Doze, exchange at the next quarter hour.
+      *2026-10-24: alarms allowed on both (each armed 18:45:00 exact), both apps closed by `am kill`
+      (no process), Doze item added on hers first, both unplugged by `dumpsys` and forced into deep
+      IDLE. At 18:45:00 exactly both processes started and both listened (Pixel 37913, hers
+      37011) until 18:45:30, then closed. Whether they exchanged is not yet seen: the socket watcher
+      caught no connection (it samples about once a second), and both phones were locked after.
+      To finish: unlock, open S5 Alpha on the Pixel, look for Doze item.* **Failed:** opened at 19:00
+      on the Pixel, S5 Alpha had no Doze item. Both woke and listened on time, but each process
+      started fresh, with no remembered address, so each had to find the other by mDNS inside 30 s
+      while in Doze: her log shows the Pixel's record, the Pixel's shows none of hers, and her
+      call — she owed the Pixel Doze item — did not land. The Pixel against the fake phone passed
+      in session 4 only because the fake phone never sleeps. **For Hugo:** this is the overnight
+      case the alarms exist for. Ideas: keep last-known peer addresses across process death, a
+      longer window when alarms align both phones, or a retry inside the window.
+- [ ] Her phone rebooted, unlocked, never opened: the wifi listener is back after one window, and it
+      catches up (needs Ava to unlock it). *Run it with alarms still allowed: exact alarms do not
+      survive a reboot, and with alarms allowed the quarter-hour jobs are cancelled, so after a
+      reboot the wifi listener is the only thing that can start the schedule again — the very
+      listener that went missing on the Pixel. Worth seeing whether anything runs at all.*
+      *2026-10-24 19:20, both rebooted with alarms allowed, unlocked, never opened: the boot
+      broadcast reached WifiWatch on both (19:22:07 Pixel, 19:22:38 hers — Samsung logs the
+      `registerNetworkCallback`), the listener fired at once and armed an exact 19:30:00 alarm on
+      both. So it came back by itself this time — the Pixel's listener too. At 19:30 her window ran
+      (port 33327, 30 s); **the Pixel's stood aside in 25 ms** — found below — so Doze item, still
+      waiting on her phone from the Doze test, did not cross. Rerun on the next build.*
+
+**The new build, on both phones**
+
+- [x] Largest font: avatars inside their circles, "Change" whole, on both screens. *Pixel: both
+      fixed — "Shared with Ava · waiting for Ava" wraps beside a whole "Change", H/A/S inside their
+      circles. Her S24 FE at font 2: the same, on her narrower screen; her font put back to 0.801.*
+- [x] The Shop view marks each item with whoever added it, and nothing for an unknown adder.
+      *Pixel: on S5 Alpha only Tea and Oats carry A; on Trio, Jam from the unpaired laptop reads
+      "someone added this" with no mark, Honey carries S.*
+- [x] Every screen's controls dumped: nothing unlabelled, the sheet's backdrop reads "Close".
+      *Pixel: the edit sheet now 0 unlabelled, backdrop labelled Close. Her phone: a list, its edit
+      sheet, Shop, Staples, Share, Lists — 0; Settings showed one only while a button was cut off
+      by the tab bar, 0 once scrolled to.*
+- [ ] The Pixel rebooted, unlocked, never opened: the wifi listener is back after one window.
+
+**Last, then put back**
+
+- [x] Unpair Ava and Hugo: sync stops both ways; pair again, share the lists again, and everything
+      comes back. *None of her 8 real lists was shared with Hugo (counted from the backup), so only
+      S5 lists were in it. The Pixel unpaired Ava: its S5 Alpha read "Just you"; an edit on each
+      side stayed there 45 s ("waiting for Hugo" on hers). Paired again with her written code on the
+      Pixel ("Add Ava"; her phone had never stopped trusting it): within 20 s every shared S5 list
+      had both people again, in step, with no sharing again needed — S5 Alpha had all 8 items on
+      both, both after-unpair edits and the stuck Window item included. Note for Hugo: pairing
+      again undoes an unpairing entirely, lists and all.*
+- [ ] Ava's lists match the backup — the backup script run again, and the two compared; anything
+      missing pasted back from the PL1 lines.
+- [ ] Throwaway lists deleted on both phones; stay-awake, font size and alarm permission as they
+      were before the session.
 
 ### Found in the session
 
@@ -212,6 +327,49 @@ and the Pixel's half; the S24 FE's own discovery and screens still need her phon
       first other person on the list, not whoever added it. On Trio, Jam added by the unpaired
       laptop read "someone added this" beside Sam's S. Now the adder's own initial, and no mark
       when the adder is unknown. Fixed in code, not yet committed. *Needs a rebuild.*
+- [ ] **A window started from the background can read "offline" and do nothing.** Pixel, 19:30:00
+      after the reboot: the alarm started SyncWindowService, which stopped 25 ms later and armed
+      19:45. The app was still firewalled as a background app (`blocked=APP_BACKGROUND`), and
+      `ConnectivityManager.activeNetwork` is null for a blocked app, which the window read as
+      offline; the firewall allowed the app only from 19:30:51. Fixed in code, not yet committed:
+      the window waits up to 5 s for a usable network before deciding (`SettledSnapshotTest`).
+      *Needs a rebuild.* Probably also why the Pixel never answered in the 18:45 Doze test.
+- [ ] **A second clash, while a card is still open, is settled silently.** The state holds one card,
+      and an unanswered one is not replaced (`SyncSession.receive`: `openConflict ?: edited…`).
+      The comment expects the question to come back on the next handover — true of a duplicate,
+      whose two items both stay, but an edit clash has already been merged by clock and never comes
+      back. Seen 2026-10-24: the Pixel still had session 4's Parmesan card open on Weekend shop,
+      so Milk removed on Ava's phone against "Oat milk" on the Pixel asked only on hers; the Pixel
+      dropped Milk without a word. Breaks the "keep which?" promise whenever two clashes overlap —
+      on different lists, or two items on one. **Not fixed — for Hugo:** cards become a list
+      (a state-format change, so the migration rule applies), or the second edit clash wins the
+      slot over an older one, or the one-card limit is accepted for 0.1.0.
+- [ ] **With the app sent Home, her phone never synced until it was opened.** Android firewalls a
+      backgrounded app (`blockedReasons=40`, APP_BACKGROUND) except while a job runs. Her app,
+      merely sent Home, kept its discovery and socket, so the Pixel kept finding her and its calls
+      timed out, each failure dropping her address. In her window — the natural one at 18:01, when
+      the firewall did lift; a forced `run -f` does not lift it — she owed the Pixel nothing and had
+      never lost sight of it, so she did not call either. Nothing moved until the app was opened.
+      Fixed in code, not yet committed: every background window calls each reachable peer once,
+      whatever it last acknowledged, and an exchange carries both ways (`SyncCoordinatorTest`).
+      *Needs a rebuild.* It also settles the open question below in practice: on the S24 FE an
+      app sent Home announces a phone nobody can reach.
+- [ ] **Items never arranged show in a different order on each phone.** After the unpair test S5
+      Alpha held the same 8 items on both, but the last three in a different order (Pixel: Window
+      item, His after unpair, Hers after unpair; hers: Hers, Window, His). `orderedItems` puts
+      unplaced items first in the phone's own storage order — arrival order, which differs — and
+      sorts only placed ones by key. Same root as the open "jumps to the top" item above. **Not
+      fixed — for Hugo:** give every new item a position when it is added, or order unplaced items
+      by something both phones share.
+- [ ] **A long paste pushes "Add to …" off the screen.** The Paste a list field grows with its text
+      and the sheet does not scroll, so with 200 items pasted (Pixel, 2026-10-24) neither "Add to
+      S5 Big" nor Cancel could be reached; Back was the only way out. Batches of 50 fitted. A long
+      list sent as text is exactly what the sheet is for. Not fixed: cap the field's height and let
+      it scroll inside, or let the sheet scroll.
+- [ ] **Two small things from the removal tests.** "Stop sharing this list with …?" opens with its
+      Remove and Keep sharing buttons below the tab bar, until the screen is scrolled by hand. And
+      the copy a removed phone keeps carries the same name, so with a same-named list of its own
+      the two cards read identically ("S5 Twin · A · 1 item · just you", twice).
 - [ ] **Revoking alarms stops background sync until the app is opened.** With alarms allowed the
       quarter-hour jobs are cancelled and the alarm alone carries the schedule. Revoking the
       permission makes Android cancel the app's exact alarms and kill the process ("schedule_exact_alarm
@@ -296,7 +454,8 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       with a throwaway key, and the unsigned build is still byte-identical across clean builds.
 - [x] Version `0.1.0`, version code 1. Bump both for every release, never reuse a code.
 - [x] Store text, changelog and icon in `fastlane/metadata/android/en-US/` (icon from
-      `./scripts/icon.sh store`).
+      `./scripts/icon.sh store`). *Lengths 2026-10-25: title 11/50, short 76/80, full 2152/4000,
+      changelog 342/500. `images/phoneScreenshots/` still empty — see screenshots above.*
 - [ ] Reread the store text after the phone session; it describes the app as that leaves it.
       *Reread 2026-10-21 against the session: accurate. "Run at startup, so background sync carries
       on after a restart" holds only once the wifi-listener workaround is built and seen after a
@@ -308,6 +467,15 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 
 - [ ] Two clean release builds here came out byte-identical (2026-10-06). Confirm the same on
       F-Droid's build server, which uses different paths and its own JDK.
+      *2026-10-25: an unsigned build of `d784102` in the dev container, from a `git archive` in
+      another directory with Debian's JDK, against Hugo's signed host build of the same commit:
+      97 entries, same order, every entry byte-identical but one —
+      `META-INF/version-control-info.textproto`, where AGP records the commit (`revision:
+      "d784102…"`), absent from an export with no `.git`. F-Droid builds from a git checkout, so it
+      matches only when the signed APK is built from exactly the tagged commit, with a clean tree:
+      `./scripts/release.sh` enforces that. The signed APK's certificate is the draft's
+      `3f6ec695…1d81`, v2 scheme, 0.1.0 (1), target SDK 36; the Gradle wrapper's checksum is
+      pinned.*
 - [x] Confirm the build server has JDK 21, or add an install step to the recipe. Its default in
       `buildserver-trixie`; `./scripts/fdroid-check.sh` built `d1994a0` there with no extra step
       (2026-10-10).
@@ -320,6 +488,20 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       [docs/fdroid/io.github.molleware.porygonlist.yml](fdroid/io.github.molleware.porygonlist.yml).
 - [ ] A GitHub release for `v0.1.0` with our signed APK attached, under the name the draft's
       `Binaries` line expects. F-Droid compares against it.
+
+**The release, in order, once everything above is ticked** (host only — the key and push stay
+there):
+
+1. `git tag -a v0.1.0 -m "PorygonList 0.1.0"` on the commit to release, working tree clean.
+2. `./scripts/release.sh` — builds the signed APK from that commit, checks its version, its
+   certificate against the draft and the commit it records, and leaves
+   `build/release/porygonlist-0.1.0.apk`.
+3. `git push origin main v0.1.0`.
+4. `./scripts/fdroid-check.sh v0.1.0` — lint, `fdroid build` of the tag in F-Droid's image, and
+   F-Droid's comparison with our APK. Stop here if it differs: a new tag costs a version code.
+5. `gh release create v0.1.0 build/release/porygonlist-0.1.0.apk --title "PorygonList 0.1.0"
+   --notes-file fastlane/metadata/android/en-US/changelogs/1.txt` (release.sh prints this line).
+6. The merge request to fdroiddata with the draft.
 
 ### Play Store
 
