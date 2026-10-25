@@ -75,8 +75,15 @@ leave her phone only what is hers. Needs the next build on the Pixel.
 - [ ] The Pixel's app sent Home, the fake phone edits, the Pixel's next natural window collects it.
 - [ ] Alarms allowed, the Pixel's app closed and in deep Doze: its window reads a usable network
       and calls the fake phone (the 5 s settle in `8c3b4c5`).
-- [ ] The Pixel rebooted, with alarms allowed and then without, unlocked, never opened: the
+- [x] The Pixel rebooted, with alarms allowed and then without, unlocked, never opened: the
       listener and the schedule come back, the first window runs, an edit from the fake phone lands.
+      *2026-10-24, build of 20:27 (`2270e83`), Proton always-on with PorygonList excluded. Alarms
+      not allowed, twice (20:48, 21:00): the boot broadcast started the app about a minute after
+      the unlock, the listener fired once, its "sync now" window exchanged with Sam within seconds
+      both ways, and the item Sam added while the Pixel was down landed. Alarms allowed (21:02):
+      the same, and the alarm re-armed itself for 21:15. The Pixel came back on a new address
+      each time (.110, .171, .219), and Sam found it each time. Only the per-uid grant survives a
+      reboot: `appops set --uid`, which is what the Settings switch does.*
 - [ ] Alarms not allowed on the Pixel: a window still runs around the quarter hour (rerun of the
       item under *App closed*, from a schedule booked by opening the app after revoking).
 - [ ] Updating from a build with the old periodic job replaces it — needs a signed build of an
@@ -419,14 +426,30 @@ first window, and Doze item (or any edit) crossing without either app opened.
       first other person on the list, not whoever added it. On Trio, Jam added by the unpaired
       laptop read "someone added this" beside Sam's S. Now the adder's own initial, and no mark
       when the adder is unknown. Fixed (`7c620b8`). *Seen on the Pixel, 2026-10-24 build.*
-- [ ] **A loop of windows, from registering the wifi listener in every window (`18b0973`).** A
+- [x] **A loop of windows, from registering the wifi listener in every window (`18b0973`).** A
       registration fires at once for the wifi already joined; that asked for "sync now", and
       booking "sync now" again cancelled the window under way, whose replacement registered again.
       Pixel, 2026-10-24, after an install and an app open: 864 listener broadcasts in one minute,
       1,792 the next, 38 "sync now" starts, the quarter-hour window cut to 20 ms. The S24 FE has
       the same build. Fixed in code: the listener is registered once per process, and "sync now"
-      is not booked again while one is booked or running. *Needs a rebuild; measure the broadcast
-      count after an app open.*
+      is not booked again while one is booked or running (`2270e83`). *Pixel, build of 20:27: one
+      broadcast in the 2½ minutes after an app open, no window started. The VPN below was on, so
+      no window decided to sync; recount with it off.* *Recounted over three reboots with sync
+      allowed: one broadcast per boot, one "sync now" window, which ran its full 30 s.*
+- [ ] **The Pixel was behind an always-on VPN all evening, so its windows were never a test.**
+      Proton VPN, always-on, came up at 19:21, with the reboot. The gate holds behind a VPN, as it
+      should, so from then the open app neither listened nor advertised, and every window stood
+      aside: the 19:30 window after the reboot, the 20:16 Home'd window, and Sam never finding the
+      Pixel. Seen 2026-10-24, 20:30, from the Share tab ("Network 10ca69 — VPN is on") and
+      `dumpsys connectivity`. Those three go back to be rerun with the VPN off.
+- [ ] **With a VPN on, nothing syncs, and only the Share tab says why.** The Lists screen reads
+      "Waiting for Sam" as though the other phone were the problem. Anyone who keeps a VPN always
+      on — as Hugo does — gets no sync and no reason. **For Hugo:** say "VPN is on" in the status
+      card, and/or mention in the store text that a VPN stops sync and how to get round it.
+      *Split tunnelling works, no code change: Proton (always-on) → Split tunnelling → Exclude
+      apps → PorygonList. Android then gives the app the plain wifi as its default network, and
+      the Pixel listened and was found by Sam with the VPN connected (2026-10-24, 20:48). Watch the
+      mode: in Proton's "include" mode the same list puts the app inside the tunnel instead.*
 - [ ] **A window started from the background can read "offline" and do nothing.** Pixel, 19:30:00
       after the reboot: the alarm started SyncWindowService, which stopped 25 ms later and armed
       19:45. The app was still firewalled as a background app (`blocked=APP_BACKGROUND`), and
@@ -434,6 +457,8 @@ first window, and Doze item (or any edit) crossing without either app opened.
       offline; the firewall allowed the app only from 19:30:51. Fixed in code, not yet committed:
       the window waits up to 5 s for a usable network before deciding (`SettledSnapshotTest`).
       *Needs a rebuild.* Probably also why the Pixel never answered in the 18:45 Doze test.
+      *Later: the always-on VPN (below the loop entry) was up from 19:21, so this window would
+      have stood aside anyway; the 5 s settle still matters for the firewall, rerun with no VPN.*
 - [ ] **A second clash, while a card is still open, is settled silently.** The state holds one card,
       and an unanswered one is not replaced (`SyncSession.receive`: `openConflict ?: edited…`).
       The comment expects the question to come back on the next handover — true of a duplicate,
@@ -482,7 +507,7 @@ first window, and Doze item (or any edit) crossing without either app opened.
 - [x] **The sheet's backdrop was an unlabelled button to a screen reader**, the size of the screen
       (found by a dump of every screen's controls, 2026-10-21; every other screen had none). Now
       labelled "Close" (`7c620b8`). *Seen on both phones, 2026-10-24 build.*
-- [ ] **Open: background sync was off after a reboot.** On 2026-10-16 the Pixel had no job, no
+- [x] **Open: background sync was off after a reboot.** On 2026-10-16 the Pixel had no job, no
       alarm and no wifi callback registered, after a reboot on 2026-10-13 with the app unopened since
       2026-10-10. Opening the app armed all three at once. The boot path is meant to do it without
       the app; to rerun with a controlled reboot.
@@ -493,6 +518,9 @@ first window, and Doze item (or any edit) crossing without either app opened.
       the boot registration is missing is not known: `register` swallows its exception and nothing
       logs listens. Worked round, not yet committed: every background window registers it again.
       To verify: rebuild, reboot, unlock without opening, wait one window, check the listener.*
+      *Verified 2026-10-24, three reboots on the build of 20:27: the listener came back from the
+      boot broadcast itself, before any window ran (one broadcast, about a second after the
+      process started), and its window exchanged with Sam. See the reboot item under "Meanwhile".*
 
 ### App closed
 
@@ -636,3 +664,9 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
       from someone" once the sender is unpaired.
 - [ ] **A TalkBack pass by ear.** Every screen, listening for anything unclear or said twice. The
       labels themselves are checked for 0.1.0 by dumps on both phones.
+- [ ] **Sync in a store, phone to phone.** Bluetooth LE between paired phones, so lists sync where
+      there is no shared wifi — in a large store, catching up whenever the phones come back within
+      range (about 20–40 m indoors). Wi-Fi Aware could back it up on phones that have it. No Google
+      Play Services. Open: whether a direct link needs only pairing, since there is no network to
+      approve. LoRa (Meshtastic radios) is the later option if the gaps across a whole store bother
+      us (Hugo, 2026-10-25).
