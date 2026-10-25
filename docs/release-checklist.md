@@ -111,7 +111,11 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
 - [ ] Unarranged items order differently → **a position when added**: every new item gets a shared
       position at once. Also fixes "an item added before the first tick jumps to the top".
 - [ ] Revoking alarms stops sync → **a backup job**: the quarter-hour job stays booked beside the
-      alarm and stands aside while the alarm is armed, so there are never two windows.
+      alarm and stands aside while the alarm is armed, so there are never two windows. *In code:
+      `BackgroundSync.ensureScheduled` books the job in both modes; a quarter-hour job returns at
+      once while alarms are allowed and the alarm is armed (`QuarterHourTest`). To see on the next
+      build: alarms allowed, both the alarm and job 20569 or 20578 pending, the job's runs ending
+      in milliseconds; then revoke, and a window still runs near the next quarter hour.*
 - [ ] Two phones in Doze miss each other → **remember addresses**: each peer's last address kept
       across process death, so a fresh window calls at once instead of waiting on mDNS. *In code,
       three parts: the last good address of each peer kept in a file beside the state for a day

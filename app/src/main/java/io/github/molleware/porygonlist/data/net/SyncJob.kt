@@ -14,8 +14,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Syncs for a short while around every quarter hour, with the app out of sight — the fallback for a
- * phone that has not allowed exact alarms. See [BackgroundSync] for the schedule it falls back from,
- * and [SyncWindow] for what a window does.
+ * phone that has not allowed exact alarms, and the backstop beside the alarm for one that has. See
+ * [BackgroundSync] for the schedule it falls back from, and [SyncWindow] for what a window does.
  *
  * With the app open, the phone listens and looks for its peers the whole time. Closed, Android
  * freezes it soon after and Doze takes it off the network, so on its own it would only hand over
@@ -54,7 +54,11 @@ class SyncJob : JobService() {
   override fun onStartJob(params: JobParameters): Boolean {
     // The next one is booked before this one does anything, so a window that fails or is stopped
     // never breaks the chain. A window that finds it should not be running cancels both anyway.
-    if (params.jobId in QUARTER_IDS) book(applicationContext, QUARTER_IDS.first { it != params.jobId })
+    if (params.jobId in QUARTER_IDS) {
+      book(applicationContext, QUARTER_IDS.first { it != params.jobId })
+      // The backstop beside an alarm that is carrying the schedule: nothing to do this time.
+      if (BackgroundSync.quarterJobStandsAside(applicationContext)) return false
+    }
 
     val window = SyncWindow(applicationContext)
     val job =
@@ -138,7 +142,7 @@ class SyncJob : JobService() {
     }
 
     /** Stops the quarter-hour windows. [runSoon]'s one-off is left to finish or to [cancelAll]. */
-    fun cancelQuarterHours(context: Context) {
+    private fun cancelQuarterHours(context: Context) {
       val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
       QUARTER_IDS.forEach(scheduler::cancel)
     }

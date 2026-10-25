@@ -21,6 +21,14 @@ const val QUARTER_HOUR_MS = 15 * 60_000L
 fun nextQuarterHour(nowMs: Long): Long = (Math.floorDiv(nowMs, QUARTER_HOUR_MS) + 1) * QUARTER_HOUR_MS
 
 /**
+ * Whether the backstop job should skip its window: only while alarms are allowed *and* armed.
+ *
+ * Allowed but not armed — a fresh install, a state never scheduled — the job runs, and its window
+ * arms the alarm on the way in. Revoked, it runs, and its window moves the phone onto the jobs.
+ */
+fun quarterJobStandsAside(canAlign: Boolean, alarmArmed: Boolean): Boolean = canAlign && alarmArmed
+
+/**
  * When the background windows run, and which of two ways.
  *
  * **On the quarter hour, both ways.** A window only lands a change when both phones are listening
@@ -34,7 +42,11 @@ fun nextQuarterHour(nowMs: Long): Long = (Math.floorDiv(nowMs, QUARTER_HOUR_MS) 
  *   or charging — overnight on a charger, say — it lands on time; in Doze it waits for the phone's
  *   own maintenance window, and that meeting is missed.
  *
- * It is one or the other, never both, so there is no doubled wake-up.
+ * **The job stays booked either way.** Revoking the permission makes Android cancel the alarm and
+ * kill the app, and nothing is broadcast about it, so an alarm on its own left a phone with no
+ * schedule at all until the app was opened (Pixel, 2026-10-21). So the job goes on beside the
+ * alarm, and stands aside each quarter hour while the alarm is there to carry it
+ * ([quarterJobStandsAside]) — never two windows, and a revoked phone falls back by itself.
  *
  * The decision is remade every time the schedule is touched, so granting or revoking the permission
  * moves the phone between the two without anything else having to notice.
@@ -43,14 +55,12 @@ object BackgroundSync {
 
   /** Turns the windows on, the aligned way if this phone allows it. Safe to call repeatedly. */
   fun ensureScheduled(context: Context) {
-    if (canAlign(context)) {
-      armAlarm(context)
-      SyncJob.cancelQuarterHours(context)
-    } else {
-      cancelAlarm(context)
-      SyncJob.ensureScheduled(context)
-    }
+    SyncJob.ensureScheduled(context)
+    if (canAlign(context)) armAlarm(context) else cancelAlarm(context)
   }
+
+  /** Whether a quarter-hour job has nothing to do: the alarm carries the schedule. See the class notes. */
+  fun quarterJobStandsAside(context: Context): Boolean = quarterJobStandsAside(canAlign(context), alarmArmed(context))
 
   /** One window straight away, on joining an approved wifi. Outside the rhythm in either mode. */
   fun runSoon(context: Context) = SyncJob.runSoon(context)
