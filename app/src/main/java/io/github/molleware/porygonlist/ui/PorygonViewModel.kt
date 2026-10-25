@@ -120,6 +120,20 @@ class PorygonViewModel(
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiscoveryDecision.Hold(HoldReason.OFFLINE))
 
   /**
+   * Whether the app is on screen. Discovery runs only while it is.
+   *
+   * Sent Home, the view model lives on, and with it the gate, so the phone went on announcing a
+   * port that a frozen process could not answer (2026-10-21). Off screen, the background windows
+   * sync instead (Hugo, 2026-10-25). Starts false: the screen says when it is shown.
+   */
+  private val onScreen = MutableStateFlow(false)
+
+  /** Told by the screen as it starts and stops. */
+  fun onScreenChanged(visible: Boolean) {
+    onScreen.value = visible
+  }
+
+  /**
    * The paired phones that are on this network right now.
    *
    * Found, not trusted. An entry means a phone claiming that id answered a browse at that address;
@@ -202,15 +216,24 @@ class PorygonViewModel(
       // phone, and discovery has nothing to find until the gate below opens.
       syncCoordinator?.start()
 
-      discovery.collect { decision ->
-        if (decision is DiscoveryDecision.Discover) {
-          val port = socket.start(ListenReason.DISCOVERY)
-          // No port means the socket would not bind. Silence is the honest answer: advertising a
-          // phone that cannot be connected to just costs the other one a timeout.
-          if (port != null) discoveryService.start(port) else discoveryService.stop()
-        } else {
-          discoveryService.stop()
-          socket.stop(ListenReason.DISCOVERY)
+      combine(discovery, onScreen, ::Pair).collect { (decision, visible) ->
+        when {
+          decision !is DiscoveryDecision.Discover -> {
+            discoveryService.stop()
+            socket.stop(ListenReason.DISCOVERY)
+          }
+          visible -> {
+            val port = socket.start(ListenReason.DISCOVERY)
+            // No port means the socket would not bind. Silence is the honest answer: advertising a
+            // phone that cannot be connected to just costs the other one a timeout.
+            if (port != null) discoveryService.start(port) else discoveryService.stop()
+          }
+          // Off screen on an approved wifi: the background windows take over from here. A window
+          // under way keeps the advertisement it is using, and stops it when it ends.
+          else -> {
+            socket.stop(ListenReason.DISCOVERY)
+            if (!socket.holds(ListenReason.BACKGROUND)) discoveryService.stop()
+          }
         }
       }
     }

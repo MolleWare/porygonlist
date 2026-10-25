@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
@@ -80,6 +81,13 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
         syncCoordinator = Graph.syncCoordinator(context),
       )
     }
+  // Discovery runs while the app is on screen and stops when it leaves; the background windows sync
+  // in between. Started, not resumed: a dialog or the split-screen partner having focus is still
+  // the app in sight.
+  LifecycleStartEffect(viewModel) {
+    viewModel.onScreenChanged(true)
+    onStopOrDispose { viewModel.onScreenChanged(false) }
+  }
   val state by viewModel.state.collectAsStateWithLifecycle()
   val networkSnapshot by viewModel.network.collectAsStateWithLifecycle()
   val discovery by viewModel.discovery.collectAsStateWithLifecycle()

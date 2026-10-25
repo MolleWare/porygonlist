@@ -86,8 +86,6 @@ leave her phone only what is hers. Needs the next build on the Pixel.
       reboot: `appops set --uid`, which is what the Settings switch does.*
 - [ ] Alarms not allowed on the Pixel: a window still runs around the quarter hour (rerun of the
       item under *App closed*, from a schedule booked by opening the app after revoking).
-- [ ] Updating from a build with the old periodic job replaces it — needs a signed build of an
-      older commit, so a second password.
 - [ ] Store screenshots on the final build, with the fake phone as the other person: demo mode,
       throwaway lists, 3–6 into `fastlane/…/phoneScreenshots/`.
 
@@ -117,9 +115,14 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
 - [ ] Two phones in Doze miss each other → **remember addresses**: each peer's last address kept
       across process death, so a fresh window calls at once instead of waiting on mDNS.
 - [ ] The app sent Home goes on announcing → **stop when it leaves the screen**: discovery stops
-      when the app is no longer visible, and the windows do the rest.
+      when the app is no longer visible, and the windows do the rest. *In code: the screen tells
+      the view model on start and stop, and off screen the gate lets the socket go and stops the
+      advert — unless a window is under way, which then stops it as it ends
+      (`PorygonViewModelTest`). To see on the next build: Home, then `dumpsys servicediscovery`
+      shows no PorygonList client and Sam's call is refused until the next window.*
 - [ ] Small ones → **only the paste sheet**: cap the field so "Add to …" stays reachable. The rest
-      moved to After 0.1.0.
+      moved to After 0.1.0. *In code: the field is capped at 190 dp, as the export sheet's text
+      is, and scrolls inside. To see on the next build: paste 200 items, "Add to …" in reach.*
 
 ### Meanwhile: release preparation
 
@@ -450,7 +453,7 @@ first window, and Doze item (or any edit) crossing without either app opened.
       apps → PorygonList. Android then gives the app the plain wifi as its default network, and
       the Pixel listened and was found by Sam with the VPN connected (2026-10-24, 20:48). Watch the
       mode: in Proton's "include" mode the same list puts the app inside the tunnel instead.*
-- [ ] **A window started from the background can read "offline" and do nothing.** Pixel, 19:30:00
+- [x] **A window started from the background can read "offline" and do nothing.** Pixel, 19:30:00
       after the reboot: the alarm started SyncWindowService, which stopped 25 ms later and armed
       19:45. The app was still firewalled as a background app (`blocked=APP_BACKGROUND`), and
       `ConnectivityManager.activeNetwork` is null for a blocked app, which the window read as
@@ -459,6 +462,10 @@ first window, and Doze item (or any edit) crossing without either app opened.
       *Needs a rebuild.* Probably also why the Pixel never answered in the 18:45 Doze test.
       *Later: the always-on VPN (below the loop entry) was up from 19:21, so this window would
       have stood aside anyway; the 5 s settle still matters for the firewall, rerun with no VPN.*
+      *Rerun 2026-10-24, build of 20:27 (`8c3b4c5` in it), Proton on with the app excluded, app
+      never opened since the boot: the 21:15 alarm fired at 21:15:00.000, the firewall lifted
+      20 ms later, the window called Sam at once and exchanged both ways (Alarm item 6 landed),
+      and armed 21:30. Between windows Sam's call was refused: the port was closed.*
 - [ ] **A second clash, while a card is still open, is settled silently.** The state holds one card,
       and an unanswered one is not replaced (`SyncSession.receive`: `openConflict ?: edited…`).
       The comment expects the question to come back on the next handover — true of a duplicate,
@@ -554,7 +561,6 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       23:30 left no window at all — see "revoking alarms stops background sync" below. Rerun from a
       phone that never had alarms, once that is decided.*
       Settings offers "Allow alarms".
-- [ ] Updating from a build with the old periodic job replaces it rather than running both.
 
 ### Overnight
 
@@ -670,3 +676,8 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
       Play Services. Open: whether a direct link needs only pairing, since there is no network to
       approve. LoRa (Meshtastic radios) is the later option if the gaps across a whole store bother
       us (Hugo, 2026-10-25).
+- [ ] **Updating from a build with the old periodic job replaces it rather than running both.**
+      Moved out of 0.1.0 (2026-10-24): 0.1.0 is the first release, so only the two test phones ever
+      had that job, and both have updated past it — the Pixel shows only the one-off jobs. Testing
+      it means installing a 9 October build over today's state file, which may not read it. The
+      code that replaces it (`SyncJob.ensureScheduled`) can go once no phone could still have it.

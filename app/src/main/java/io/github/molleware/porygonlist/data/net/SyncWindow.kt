@@ -23,7 +23,7 @@ class SyncWindow(private val context: Context) {
   @Volatile private var opened: Opened? = null
 
   /** What this window started itself, so it stops exactly that and nothing the open app is using. */
-  private class Opened(val socket: Boolean, val discovery: Boolean)
+  private class Opened(val socket: Boolean)
 
   suspend fun run() {
     if (!busy.compareAndSet(false, true)) return
@@ -40,11 +40,11 @@ class SyncWindow(private val context: Context) {
     repo.load()
     val state = repo.state.filterNotNull().first()
 
-    // The wifi listener again, every window. The boot path registers it, but on the Pixel after the
-    // reboots of 2026-10-13 and 2026-10-20 it was missing until the app was opened, while this job —
-    // persisted by the system — survived and ran. Registering the same PendingIntent replaces the
-    // old request, so repeating it costs nothing. Before the plan, so a window that stops the
-    // schedule on a strange wifi still leaves the listener that restarts it at home.
+    // The wifi listener, in case nothing in this process has registered it yet. The boot path does,
+    // but on the Pixel after the reboots of 2026-10-13 and 2026-10-20 it was missing until the app
+    // was opened, while this job — persisted by the system — survived and ran. Once per process:
+    // see WifiWatch.register for the loop that repeating it made. Before the plan, so a window that
+    // stops the schedule on a strange wifi still leaves the listener that restarts it at home.
     if (state.peers.isNotEmpty()) WifiWatch.register(context)
 
     // Read in one go, not off the monitor's flow — whose first value has no fingerprint yet, which
@@ -76,7 +76,7 @@ class SyncWindow(private val context: Context) {
     // advertisement would be the open app's to undo, and it would not know to.
     val appListening = endpoint.holds(ListenReason.DISCOVERY)
     val port = endpoint.start(ListenReason.BACKGROUND) ?: return
-    opened = Opened(socket = true, discovery = !appListening)
+    opened = Opened(socket = true)
     if (!appListening) discovery.start(port)
 
     delay(WINDOW_MS)
@@ -87,9 +87,9 @@ class SyncWindow(private val context: Context) {
     val was = opened ?: return
     opened = null
     val endpoint = Graph.syncEndpoint()
-    // Checked again at the end, not trusted from the start: the owner may have opened the app during
-    // the window, and its discovery is now the one running.
-    if (was.discovery && !endpoint.holds(ListenReason.DISCOVERY)) Graph.peerDiscovery(context).stop()
+    // Decided at the end, not at the start: the owner may have opened the app during the window, and
+    // its discovery is now the one running; or sent it away, leaving its discovery to this window.
+    if (!endpoint.holds(ListenReason.DISCOVERY)) Graph.peerDiscovery(context).stop()
     if (was.socket) endpoint.stop(ListenReason.BACKGROUND)
   }
 

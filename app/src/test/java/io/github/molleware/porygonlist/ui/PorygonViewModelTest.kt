@@ -17,21 +17,26 @@ import io.github.molleware.porygonlist.data.seed
 import io.github.molleware.porygonlist.data.crypto.InMemoryIdentityStore
 import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PairingCodec
+import io.github.molleware.porygonlist.data.net.ListenReason
+import io.github.molleware.porygonlist.data.net.NetworkFingerprint
 import io.github.molleware.porygonlist.data.net.NetworkMonitor
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
 import io.github.molleware.porygonlist.data.net.PeerDiscovery
 import io.github.molleware.porygonlist.data.net.ServiceRecord
+import io.github.molleware.porygonlist.data.net.SyncEndpoint
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.HybridClock
 import io.github.molleware.porygonlist.data.sync.IdFactory
 import io.github.molleware.porygonlist.data.sync.ItemId
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -81,6 +86,16 @@ private object OfflineMonitor : NetworkMonitor {
 
   /** Offline, so there is no wifi and never a name. */
   override val wifiName = MutableStateFlow<String?>(null)
+
+  override fun refreshWifiName() = Unit
+}
+
+private val HOME = NetworkFingerprint("home-wifi-fingerprint")
+
+private object HomeMonitor : NetworkMonitor {
+  override val snapshots = flowOf(NetworkSnapshot(fingerprint = HOME, isWifi = true, isUsable = true))
+
+  override val wifiName = MutableStateFlow<String?>("Home")
 
   override fun refreshWifiName() = Unit
 }
@@ -156,6 +171,74 @@ class PorygonViewModelTest {
     store.clear()
 
     assertTrue("discovery stopped when the screen went", stops > before)
+  }
+
+  /** A discovery that counts its stops, and a view model on an approved home wifi using it. */
+  private inner class OnHomeWifi(scope: CoroutineScope) {
+    var stops = 0
+    // The in-memory key has no certificate, so the socket never binds. The endpoint still counts
+    // its reasons, and those are what the gate is judged by here.
+    val endpoint = SyncEndpoint(scope) { store.identity() }
+    private val discovery =
+      object : PeerDiscovery {
+        override val found = MutableStateFlow(emptySet<ServiceRecord>())
+
+        override fun start(port: Int) = Unit
+
+        override fun stop() {
+          stops++
+        }
+      }
+    val vm: PorygonViewModel =
+      ViewModelProvider(
+        viewModels,
+        viewModelFactory {
+          initializer { PorygonViewModel(repo, HomeMonitor, store::identity, {}, discovery, endpoint, io = dispatcher) }
+        },
+      )["home", PorygonViewModel::class.java]
+
+    val listening
+      get() = endpoint.holds(ListenReason.DISCOVERY)
+  }
+
+  @Test
+  fun `the app sent Home stops listening, and listens again when it is back`() = runTest(dispatcher) {
+    val home = OnHomeWifi(backgroundScope)
+    advanceUntilIdle()
+    home.vm.approveCurrentNetwork()
+    advanceUntilIdle()
+    assertFalse("nothing before the screen is shown", home.listening)
+
+    home.vm.onScreenChanged(true)
+    advanceUntilIdle()
+    assertTrue("on screen, on an approved wifi", home.listening)
+
+    val before = home.stops
+    home.vm.onScreenChanged(false)
+    advanceUntilIdle()
+    assertFalse("sent Home, the socket is let go", home.listening)
+    assertTrue("and the advertisement stopped", home.stops > before)
+
+    home.vm.onScreenChanged(true)
+    advanceUntilIdle()
+    assertTrue("back on screen", home.listening)
+  }
+
+  @Test
+  fun `the app sent Home during a window leaves the window its advertisement`() = runTest(dispatcher) {
+    val home = OnHomeWifi(backgroundScope)
+    advanceUntilIdle()
+    home.vm.approveCurrentNetwork()
+    home.vm.onScreenChanged(true)
+    advanceUntilIdle()
+    home.endpoint.start(ListenReason.BACKGROUND)
+
+    val before = home.stops
+    home.vm.onScreenChanged(false)
+    advanceUntilIdle()
+
+    assertFalse(home.listening)
+    assertEquals("the window stops it when it ends", before, home.stops)
   }
 
   // ── First run ─────────────────────────────────────────────────────────────
