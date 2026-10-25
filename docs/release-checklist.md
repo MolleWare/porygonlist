@@ -152,9 +152,9 @@ needed except to install. Proton stays on, with PorygonList excluded:
       2026-10-25.*
 - [x] ~~TalkBack on, once through every screen by ear.~~ *Not for 0.1.0 (Hugo, 2026-10-25); moved
       to After 0.1.0.*
-- [ ] The release key and its password backed up off this machine. *2026-10-25: the password
+- [x] The release key and its password backed up off this machine. *2026-10-25: the password
       is backed up; the key itself — the `.jks` file named in `keystore.properties`, on the host —
-      is not yet. Both are needed.*
+      is not yet. Both are needed.* *Both backed up (Hugo, 2026-10-25).*
 - [ ] Play Console: account, app entry, Play App Signing with our key, data safety form, location
       declaration, content rating.
 
