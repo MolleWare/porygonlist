@@ -199,7 +199,6 @@ class FormatTest {
       activeListId = l.id,
       networks = emptyList(),
       peers = emptyList(),
-      conflict = null,
       deliveredTo = delivered,
     )
 

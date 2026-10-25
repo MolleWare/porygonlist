@@ -49,7 +49,7 @@ class FirstRunTest {
     assertEquals("no staples", emptyList<Staple>(), state.staples)
     assertEquals("no approved networks", emptyList<ApprovedNetwork>(), state.networks)
     assertEquals("nobody paired", emptyList<TrustedPeer>(), state.peers)
-    assertNull("no conflict to resolve", state.conflict)
+    assertEquals("no conflict to resolve", emptyList<Conflict>(), state.conflicts)
     assertFalse("nothing is active", state.lists.any { it.id == state.activeListId })
   }
 

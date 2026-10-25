@@ -804,7 +804,7 @@ class PorygonViewModelTest {
     // The two competing items on the list, as they are after a real handover.
     val (mine, theirs) = putBothOnList()
 
-    vm.mergeConflict()
+    vm.mergeConflict(Conflict(mine, theirs))
 
     val rice = state().activeList.liveItems.filter { it.name.value == "Rice" }
     assertEquals("one entry, not three", 1, rice.size)
@@ -815,34 +815,48 @@ class PorygonViewModelTest {
     val items = state().activeList.items
     assertTrue(items.single { it.id == mine.id }.removed.value)
     assertTrue(items.single { it.id == theirs.id }.removed.value)
-    assertNull(state().conflict)
+    assertEquals(emptyList<Conflict>(), state().conflicts)
   }
 
   @Test
   fun `keeping both leaves exactly the two that were there`() = runTest(dispatcher) {
     repo.load()
-    putBothOnList()
+    val (mine, theirs) = putBothOnList()
 
-    vm.keepBoth()
+    vm.keepBoth(Conflict(mine, theirs))
 
     assertEquals(2, state().activeList.liveItems.count { it.name.value == "Rice" })
-    assertNull(state().conflict)
+    assertEquals(emptyList<Conflict>(), state().conflicts)
+  }
+
+  @Test
+  fun `answering one card leaves the others waiting`() = runTest(dispatcher) {
+    repo.load()
+    val eggs = state().conflicts.single()
+    val (mine, theirs) = putBothOnList(replacing = false)
+
+    vm.keepBoth(Conflict(mine, theirs))
+
+    assertEquals(listOf(eggs), state().conflicts)
   }
 
   @Test
   fun `answering a card that arrived before the items does not lose them`() = runTest(dispatcher) {
     repo.load()
     // The seeded fixture: the two sides are held on the conflict and are not on the list.
-    val conflict = state().conflict!!
+    val conflict = state().conflicts.single()
 
-    vm.keepBoth()
+    vm.keepBoth(conflict)
 
     val eggs = state().activeList.liveItems.filter { it.name.value == conflict.itemName }
     assertEquals(2, eggs.size)
   }
 
-  /** Puts a competing pair on the open list and surfaces it, the way a handover leaves things. */
-  private fun putBothOnList(): kotlin.Pair<GroceryItem, GroceryItem> {
+  /**
+   * Puts a competing pair on the open list and surfaces it, the way a handover leaves things. In
+   * place of the seeded card unless [replacing] is false, when it joins it.
+   */
+  private fun putBothOnList(replacing: Boolean = true): kotlin.Pair<GroceryItem, GroceryItem> {
     val stamp = Hlc(1_700_000_000_000, 0, state().localDevice)
     val theirDevice = state().activeList.people.first { it.device != state().localDevice }.device
     val mine =
@@ -860,7 +874,7 @@ class PorygonViewModelTest {
       )
     repo.update { s, _ ->
       s.copy(
-        conflict = Conflict(mine, theirs),
+        conflicts = (if (replacing) emptyList() else s.conflicts) + Conflict(mine, theirs),
         lists = s.lists.map { if (it.id == s.activeListId) it.copy(items = it.items + mine + theirs) else it },
       )
     }

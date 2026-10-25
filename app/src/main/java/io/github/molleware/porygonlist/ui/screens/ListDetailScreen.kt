@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.ConflictKind
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
@@ -108,10 +110,10 @@ fun ListDetailScreen(
   onEditItem: (GroceryItem) -> Unit,
   /** Puts an item at a new place in the list's shared order. */
   onMoveItem: (ItemId, Int) -> Unit,
-  onMerge: () -> Unit,
-  onKeepBoth: () -> Unit,
+  onMerge: (Conflict) -> Unit,
+  onKeepBoth: (Conflict) -> Unit,
   /** Answers "keep which?": true keeps this phone's version of an item changed on two phones. */
-  onKeepVersion: (yours: Boolean) -> Unit,
+  onKeepVersion: (Conflict, yours: Boolean) -> Unit,
   /** Opens sharing for this list — who has it, and who else could. */
   onShare: () -> Unit,
   confirmingClear: Boolean,
@@ -202,33 +204,35 @@ fun ListDetailScreen(
       }
     }
 
-    // Only on the list it is about.
-    state.openConflict?.takeIf { it.listId == null || it.listId == list.id }?.let { conflict ->
-      val cardModifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp)
-      when (conflict.kind) {
-        ConflictKind.DUPLICATE ->
-          ConflictCard(
-            title = "You both added ${conflict.itemName}",
-            body =
-              "${conflictSide(conflict.yours, list, state.localDevice)}, " +
-                "${conflictSide(conflict.theirs, list, state.localDevice)} — neither of you could see the other's copy at the time.",
-            primary = "Merge",
-            onPrimary = onMerge,
-            secondary = "Keep both",
-            onSecondary = onKeepBoth,
-            modifier = cardModifier,
-          )
-        ConflictKind.EDITED -> {
-          val text = editClashText(conflict, list, state.localDevice)
-          ConflictCard(
-            title = text.title,
-            body = text.body,
-            primary = text.keepYours,
-            onPrimary = { onKeepVersion(true) },
-            secondary = text.keepTheirs,
-            onSecondary = { onKeepVersion(false) },
-            modifier = cardModifier,
-          )
+    // Only on the list each is about, every one its own card, oldest first.
+    state.openConflictsOn(list.id).forEach { conflict ->
+      key(conflict.question) {
+        val cardModifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp)
+        when (conflict.kind) {
+          ConflictKind.DUPLICATE ->
+            ConflictCard(
+              title = "You both added ${conflict.itemName}",
+              body =
+                "${conflictSide(conflict.yours, list, state.localDevice)}, " +
+                  "${conflictSide(conflict.theirs, list, state.localDevice)} — neither of you could see the other's copy at the time.",
+              primary = "Merge",
+              onPrimary = { onMerge(conflict) },
+              secondary = "Keep both",
+              onSecondary = { onKeepBoth(conflict) },
+              modifier = cardModifier,
+            )
+          ConflictKind.EDITED -> {
+            val text = editClashText(conflict, list, state.localDevice)
+            ConflictCard(
+              title = text.title,
+              body = text.body,
+              primary = text.keepYours,
+              onPrimary = { onKeepVersion(conflict, true) },
+              secondary = text.keepTheirs,
+              onSecondary = { onKeepVersion(conflict, false) },
+              modifier = cardModifier,
+            )
+          }
         }
       }
     }

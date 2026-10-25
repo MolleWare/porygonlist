@@ -115,7 +115,6 @@ class RemovalTest {
         lists = listOf(list(item("Oat milk", removedAt = removal))),
         activeListId = ListId("list:1"),
         networks = emptyList(),
-          conflict = null,
       )
 
     val restored = StateCodec.decode(StateCodec.encode(state))!!.lists.first()

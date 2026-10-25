@@ -339,23 +339,23 @@ data class GroceryList(
    * nothing left for the tombstone to contradict and it can go. Until then it stays, however old
    * it is — age is not evidence of delivery.
    *
-   * [asked] is the item a "keep which?" card is about, and its tombstone stays while the card does.
-   * Keeping the removal rewrites it as a fresh edit, and that edit is what closes the card on the
-   * other phone; with the tombstone collected there would be nothing to write, and the other card
-   * would stay open for good, offering to bring the item back.
+   * [asked] are the items "keep which?" cards are about, and their tombstones stay while the cards
+   * do. Keeping the removal rewrites it as a fresh edit, and that edit is what closes the card on
+   * the other phone; with the tombstone collected there would be nothing to write, and the other
+   * card would stay open for good, offering to bring the item back.
    */
   fun pruneDelivered(
     log: DeliveryLog,
     localDevice: DeviceId,
     reachable: Set<DeviceId>? = null,
-    asked: ItemId? = null,
+    asked: Set<ItemId> = emptySet(),
   ): GroceryList {
     val peers = peersOf(localDevice)
     return copy(
       // With nobody to deliver to there is nothing to wait for, and a solo list keeps no tombstones.
       items =
         if (peers.isEmpty()) liveItems
-        else items.filterNot { it.id != asked && it.removed.value && log.deliveredToAll(it.removed.at, peers) },
+        else items.filterNot { it.id !in asked && it.removed.value && log.deliveredToAll(it.removed.at, peers) },
       // Someone off the list is collected on the same terms as a removed item: once everyone who has
       // to hear it has confirmed, nobody is left holding a copy that says otherwise.
       people =
@@ -499,6 +499,13 @@ data class Conflict(
   val itemName: String
     get() = yours.name.value
 
+  /**
+   * What the card asks about, so the same question arriving twice is one card rather than two: an
+   * edit clash is about one item, a duplicate about a pair.
+   */
+  val question: Any
+    get() = Triple(kind, listId, if (kind == ConflictKind.EDITED) setOf(yours.id) else setOf(yours.id, theirs.id))
+
   /** The newest edit either side made to what can clash: name, quantity, being on the list. */
   private val sidesTouched: Hlc
     get() = listOf(yours, theirs).maxOf { maxOf(it.name.at, it.qty.at, it.removed.at) }
@@ -551,7 +558,15 @@ data class AppState(
   val peers: List<TrustedPeer> = emptyList(),
   /** This phone's one-tap shortlist. Starts empty; local to the install; never sent anywhere. */
   val staples: List<Staple> = emptyList(),
-  val conflict: Conflict?,
+  /**
+   * Every question waiting for a person, oldest first, each on its own list.
+   *
+   * Several, not one: with a single slot an unanswered card stopped a second clash being asked at
+   * all, and an edit clash, already merged by clock, never came back — the Pixel dropped Milk
+   * without a word while Parmesan's card waited (2026-10-24). Hugo, 2026-10-25: every clash its
+   * own card.
+   */
+  val conflicts: List<Conflict> = emptyList(),
 ) {
   /**
    * With no lists at all — a fresh install, or the last one deleted — this is [GroceryList.none]: a
@@ -609,13 +624,25 @@ data class AppState(
   }
 
   /**
-   * The card waiting for an answer, if it still means anything.
+   * The cards waiting for an answer that still mean anything.
    *
    * An edit clash somebody has since settled — on the other phone, or by editing the item again —
-   * is no longer a question, so it reads as none rather than asking about a choice already made.
+   * is no longer a question, so it is left out rather than asking about a choice already made.
    */
-  val openConflict: Conflict?
-    get() = conflict?.takeUnless { c -> c.isStaleOn(lists.firstOrNull { it.id == (c.listId ?: activeListId) }) }
+  val openConflicts: List<Conflict>
+    get() = conflicts.filterNot { c -> c.isStaleOn(lists.firstOrNull { it.id == listIdOf(c) }) }
+
+  /** The list a card is about — the open one, for a card from before that was recorded. */
+  fun listIdOf(c: Conflict): ListId = c.listId ?: activeListId
+
+  /** The open cards about [listId], oldest first. */
+  fun openConflictsOn(listId: ListId): List<Conflict> = openConflicts.filter { listIdOf(it) == listId }
+
+  /** [c] as it stands now, if it is still open: the card a person answers may have moved on. */
+  fun openConflict(c: Conflict): Conflict? = openConflicts.firstOrNull { it.question == c.question }
+
+  /** Every card but [c]. */
+  fun withoutConflict(c: Conflict): AppState = copy(conflicts = conflicts.filterNot { it.question == c.question })
 
   /**
    * Answers "keep which?" for an item changed on two phones at once.
@@ -625,12 +652,11 @@ data class AppState(
    * rather than asking a question that has been answered. Only what the two versions disagree on
    * is rewritten; anything else about the item is left as the merge had it.
    */
-  fun withVersionKept(yours: Boolean, at: Hlc): AppState {
-    val c = openConflict?.takeIf { it.kind == ConflictKind.EDITED } ?: return this
+  fun withVersionKept(card: Conflict, yours: Boolean, at: Hlc): AppState {
+    val c = openConflict(card)?.takeIf { it.kind == ConflictKind.EDITED } ?: return this
     val chosen = if (yours) c.yours else c.theirs
-    val target = c.listId ?: activeListId
-    return copy(
-      conflict = null,
+    val target = listIdOf(c)
+    return withoutConflict(c).copy(
       lists =
         lists.map { list ->
           if (list.id != target) list
@@ -743,7 +769,7 @@ data class AppState(
       lists =
         lists
           .map { list ->
-            val asked = openConflict?.takeIf { it.kind == ConflictKind.EDITED && (it.listId ?: activeListId) == list.id }?.yours?.id
+            val asked = openConflictsOn(list.id).filter { it.kind == ConflictKind.EDITED }.map { it.yours.id }.toSet()
             list.pruneDelivered(deliveredTo, localDevice, reachable = peers.map { p -> p.deviceId }.toSet(), asked = asked)
           }
           // A list this phone has left is kept, and kept being sent, for exactly as long as its own
@@ -777,7 +803,6 @@ data class AppState(
         // An empty id is never minted, so [activeList] falls back to [GroceryList.none].
         activeListId = ListId(""),
         networks = emptyList(),
-        conflict = null,
       )
   }
 }

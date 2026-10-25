@@ -263,13 +263,16 @@ private class Console(
         vm.openEditSheet(item(rest), addedBy = "")
         vm.confirmRemove()
       }
-      "keep" ->
+      "keep" -> {
+        // The first card on the open list, as the screen shows them: oldest first.
+        val card = state.openConflictsOn(state.activeListId).firstOrNull() ?: error("no card on the open list")
         when (rest) {
-          "mine", "yours" -> vm.keepVersion(yours = true)
-          "theirs" -> vm.keepVersion(yours = false)
-          "both" -> vm.keepBoth()
+          "mine", "yours" -> vm.keepVersion(card, yours = true)
+          "theirs" -> vm.keepVersion(card, yours = false)
+          "both" -> vm.keepBoth(card)
           else -> error("keep mine | theirs | both")
         }
+      }
       "offline" -> wifi.online(false)
       "online" -> wifi.online(true)
       "found" -> discovery.found.value.forEach { say("found ${it.deviceId.value} at ${it.host}:${it.port}") }
@@ -307,7 +310,7 @@ private class Console(
       list.liveItems.forEach { say("      ${if (it.checked) "[x]" else "[ ]"} ${it.label()}") }
     }
     // What a screen would show: a clash answered on the other phone is stored but no longer asked.
-    s.openConflict?.let { say("conflict (${it.kind}) on ${it.itemName}: mine ${it.yours.label()} / theirs ${it.theirs.label()}") }
+    s.openConflicts.forEach { say("conflict (${it.kind}) on ${it.itemName}: mine ${it.yours.label()} / theirs ${it.theirs.label()}") }
   }
 
   private fun GroceryItem.label() =

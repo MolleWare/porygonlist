@@ -208,7 +208,6 @@ class ReorderingTest {
       activeListId = lists.first().id,
       networks = emptyList(),
       peers = listOf(TrustedPeer(hugo, byteArrayOf(1), "Hugo", 0)),
-      conflict = null,
     )
 
   @Test

@@ -30,7 +30,6 @@ class BackgroundPlanTest {
       activeListId = ListId(""),
       networks = listOf(ApprovedNetwork(home, "Home", "", approved = true)),
       peers = if (paired) listOf(TrustedPeer(DeviceId("AVAAAAAAAAAAAAAA"), byteArrayOf(1), "Ava", 0)) else emptyList(),
-      conflict = null,
     )
 
   private fun on(fingerprint: NetworkFingerprint?, usable: Boolean = true, vpn: Boolean = false) =

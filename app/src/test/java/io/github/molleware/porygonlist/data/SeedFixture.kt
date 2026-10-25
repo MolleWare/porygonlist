@@ -132,7 +132,7 @@ fun AppState.Companion.seed(
         ApprovedNetwork(NetworkFingerprint("seed03"), "Mum-and-Dad", "Approved, seen in June", approved = false),
       ),
     staples = SEED_STAPLES,
-    conflict = conflict,
+    conflicts = listOf(conflict),
   )
 }
 

@@ -162,7 +162,7 @@ fun ListsScreen(
             list = list,
             localDevice = state.localDevice,
             delivered = state.deliveredTo,
-            needsAnswer = state.openConflict?.let { it.listId == list.id || (it.listId == null && state.activeListId == list.id) } == true,
+            needsAnswer = state.openConflictsOn(list.id).isNotEmpty(),
             onClick = { onOpenList(list.id) },
             onLongClick = { onStartRename(list) },
           )

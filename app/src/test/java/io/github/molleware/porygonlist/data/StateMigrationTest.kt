@@ -62,7 +62,6 @@ class StateMigrationTest {
         ),
       activeListId = ListId("${me.value}:2"),
       networks = emptyList(),
-      conflict = null,
     )
 
   /**

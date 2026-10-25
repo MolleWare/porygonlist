@@ -1,6 +1,7 @@
 package io.github.molleware.porygonlist.data.sync
 
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListAccent
@@ -34,7 +35,6 @@ private class Phone(val device: DeviceId, wall: Long, items: List<GroceryItem>, 
       activeListId = ListId("list:1"),
       networks = emptyList(),
       peers = people.filterNot { it.device == device }.map { TrustedPeer(it.device, byteArrayOf(1), it.name, 0) },
-      conflict = null,
     )
 
   val list: GroceryList
@@ -415,7 +415,7 @@ class DuplicateOverSyncTest {
     val result = ava.syncTo(hugo) as SyncResult.Merged
 
     assertEquals(1, result.duplicates.size)
-    val card = hugo.state.conflict!!
+    val card = hugo.state.conflicts.single()
     assertEquals("Rice", card.itemName.replaceFirstChar { it.uppercase() })
     assertEquals("both entries stay until someone answers", 2, hugo.list.liveItems.size)
   }
@@ -427,27 +427,28 @@ class DuplicateOverSyncTest {
     hugo.add(1, "Rice")
 
     ava.syncTo(hugo)
-    hugo.state = hugo.state.copy(conflict = null) // answered, however they answered it
+    hugo.state = hugo.state.copy(conflicts = emptyList()) // answered, however they answered it
     hugo.syncTo(ava)
     val again = ava.syncTo(hugo) as SyncResult.Merged
 
     assertTrue(again.duplicates.isEmpty())
-    assertNull(hugo.state.conflict)
+    assertEquals(emptyList<Conflict>(), hugo.state.conflicts)
   }
 
   @Test
-  fun `an unanswered question is not replaced by a newer one`() {
+  fun `a newer question joins an unanswered one, behind it`() {
     val (ava, hugo) = phones()
     ava.add(1, "Rice")
     hugo.add(1, "Rice")
     ava.syncTo(hugo)
-    val first = hugo.state.conflict!!
+    val first = hugo.state.conflicts.single()
 
     ava.add(2, "Beans")
     hugo.add(2, "Beans")
     ava.syncTo(hugo)
 
-    assertEquals("the person is answering the first one", first, hugo.state.conflict)
+    assertEquals("the person is answering the first one", first, hugo.state.conflicts.first())
+    assertEquals(listOf("Rice", "Beans"), hugo.state.conflicts.map { it.itemName })
   }
 
   @Test
@@ -459,7 +460,7 @@ class DuplicateOverSyncTest {
     val result = ava.syncTo(hugo) as SyncResult.Merged
 
     assertTrue(result.duplicates.isEmpty())
-    assertNull(hugo.state.conflict)
+    assertEquals(emptyList<Conflict>(), hugo.state.conflicts)
     assertEquals(2, hugo.list.liveItems.size)
   }
 }

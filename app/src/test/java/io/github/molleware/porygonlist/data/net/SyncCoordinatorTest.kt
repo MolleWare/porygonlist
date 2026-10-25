@@ -86,7 +86,6 @@ class SyncCoordinatorTest {
           activeListId = lists.firstOrNull()?.id ?: ListId(""),
           networks = emptyList(),
           peers = listOf(peer),
-          conflict = null,
         )
       )
     lateinit var coordinator: SyncCoordinator

@@ -51,17 +51,22 @@ class EditClashTest {
       activeListId = listId,
       networks = emptyList(),
       peers = listOf(TrustedPeer(other, byteArrayOf(1), other.value, 0)),
-      conflict = null,
     )
 
   private fun AppState.receiving(from: DeviceId, item: GroceryItem, at: Long) =
     (receive(SyncPayload(from, Hlc(at, 0, from), listOf(listWith(item))), HybridClock(localDevice)) as SyncResult.Merged).state
 
+  /** The one card these tests make, or null when there is none. */
+  private val AppState.card: Conflict?
+    get() = openConflicts.singleOrNull()
+
+  private fun AppState.keep(yours: Boolean, at: Hlc) = withVersionKept(openConflicts.single(), yours, at)
+
   @Test
   fun `two changes made blind to each other are asked about`() {
     val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200)
 
-    val card = hugos.openConflict!!
+    val card = hugos.card!!
     assertEquals(ConflictKind.EDITED, card.kind)
     assertEquals(listId, card.listId)
     assertEquals(3, card.yours.qty.value)
@@ -71,7 +76,7 @@ class EditClashTest {
   @Test
   fun `the card says what each person did`() {
     val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200)
-    val text = editClashText(hugos.openConflict!!, hugos.lists.single(), hugo)
+    val text = editClashText(hugos.card!!, hugos.lists.single(), hugo)
 
     assertEquals("Changed on two phones at once", text.title)
     assertEquals(
@@ -88,7 +93,7 @@ class EditClashTest {
     val hugoRenamed = base.copy(name = base.name.set("Oat drink", Hlc(2_100, 0, hugo)))
     val hugos = phone(hugo, hugoRenamed, ava).receiving(ava, avaRemoved, 2_200)
 
-    val text = editClashText(hugos.openConflict!!, hugos.lists.single(), hugo)
+    val text = editClashText(hugos.card!!, hugos.lists.single(), hugo)
     assertEquals(
       "You made it “Oat drink” and Ava took it off the list, each before seeing the other's change. Which should stay?",
       text.body,
@@ -103,7 +108,7 @@ class EditClashTest {
     // Everyone confirmed the removal while the card waited, so its tombstone is gone.
     val collected = hugos.copy(lists = hugos.lists.map { it.copy(items = emptyList()) })
 
-    val kept = collected.withVersionKept(yours = true, at = Hlc(3_000, 0, hugo))
+    val kept = collected.keep(yours = true, at = Hlc(3_000, 0, hugo))
 
     val item = kept.lists.single().liveItems.single()
     assertEquals("Oat drink", item.name.value)
@@ -129,10 +134,10 @@ class EditClashTest {
     assertEquals("held while the card is open", 1, avas.lists.single().items.size)
     assertEquals("held while the card is open", 1, hugos.lists.single().items.size)
 
-    val answered = avas.withVersionKept(yours = true, at = Hlc(3_000, 0, ava))
+    val answered = avas.keep(yours = true, at = Hlc(3_000, 0, ava))
     val after = hugos.receiving(ava, answered.lists.single().items.single(), 3_100)
 
-    assertNull("answered elsewhere, so not asked again", after.openConflict)
+    assertNull("answered elsewhere, so not asked again", after.card)
     assertEquals(emptyList<GroceryItem>(), after.lists.single().liveItems)
   }
 
@@ -144,8 +149,8 @@ class EditClashTest {
       GroceryItem(ItemId("${hugo.value}:7"), Field("Rice", Hlc(2_100, 0, hugo)), Field(1, Hlc(2_100, 0, hugo)), checkedAt = Hlc(2_100, 0, hugo), removed = Field(false, Hlc(2_100, 0, hugo)))
     val hugos = phone(hugo, hugosRice, ava).receiving(ava, avasRice, 2_200)
 
-    assertEquals(ConflictKind.DUPLICATE, hugos.openConflict!!.kind)
-    assertEquals(listId, hugos.openConflict!!.listId)
+    assertEquals(ConflictKind.DUPLICATE, hugos.card!!.kind)
+    assertEquals(listId, hugos.card!!.listId)
   }
 
   @Test
@@ -154,7 +159,7 @@ class EditClashTest {
     val informed = avasVersion.copy(qty = avasVersion.qty.set(3, Hlc(2_100, 0, hugo)))
     val avas = phone(ava, avasVersion, hugo).receiving(hugo, informed, 2_200)
 
-    assertNull(avas.openConflict)
+    assertNull(avas.card)
   }
 
   @Test
@@ -162,32 +167,32 @@ class EditClashTest {
     val alsoTwo = base.copy(qty = base.qty.set(2, Hlc(2_100, 0, hugo)))
     val avas = phone(ava, avasVersion, hugo).receiving(hugo, alsoTwo, 2_200)
 
-    assertNull(avas.openConflict)
+    assertNull(avas.card)
   }
 
   @Test
   fun `keeping a version writes it again, newer than both`() {
     val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200)
 
-    val kept = hugos.withVersionKept(yours = false, at = Hlc(3_000, 0, hugo))
+    val kept = hugos.keep(yours = false, at = Hlc(3_000, 0, hugo))
 
     val item = kept.lists.single().items.single()
     assertEquals(2, item.qty.value)
     assertEquals(Hlc(3_000, 0, hugo), item.qty.at)
-    assertNull(kept.conflict)
+    assertEquals(emptyList<Conflict>(), kept.conflicts)
   }
 
   @Test
   fun `the answer closes the same question on the other phone`() {
     // Ava's phone noticed the clash too.
     val avas = phone(ava, avasVersion, hugo).receiving(hugo, hugosVersion, 2_200)
-    assertNotNull(avas.openConflict)
+    assertNotNull(avas.card)
 
     // Hugo answers on his phone, and his answer arrives at Ava's.
-    val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200).withVersionKept(yours = false, at = Hlc(3_000, 0, hugo))
+    val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200).keep(yours = false, at = Hlc(3_000, 0, hugo))
     val after = avas.receiving(hugo, hugos.lists.single().items.single(), 3_100)
 
-    assertNull("answered elsewhere, so not asked again", after.openConflict)
+    assertNull("answered elsewhere, so not asked again", after.card)
     assertEquals(2, after.lists.single().items.single().qty.value)
   }
 
@@ -205,7 +210,7 @@ class EditClashTest {
   fun `the question survives a restart, still on its list`() {
     val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200)
 
-    val back = StateCodec.decode(StateCodec.encode(hugos))!!.conflict!!
+    val back = StateCodec.decode(StateCodec.encode(hugos))!!.conflicts.single()
     assertEquals(ConflictKind.EDITED, back.kind)
     assertEquals(listId, back.listId)
   }
@@ -215,8 +220,59 @@ class EditClashTest {
     val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200)
     val old = StateCodec.encode(hugos).lines().joinToString("\n") { if (it.startsWith("conflict|")) "conflict" else it }
 
-    val back = StateCodec.decode(old)!!.conflict!!
+    val back = StateCodec.decode(old)!!.conflicts.single()
     assertEquals(ConflictKind.DUPLICATE, back.kind)
     assertNull(back.listId)
+  }
+
+  // ── Several at once ───────────────────────────────────────────────────────
+
+  private val milkId = ItemId("${ava.value}:3")
+  private val milk =
+    GroceryItem(milkId, Field("Milk", created), Field(1, created), checkedAt = created, removed = Field(false, created))
+
+  private fun twoItems(oatMilk: GroceryItem, milk: GroceryItem) =
+    listWith(oatMilk).let { it.copy(items = listOf(oatMilk, milk)) }
+
+  @Test
+  fun `a second clash while a card is open gets its own card`() {
+    // Seen 2026-10-24: the Pixel still had a card open on Weekend shop, so Milk removed on Ava's
+    // phone against Milk renamed on the Pixel was settled by clock, and the Pixel dropped Milk
+    // without a word.
+    val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200)
+    assertEquals(1, hugos.openConflicts.size)
+
+    val hisMilk = milk.copy(name = milk.name.set("Oat milk", Hlc(2_400, 0, hugo)))
+    val herMilk = milk.copy(removed = milk.removed.set(true, Hlc(2_300, 0, ava)))
+    val withHis = hugos.copy(lists = listOf(twoItems(hugos.lists.single().items.single(), hisMilk)))
+    val payload = SyncPayload(ava, Hlc(2_500, 0, ava), listOf(twoItems(avasVersion, herMilk)))
+    val after = (withHis.receive(payload, HybridClock(hugo)) as SyncResult.Merged).state
+
+    assertEquals(listOf(itemId, milkId), after.openConflicts.map { it.yours.id })
+    assertEquals("both asked on the list they are about", 2, after.openConflictsOn(listId).size)
+  }
+
+  @Test
+  fun `answering one card leaves the other`() {
+    val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200)
+    val hisMilk = milk.copy(name = milk.name.set("Oat milk", Hlc(2_400, 0, hugo)))
+    val herMilk = milk.copy(removed = milk.removed.set(true, Hlc(2_300, 0, ava)))
+    val withHis = hugos.copy(lists = listOf(twoItems(hugos.lists.single().items.single(), hisMilk)))
+    val both = (withHis.receive(SyncPayload(ava, Hlc(2_500, 0, ava), listOf(twoItems(avasVersion, herMilk))), HybridClock(hugo)) as SyncResult.Merged).state
+
+    val milkCard = both.openConflicts.single { it.yours.id == milkId }
+    val after = both.withVersionKept(milkCard, yours = true, at = Hlc(3_000, 0, hugo))
+
+    assertEquals(listOf(itemId), after.openConflicts.map { it.yours.id })
+    assertEquals("Oat milk", after.lists.single().liveItems.single { it.id == milkId }.name.value)
+  }
+
+  @Test
+  fun `the same clash met again is one card, not two`() {
+    val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200)
+
+    val again = hugos.receiving(ava, avasVersion, 2_300)
+
+    assertEquals(1, again.openConflicts.size)
   }
 }

@@ -45,7 +45,6 @@ class LeavingAListTest {
       activeListId = listId,
       networks = emptyList(),
       peers = listOf(TrustedPeer(hugo, byteArrayOf(1, 2, 3), "Hugo", 0)),
-      conflict = null,
     )
 
   private fun leave(state: AppState, at: Hlc = Hlc(2_000, 0, ava)) =

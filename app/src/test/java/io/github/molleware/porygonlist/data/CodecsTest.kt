@@ -194,13 +194,34 @@ class StateCodecTest {
   fun `a conflict keeps both real items`() {
     val mine = item(1, "Eggs", creator = ME)
     val theirs = item(1, "Eggs", creator = THEM)
-    val state = single().copy(conflict = Conflict(mine, theirs))
+    val state = single().copy(conflicts = listOf(Conflict(mine, theirs)))
 
-    val restored = StateCodec.decode(StateCodec.encode(state))!!.conflict!!
+    val restored = StateCodec.decode(StateCodec.encode(state))!!.conflicts.single()
 
     // The items are the whole record: what the card says about them is written when it is shown.
     assertEquals(mine, restored.yours)
     assertEquals(theirs, restored.theirs)
+  }
+
+  @Test
+  fun `several cards survive a save, in order, each on its own list`() {
+    val eggs = Conflict(item(1, "Eggs", creator = ME), item(1, "Eggs", creator = THEM))
+    val milk = Conflict(item(2, "Milk", creator = ME), item(2, "Oat milk", creator = THEM), ConflictKind.EDITED, ListId("${ME.value}:1"))
+    val state = single().copy(conflicts = listOf(eggs, milk))
+
+    val restored = StateCodec.decode(StateCodec.encode(state))!!.conflicts
+
+    assertEquals(listOf(eggs, milk), restored)
+  }
+
+  @Test
+  fun `a file from before several cards reads as a list of one`() {
+    // What a build holding a single card wrote: one `conflict` line and its two sides.
+    val eggs = Conflict(item(1, "Eggs", creator = ME), item(1, "Eggs", creator = THEM))
+    val old = StateCodec.encode(single().copy(conflicts = listOf(eggs)))
+    assertEquals(1, old.lines().count { it.startsWith("conflict|") })
+
+    assertEquals(listOf(eggs), StateCodec.decode(old)!!.conflicts)
   }
 
   @Test
@@ -292,6 +313,5 @@ class StateCodecTest {
         ),
       activeListId = ListId("${ME.value}:1"),
       networks = emptyList(),
-      conflict = null,
     )
 }

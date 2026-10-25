@@ -46,7 +46,6 @@ class ReplacedPhoneTest {
       lists = listOf(GroceryList(ListId("list:1"), "Weekly shop", ListAccent.ACCENT, items.toList(), people)),
       activeListId = ListId("list:1"),
       networks = emptyList(),
-      conflict = null,
     )
 
   private val pair = listOf(Person(ava, "Ava", "A"), Person(hugoOld, "Hugo", "H"))

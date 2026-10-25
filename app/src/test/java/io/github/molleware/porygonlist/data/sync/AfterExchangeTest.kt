@@ -48,7 +48,6 @@ class AfterExchangeTest {
       networks = emptyList(),
       // Both of them are paired, which is exactly what makes impersonation worth testing.
       peers = listOf(TrustedPeer(hugo, byteArrayOf(1), "Hugo", 0), TrustedPeer(sam, byteArrayOf(2), "Sam", 0)),
-      conflict = null,
     )
 
   private fun clock() = HybridClock(ava, now = { 5_000 })

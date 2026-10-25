@@ -107,7 +107,15 @@ day; the merge ones then go on the two-phone list above.
 Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
 
 - [ ] Two clashes at once → **several cards**: every clash its own card, on its own list, nothing
-      settled silently. A state-format change, so a migration and its tests.
+      settled silently. A state-format change, so a migration and its tests. *In code: the state
+      holds a list of cards; a merge keeps the open ones, refreshes one whose question comes round
+      again, and adds the new ones; each answer names its card; a list shows all of its cards,
+      oldest first. No new file version was needed: a card was already a `conflict` line and its
+      two sides, so a file holding several is read in sequence and an old file is a list of one —
+      and no older build is made to refuse a newer file, which would start the phone over
+      (`EditClashTest`, `SyncSessionTest`, `CodecsTest`, `PorygonViewModelTest`). To see on both
+      phones: two clashes on two items at once, two cards, each answered on its own; then a
+      restart, and the unanswered one is still there.*
 - [ ] Unarranged items order differently → **a position when added**: every new item gets a shared
       position at once. Also fixes "an item added before the first tick jumps to the top". *In
       code: adding no longer skips the key in a list nobody has arranged; the first add places the
@@ -492,6 +500,7 @@ first window, and Doze item (or any edit) crossing without either app opened.
       on different lists, or two items on one. **Not fixed — for Hugo:** cards become a list
       (a state-format change, so the migration rule applies), or the second edit clash wins the
       slot over an older one, or the one-card limit is accepted for 0.1.0.
+      *Decided: several cards (Hugo, 2026-10-25). Fixed in code — see the decision above.*
 - [ ] **With the app sent Home, her phone never synced until it was opened.** Android firewalls a
       backgrounded app (`blockedReasons=40`, APP_BACKGROUND) except while a job runs. Her app,
       merely sent Home, kept its discovery and socket, so the Pixel kept finding her and its calls

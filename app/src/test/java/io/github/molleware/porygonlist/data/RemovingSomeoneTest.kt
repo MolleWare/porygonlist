@@ -59,7 +59,6 @@ class RemovingSomeoneTest {
       activeListId = list.id,
       networks = emptyList(),
       peers = listOfNotNull(pairedWith, alsoPairedWith).map { TrustedPeer(it, byteArrayOf(1), it.value, 0) },
-      conflict = null,
     )
 
   // ── On the phone that removes ─────────────────────────────────────────────

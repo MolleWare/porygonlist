@@ -183,6 +183,5 @@ class DeliveryTest {
       lists = lists.toList(),
       activeListId = ListId("list:1"),
       networks = emptyList(),
-      conflict = null,
     )
 }

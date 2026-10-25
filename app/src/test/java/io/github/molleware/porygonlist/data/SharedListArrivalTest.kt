@@ -38,7 +38,6 @@ class SharedListArrivalTest {
       activeListId = mine.id,
       networks = emptyList(),
       peers = listOf(TrustedPeer(ava, byteArrayOf(1), "Ava", 0)),
-      conflict = null,
     )
 
   private fun arrive(): AppState =

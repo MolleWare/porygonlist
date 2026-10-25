@@ -135,16 +135,19 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
   val kept = if (ids == null) emptyMap() else removedFrom.associate { it.id to it.keptAsPrivate(ids.nextList(), ids::nextItem, localDevice) }
   val active = kept[activeListId]?.id ?: activeListId
 
-  // One card at a time, and an unanswered one is not thrown away for a newer one: the items behind
-  // it are both on the list, so the question keeps until it is asked again on the next handover.
-  // An edit clash goes first: unlike a duplicate, its losing version is already off the screen.
-  // A card the merge has just overtaken — answered on the other phone, say — is dropped first.
+  // Every clash its own card. A card the merge has just overtaken — answered on the other phone,
+  // say — is dropped; one already open whose question comes round again keeps its place, with the
+  // versions as they are now; anything new joins the end, edit clashes before duplicates.
   val merging = copy(lists = mergedLists)
-  val surfaced = merging.openConflict ?: edited.firstOrNull() ?: duplicates.firstOrNull()
+  val open = merging.openConflicts
+  val arriving = (edited + duplicates).distinctBy { it.question }
+  val cards =
+    open.map { card -> arriving.firstOrNull { it.question == card.question } ?: card } +
+      arriving.filterNot { new -> open.any { it.question == new.question } }
 
   return SyncResult.Merged(
     state =
-      copy(lists = mergedLists + kept.values, activeListId = active, clockHead = clock.head(), conflict = surfaced)
+      copy(lists = mergedLists + kept.values, activeListId = active, clockHead = clock.head(), conflicts = cards)
         .pruneDeliveredTombstones(),
     clashes = clashes,
     duplicates = duplicates,

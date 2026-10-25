@@ -125,9 +125,11 @@ object StateCodec {
       )
     )
 
-    state.conflict?.let { c ->
+    state.conflicts.forEach { c ->
       // Which kind of question, and on which list. The two sides follow on their own lines, and what
-      // the card says about them is written at display time rather than stored.
+      // the card says about them is written at display time rather than stored. One card after
+      // another: a file with a single card is exactly what builds that held only one wrote, so
+      // several cards needed no new version and no migration.
       appendLine(record("conflict", c.kind.name, c.listId?.value.orEmpty()))
       appendLine(record(*(listOf("conflictitem", "yours") + itemFields(c.yours)).toTypedArray()))
       appendLine(record(*(listOf("conflictitem", "theirs") + itemFields(c.theirs)).toTypedArray()))
@@ -205,11 +207,8 @@ object StateCodec {
     // only matters once, in migrateListIds, so everything up to there treats it as opaque text.
     var activeListId = ""
     var displayName = ""
-    var sawConflict = false
-    var conflictKind = ConflictKind.DUPLICATE
-    var conflictListRaw: String? = null
-    var conflictYours: GroceryItem? = null
-    var conflictTheirs: GroceryItem? = null
+    // Each `conflict` line opens a card, and the `conflictitem` lines after it fill it in.
+    val cards = mutableListOf<RawCard>()
     val networks = mutableListOf<ApprovedNetwork>()
     val peers = mutableListOf<TrustedPeer>()
     val staples = mutableListOf<Staple>()
@@ -240,16 +239,18 @@ object StateCodec {
             }
             // Versions up to 8 wrote two ready-made sentences here. They are ignored rather than
             // read: the card works them out from the items now, and a stored one was already stale.
-            "conflict" -> {
-              sawConflict = true
-              // Both absent in files from before edit clashes were asked about: a duplicate, on
-              // whichever list is open.
-              conflictKind = f.getOrNull(1)?.let { runCatching { ConflictKind.valueOf(it) }.getOrNull() } ?: ConflictKind.DUPLICATE
-              conflictListRaw = f.getOrNull(2)?.takeIf { it.isNotEmpty() }
-            }
+            "conflict" ->
+              cards +=
+                RawCard(
+                  // Both absent in files from before edit clashes were asked about: a duplicate, on
+                  // whichever list is open.
+                  kind = f.getOrNull(1)?.let { runCatching { ConflictKind.valueOf(it) }.getOrNull() } ?: ConflictKind.DUPLICATE,
+                  listRaw = f.getOrNull(2)?.takeIf { it.isNotEmpty() },
+                )
             "conflictitem" -> {
+              val card = cards.lastOrNull() ?: return@runCatching
               val item = parseItem(f, from = 2) ?: return@runCatching
-              if (f[1] == "yours") conflictYours = item else conflictTheirs = item
+              if (f[1] == "yours") card.yours = item else card.theirs = item
             }
             "receipt" -> receipts[DeviceId(f[1])] = Hlc.decode(f[2]) ?: return@runCatching
             "peer" ->
@@ -317,7 +318,7 @@ object StateCodec {
     // built rather than being threaded through afterwards.
     val everyItemByRawList = items.values.flatten()
     val highestBefore =
-      (everyItemByRawList + listOfNotNull(conflictYours, conflictTheirs))
+      (everyItemByRawList + cards.flatMap { listOfNotNull(it.yours, it.theirs) })
         .filter { it.id.device == device }
         .mapNotNull { it.id.value.substringAfter(':').toLongOrNull() }
         .maxOrNull() ?: 0L
@@ -340,12 +341,14 @@ object StateCodec {
       }
 
     // Both sides must be present, or there is no clash to show.
-    val conflict =
-      if (sawConflict && conflictYours != null && conflictTheirs != null) {
-        Conflict(conflictYours, conflictTheirs, conflictKind, conflictListRaw?.let { renamed.ids[it] ?: ListId(it) })
-      } else null
+    val conflicts =
+      cards.mapNotNull { card ->
+        val yours = card.yours ?: return@mapNotNull null
+        val theirs = card.theirs ?: return@mapNotNull null
+        Conflict(yours, theirs, card.kind, card.listRaw?.let { renamed.ids[it] ?: ListId(it) })
+      }
 
-    val everyItem = lists.flatMap { it.items } + listOfNotNull(conflict?.yours, conflict?.theirs)
+    val everyItem = lists.flatMap { it.items } + conflicts.flatMap { listOf(it.yours, it.theirs) }
 
     // A damaged counter must never hand out an id already in use, and the clock must never resume
     // behind a stamp already on disk — either would let a new edit lose to an old one.
@@ -374,8 +377,14 @@ object StateCodec {
       // A peer whose key does not hash to its id is not that peer; drop it rather than trust it.
       peers = peers.filter { DeviceIdentity.matches(it.deviceId, it.publicKey) },
       staples = staples,
-      conflict = conflict,
+      conflicts = conflicts,
     )
+  }
+
+  /** A card as read, before its list id is known and while its two sides may still be arriving. */
+  private class RawCard(val kind: ConflictKind, val listRaw: String?) {
+    var yours: GroceryItem? = null
+    var theirs: GroceryItem? = null
   }
 
   /** What a file's raw list ids became, and where the id counter ended up. */
