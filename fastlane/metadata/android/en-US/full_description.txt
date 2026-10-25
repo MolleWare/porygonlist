@@ -10,11 +10,12 @@ Pair two phones once by scanning a code. After that, a shared list hands its cha
 • Put items in order — the order is shared, so sorting by aisle works for everyone
 • Arrange and pin your lists, just for you
 • Staples for the things you buy every week, and a shopping view for the shop itself, where ticked items sink to the bottom
-• Syncs in the background for half a minute on every quarter hour, only while you are on an approved wifi
+• Syncs in the background for half a minute every quarter hour — on the dot with alarms allowed — only while you are on an approved wifi
 
 <b>Good to know</b>
 • Lists are meant to be thrown away. They live only on the phones that share them: uninstall the app and that phone's lists go with it.
 • Two phones only swap changes while both can be reached on the same wifi. If one has the app open, the other catches up within about a quarter of an hour. With alarms allowed, two closed phones meet at :00, :15, :30 and :45; without, a phone left idle may wake late and miss the other.
+• A VPN hides which wifi you are on, so nothing syncs while one is on — unless your VPN app leaves PorygonList out of it (split tunnelling, excluding PorygonList).
 
 <b>Permissions</b>
 • Network access, to talk to paired phones on your local wifi

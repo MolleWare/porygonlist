@@ -1,5 +1,6 @@
 package io.github.molleware.porygonlist.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -194,18 +195,20 @@ private fun QuarterHourCard() {
     if (!aligned) {
       SecondaryButton(
         "Allow alarms",
-        {
-          runCatching {
-            context.startActivity(
-              Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.fromParts("package", context.packageName, null))
-            )
-          }
-        },
+        { askForAlarms(context) },
         modifier = Modifier.padding(top = 12.dp),
         style = PorygonType.Meta,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
       )
     }
+  }
+}
+
+/** The system page where the owner allows this app's alarms. Android 12 and later only. */
+@RequiresApi(Build.VERSION_CODES.S)
+internal fun askForAlarms(context: Context) {
+  runCatching {
+    context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.fromParts("package", context.packageName, null)))
   }
 }
 

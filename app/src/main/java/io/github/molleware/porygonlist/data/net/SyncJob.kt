@@ -90,30 +90,48 @@ class SyncJob : JobService() {
     /** A single window as soon as possible, on joining an approved wifi. See [WifiWatch]. */
     private const val NOW_ID = 0x5060
 
+    /** How long after its quarter hour a window may start at the latest. See [book]. */
+    private const val LATE_BY_MS = 5 * 60_000L
+
     /**
      * Books the next quarter-hour window if none is, and leaves it alone if one is.
      *
-     * A booked window already aims at a fixed moment, so leaving it is never wrong. The exception is
-     * the periodic job an earlier version scheduled under the same id, which is replaced.
+     * A booked window already aims at a fixed moment, so leaving it is never wrong. The exceptions
+     * are the periodic job an earlier version scheduled under the same id, and a window booked
+     * without a deadline while alarms were allowed once they no longer are: both are replaced.
      */
     fun ensureScheduled(context: Context) {
       val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
       val pending = QUARTER_IDS.mapNotNull { scheduler.getPendingJob(it) }
-      if (pending.any { !it.isPeriodic }) return
-      book(context, QUARTER_IDS.first())
+      // A backstop booked while alarms were allowed has no deadline, and needs one once they are not.
+      val needsDeadline = !BackgroundSync.canAlign(context)
+      if (pending.any { !it.isPeriodic && (!needsDeadline || it.maxExecutionDelayMillis > 0) }) return
+      book(context, pending.firstOrNull { !it.isPeriodic }?.id ?: QUARTER_IDS.first())
     }
 
     /**
      * Unmetered rather than any network: the gate wants an approved wifi, and there is no reason to
-     * wake on mobile data only to find that out. No deadline either, for the same reason — a
-     * deadline runs the job with its network requirement unmet.
+     * wake on mobile data only to find that out.
+     *
+     * **A deadline, [LATE_BY_MS] after the quarter hour.** Without one, Android left a ready window
+     * unstarted for 35 minutes on an awake phone on its charger, every constraint met (Pixel,
+     * 22:30, 2026-10-24) — and a closed app is meant to sync within a quarter of an hour or so
+     * (Hugo, 2026-10-25). A deadline runs the job even with its network requirement unmet; the
+     * window then finds no approved wifi and stands aside, as it does on any wrong network. Doze
+     * still holds it to the phone's next maintenance window: only alarms get through that.
+     *
+     * Only without alarms. Beside an alarm the job is a backstop that stands aside, and a deadline
+     * would only start the process every quarter hour to do so. Each window books the next, so the
+     * choice follows the permission as it changes.
      */
     private fun book(context: Context, id: Int) {
       val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
       val now = System.currentTimeMillis()
+      val wait = nextQuarterHour(now) - now
       scheduler.schedule(
         JobInfo.Builder(id, ComponentName(context, SyncJob::class.java))
-          .setMinimumLatency(nextQuarterHour(now) - now)
+          .setMinimumLatency(wait)
+          .apply { if (!BackgroundSync.canAlign(context)) setOverrideDeadline(wait + LATE_BY_MS) }
           .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
           // Survives a reboot, so a phone that restarts overnight goes back to syncing without
           // waiting for somebody to open the app.

@@ -1,5 +1,7 @@
 package io.github.molleware.porygonlist.ui.screens
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +24,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,8 +37,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.net.BackgroundSync
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.sync.DeviceId
@@ -132,6 +138,11 @@ fun ListsScreen(
     }
 
     SyncPill(state, networkLabel, vpnOn, onExplainVpn)
+
+    // Once there is somebody to sync with, and only where Android asks at all.
+    if (state.peers.isNotEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      AllowAlarmsCard(Modifier.padding(top = 12.dp))
+    }
 
     Row(
       Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 10.dp),
@@ -388,6 +399,53 @@ private fun SyncPill(state: AppState, networkLabel: String, vpnOn: Boolean, onEx
       style = PorygonType.Meta,
       color = TextInk.copy(alpha = 0.72f),
     )
+  }
+}
+
+/**
+ * Asks for alarms, on the home screen, while they are not allowed.
+ *
+ * Settings already offered them, and nobody went looking: without them a closed phone syncs on
+ * Android's schedule, and on the Pixel that left a ready window unstarted for 35 minutes (22:30,
+ * 2026-10-24). A closed app is meant to catch up within a quarter of an hour or so (Hugo,
+ * 2026-10-25), which only alarms can promise. "Not now" puts it away until the app is next started
+ * — a reminder, not a wall. Read from Android on every return, since the switch is flipped there.
+ */
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+private fun AllowAlarmsCard(modifier: Modifier = Modifier) {
+  val context = LocalContext.current
+  var allowed by remember { mutableStateOf(BackgroundSync.canAlign(context)) }
+  var notNow by remember { mutableStateOf(false) }
+  LifecycleResumeEffect(Unit) {
+    allowed = BackgroundSync.canAlign(context)
+    onPauseOrDispose {}
+  }
+  if (allowed || notNow) return
+
+  Column(modifier.fillMaxWidth().clip(Shapes.Panel).background(Surface).padding(horizontal = 16.dp, vertical = 14.dp)) {
+    Text("Allow alarms to sync while closed", style = PorygonType.RowName, color = TextInk)
+    Text(
+      "Closed, this phone waits for Android to wake it, which can be half an hour late or more. " +
+        "With alarms it wakes at :00, :15, :30 and :45, when your paired phones do.",
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(top = 4.dp),
+    )
+    Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+      PrimaryButton(
+        "Allow alarms",
+        { askForAlarms(context) },
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+      )
+      SecondaryButton(
+        "Not now",
+        { notNow = true },
+        style = PorygonType.Meta,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+      )
+    }
   }
 }
 

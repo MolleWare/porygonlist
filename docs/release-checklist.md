@@ -125,6 +125,13 @@ needed except to install. Proton stays on, with PorygonList excluded:
       and the store's "Good to know" says the same, though its feature line ("on every quarter
       hour") does not — or ask for alarms more firmly, or bring "Sync is one switch" (alarms
       required) forward.**
+      *Decided (Hugo, 2026-10-25): a closed app syncs within 15–30 minutes; after a reboot an hour
+      is fine. Both levers, in code: the Lists screen asks for alarms while they are not allowed
+      ("Not now" puts it away until the next start), and without alarms the quarter-hour job gets
+      a deadline 5 minutes after its quarter hour, which Android has to honour outside Doze; a
+      backstop booked without one is rebooked once alarms go. The store's feature line now says
+      "on the dot with alarms allowed", and "Good to know" mentions the VPN. To see on the next
+      build: alarms not allowed, the Lists card; a job window started by 5 past the quarter hour.*
 - [ ] Store screenshots on the final build, with the fake phone as the other person: demo mode,
       throwaway lists, 3–6 into `fastlane/…/phoneScreenshots/`.
 
