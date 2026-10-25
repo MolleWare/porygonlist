@@ -127,6 +127,9 @@ class SyncJob : JobService() {
     /** One window soon, outside the quarter-hour rhythm. Replaces any that is still waiting. */
     fun runSoon(context: Context) {
       val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
+      // Already booked, or running: booking it again would cancel the window under way and start
+      // another, which is how a burst of wifi broadcasts became a loop of windows (2026-10-24).
+      if (scheduler.getPendingJob(NOW_ID) != null) return
       scheduler.schedule(
         JobInfo.Builder(NOW_ID, ComponentName(context, SyncJob::class.java))
           .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)

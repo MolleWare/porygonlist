@@ -17,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** What the background sync should do, given where the phone is and who it knows. */
 enum class BackgroundPlan {
@@ -101,11 +102,19 @@ class WifiWatch : BroadcastReceiver() {
   companion object {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** Whether this process has registered already. */
+    private val registered = AtomicBoolean(false)
+
     /**
-     * Asks Android to tell [WifiWatch] whenever a wifi is joined. Safe to call repeatedly: the same
-     * PendingIntent replaces the earlier registration rather than adding a second.
+     * Asks Android to tell [WifiWatch] whenever a wifi is joined. Once per process: the same
+     * PendingIntent would replace the earlier registration rather than add a second, but every
+     * registration fires at once for the wifi already joined, and that asks for a window. With each
+     * window registering again, that was a loop — 2,600 broadcasts in two minutes on the Pixel,
+     * 2026-10-24, each "sync now" cancelling the window it replaced. A new process, after a reboot
+     * or a kill, still registers on the first call.
      */
     fun register(context: Context) {
+      if (!registered.compareAndSet(false, true)) return
       val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return
       val request =
         NetworkRequest.Builder()
@@ -119,7 +128,8 @@ class WifiWatch : BroadcastReceiver() {
       val flags =
         PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
       val intent = PendingIntent.getBroadcast(context, 0, Intent(context, WifiWatch::class.java), flags)
-      runCatching { connectivity.registerNetworkCallback(request, intent) }
+      // A refusal leaves the next call free to try again.
+      runCatching { connectivity.registerNetworkCallback(request, intent) }.onFailure { registered.set(false) }
     }
   }
 }

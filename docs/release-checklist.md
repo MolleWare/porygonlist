@@ -419,6 +419,14 @@ first window, and Doze item (or any edit) crossing without either app opened.
       first other person on the list, not whoever added it. On Trio, Jam added by the unpaired
       laptop read "someone added this" beside Sam's S. Now the adder's own initial, and no mark
       when the adder is unknown. Fixed (`7c620b8`). *Seen on the Pixel, 2026-10-24 build.*
+- [ ] **A loop of windows, from registering the wifi listener in every window (`18b0973`).** A
+      registration fires at once for the wifi already joined; that asked for "sync now", and
+      booking "sync now" again cancelled the window under way, whose replacement registered again.
+      Pixel, 2026-10-24, after an install and an app open: 864 listener broadcasts in one minute,
+      1,792 the next, 38 "sync now" starts, the quarter-hour window cut to 20 ms. The S24 FE has
+      the same build. Fixed in code: the listener is registered once per process, and "sync now"
+      is not booked again while one is booked or running. *Needs a rebuild; measure the broadcast
+      count after an app open.*
 - [ ] **A window started from the background can read "offline" and do nothing.** Pixel, 19:30:00
       after the reboot: the alarm started SyncWindowService, which stopped 25 ms later and armed
       19:45. The app was still firewalled as a background app (`blocked=APP_BACKGROUND`), and
