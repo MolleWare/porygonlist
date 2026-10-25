@@ -490,7 +490,8 @@ first window, and Doze item (or any edit) crossing without either app opened.
       card, and leaving the list never closed it, so the card was still waiting on that list's id.
       Fixed in code, not yet committed: deleting closes it (`PorygonViewModelTest`). *22:48 build:
       left Trio by its card's Delete, Sam shared it again — back as a plain card, "new, from Sam".*
-- [ ] **A closed app went on announcing itself.** The open app's discovery belongs to the graph and
+- [x] **A closed app went on announcing itself.** *Verified fixed, build of 15:53, 2026-10-25: sent
+      Home, nothing advertised or browsed, the socket closed — see "On the next build".* The open app's discovery belongs to the graph and
       was turned off only by its gate, which dies with the view model; so after the app closed the
       phone kept advertising a port that timed out, until the process died, and background windows,
       finding it "already listening", left it. Fixed in code, not yet committed: `onCleared` stops
@@ -554,7 +555,8 @@ first window, and Doze item (or any edit) crossing without either app opened.
       broadcast in the 2½ minutes after an app open, no window started. The VPN below was on, so
       no window decided to sync; recount with it off.* *Recounted over three reboots with sync
       allowed: one broadcast per boot, one "sync now" window, which ran its full 30 s.*
-- [ ] **The Pixel was behind an always-on VPN all evening, so its windows were never a test.**
+- [x] **The Pixel was behind an always-on VPN all evening, so its windows were never a test.**
+      *Settled: PorygonList excluded in Proton, and the three windows rerun and passed that night.*
       Proton VPN, always-on, came up at 19:21, with the reboot. The gate holds behind a VPN, as it
       should, so from then the open app neither listened nor advertised, and every window stood
       aside: the 19:30 window after the reboot, the 20:16 Home'd window, and Sam never finding the
@@ -585,7 +587,8 @@ first window, and Doze item (or any edit) crossing without either app opened.
       never opened since the boot: the 21:15 alarm fired at 21:15:00.000, the firewall lifted
       20 ms later, the window called Sam at once and exchanged both ways (Alarm item 6 landed),
       and armed 21:30. Between windows Sam's call was refused: the port was closed.*
-- [ ] **A second clash, while a card is still open, is settled silently.** The state holds one card,
+- [x] **A second clash, while a card is still open, is settled silently.** *Verified fixed on the
+      Pixel against Sam, build of 15:53: two clashes, two cards on each phone.* The state holds one card,
       and an unanswered one is not replaced (`SyncSession.receive`: `openConflict ?: edited…`).
       The comment expects the question to come back on the next handover — true of a duplicate,
       whose two items both stay, but an edit clash has already been merged by clock and never comes
@@ -606,14 +609,16 @@ first window, and Doze item (or any edit) crossing without either app opened.
       whatever it last acknowledged, and an exchange carries both ways (`SyncCoordinatorTest`).
       *Needs a rebuild.* It also settles the open question below in practice: on the S24 FE an
       app sent Home announces a phone nobody can reach.
-- [ ] **Items never arranged show in a different order on each phone.** After the unpair test S5
+- [x] **Items never arranged show in a different order on each phone.** *Verified fixed on the
+      Pixel against Sam, build of 15:53: a fresh list, the same order on both.* After the unpair test S5
       Alpha held the same 8 items on both, but the last three in a different order (Pixel: Window
       item, His after unpair, Hers after unpair; hers: Hers, Window, His). `orderedItems` puts
       unplaced items first in the phone's own storage order — arrival order, which differs — and
       sorts only placed ones by key. Same root as the open "jumps to the top" item above. **Not
       fixed — for Hugo:** give every new item a position when it is added, or order unplaced items
       by something both phones share.
-- [ ] **A long paste pushes "Add to …" off the screen.** The Paste a list field grows with its text
+- [x] **A long paste pushes "Add to …" off the screen.** *Verified fixed, build of 15:53: 200 items,
+      buttons in reach.* The Paste a list field grows with its text
       and the sheet does not scroll, so with 200 items pasted (Pixel, 2026-10-24) neither "Add to
       S5 Big" nor Cancel could be reached; Back was the only way out. Batches of 50 fitted. A long
       list sent as text is exactly what the sheet is for. Not fixed: cap the field's height and let
@@ -622,7 +627,8 @@ first window, and Doze item (or any edit) crossing without either app opened.
       Remove and Keep sharing buttons below the tab bar, until the screen is scrolled by hand. And
       the copy a removed phone keeps carries the same name, so with a same-named list of its own
       the two cards read identically ("S5 Twin · A · 1 item · just you", twice).
-- [ ] **Revoking alarms stops background sync until the app is opened.** With alarms allowed the
+- [x] **Revoking alarms stops background sync until the app is opened.** *Verified fixed, build of
+      15:53: after a revoke the backup job is still booked.* With alarms allowed the
       quarter-hour jobs are cancelled and the alarm alone carries the schedule. Revoking the
       permission makes Android cancel the app's exact alarms and kill the process ("schedule_exact_alarm
       revoked", 23:30:36) — and the state-changed broadcast is only sent on a grant, so nothing books
