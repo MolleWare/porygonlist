@@ -37,17 +37,18 @@ class PeerAddressBook(private val file: File? = null) {
   val port: Int?
     get() = synchronized(lock) { loadLocked(); lastPort }
 
-  fun rememberPort(port: Int) =
+  fun rememberPort(port: Int) {
     synchronized(lock) {
       loadLocked()
       if (lastPort == port) return
       lastPort = port
       saveLocked()
     }
+  }
 
   fun entries(): List<Entry> = synchronized(lock) { loadLocked(); peers.values.toList() }
 
-  fun remember(record: ServiceRecord, at: Long) =
+  fun remember(record: ServiceRecord, at: Long) {
     synchronized(lock) {
       loadLocked()
       // Only a move is worth a write. The time matters only to tell an old address from a fresh one,
@@ -57,6 +58,7 @@ class PeerAddressBook(private val file: File? = null) {
       peers[record.deviceId] = Entry(record, at)
       saveLocked()
     }
+  }
 
   /** Everything, file included. For when this phone's identity goes, and its peers with it. */
   fun forgetAll() =
