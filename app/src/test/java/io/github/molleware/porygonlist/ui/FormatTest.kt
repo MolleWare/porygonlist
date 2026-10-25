@@ -216,6 +216,15 @@ class FormatTest {
   }
 
   @Test
+  fun `behind a VPN the banner says so, rather than blaming the other phone`() {
+    // Pixel, always-on Proton, 2026-10-24: "Waiting for Sam" all evening, and the VPN the reason.
+    assertEquals("VPN is on", syncHeadline(stateWith(shopping), vpnOn = true))
+    assertEquals("VPN is on", syncHeadline(stateWith(shopping, DeliveryLog().record(hugo, Hlc(now, 0, me))), vpnOn = true))
+    val solo = shopping.copy(people = listOf(Person(me, "Ava", "A")))
+    assertEquals("with nobody to sync with, a VPN changes nothing", "Nobody to sync with yet", syncHeadline(stateWith(solo), vpnOn = true))
+  }
+
+  @Test
   fun `the edit sheet names everyone a change goes to`() {
     val three = shopping.copy(people = shopping.people + Person(sam, "Sam", "S"))
     assertEquals("Goes to Hugo as soon as their phone is around.", editSyncNote(stateWith(shopping)))

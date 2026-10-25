@@ -217,6 +217,43 @@ fun ExportSheet(text: String, remaining: Int, copied: Boolean, onCopied: () -> U
   }
 }
 
+/**
+ * Why nothing syncs while a VPN is on, and the way round it.
+ *
+ * The gate cannot see past a tunnel — behind one, every network looks like the VPN's — so it stays
+ * quiet, as it should. What keeps both is the VPN leaving this app out, which only the VPN's own
+ * settings can do. Proton calls it split tunnelling, and has an include mode that does the opposite:
+ * on the Pixel, PorygonList ended up the one app inside the tunnel (2026-10-24).
+ */
+@Composable
+fun VpnSheet(onDismiss: () -> Unit) {
+  PorygonBottomSheet(onDismiss) {
+    Text("A VPN is on", style = PorygonType.SheetTitle, color = TextInk, modifier = Modifier.padding(bottom = 10.dp))
+    val body = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5)
+    Text(
+      "Lists sync only on a wifi you approved, and a VPN hides which wifi this is. So while it is on, " +
+        "this phone does not sync.",
+      style = body,
+      color = TextInk,
+    )
+    Text(
+      "To keep both, leave PorygonList out of the VPN. In your VPN app, look for split tunnelling — " +
+        "sometimes called excluded apps — and add PorygonList to the apps that skip it. If it asks, " +
+        "choose exclude: include does the opposite.",
+      style = body,
+      color = TextInk,
+      modifier = Modifier.padding(top = 10.dp),
+    )
+    Text(
+      "Your other apps stay on the VPN.",
+      style = PorygonType.Fine,
+      color = Neutral700,
+      modifier = Modifier.padding(top = 10.dp, bottom = 16.dp),
+    )
+    PrimaryButton("Got it", onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp))
+  }
+}
+
 /** Take a message someone sent and fold it into the list. */
 @Composable
 fun ImportSheet(

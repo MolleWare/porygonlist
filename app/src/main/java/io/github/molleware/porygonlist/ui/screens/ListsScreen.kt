@@ -101,6 +101,9 @@ fun ListsScreen(
   /** Arranges this phone's lists. Never sent anywhere. */
   onMoveList: (ListId, Int) -> Unit,
   onSetPinned: (ListId, Boolean) -> Unit,
+  /** A VPN is holding sync back. The banner says so, and opens [onExplainVpn] when tapped. */
+  vpnOn: Boolean = false,
+  onExplainVpn: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   // Edit order: cards grow a pin and a handle, and stop opening on a tap so a grab cannot also
@@ -128,7 +131,7 @@ fun ListsScreen(
       )
     }
 
-    SyncPill(state, networkLabel)
+    SyncPill(state, networkLabel, vpnOn, onExplainVpn)
 
     Row(
       Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 10.dp),
@@ -358,23 +361,33 @@ private fun ListEditCard(
  * font — instead of being squeezed into a sliver beside it and broken mid-word. The corners stop at
  * the Panel radius for the same reason: on one line that is still a full pill, but a pill radius on
  * a banner two lines tall makes an oval that clips its own text.
+ *
+ * With a VPN in the way it says so, and becomes the way to the fix: a VPN that leaves this app out
+ * of its tunnel lets it sync again, which is nothing the app can do for you, but easy to miss.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun SyncPill(state: AppState, networkLabel: String) {
+private fun SyncPill(state: AppState, networkLabel: String, vpnOn: Boolean, onExplainVpn: () -> Unit) {
+  val headline = syncHeadline(state, vpnOn)
+  val explainsVpn = headline == "VPN is on"
   FlowRow(
     Modifier.fillMaxWidth()
       .clip(Shapes.Panel)
       .background(Accent2100)
+      .then(if (explainsVpn) Modifier.clickable(onClickLabel = "See how to sync with it on", onClick = onExplainVpn) else Modifier)
       .padding(horizontal = 16.dp, vertical = 12.dp),
     horizontalArrangement = Arrangement.spacedBy(9.dp),
     verticalArrangement = Arrangement.spacedBy(4.dp),
   ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
       Dot(Accent2)
-      Text(syncHeadline(state), style = PorygonType.MetaBold, color = TextInk)
+      Text(headline, style = PorygonType.MetaBold, color = TextInk)
     }
-    Text(syncDetail(state, networkLabel), style = PorygonType.Meta, color = TextInk.copy(alpha = 0.72f))
+    Text(
+      if (explainsVpn) "Nothing syncs while it is on · tap to keep both" else syncDetail(state, networkLabel),
+      style = PorygonType.Meta,
+      color = TextInk.copy(alpha = 0.72f),
+    )
   }
 }
 

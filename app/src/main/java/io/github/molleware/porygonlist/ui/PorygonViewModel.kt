@@ -69,6 +69,8 @@ enum class Sheet {
   EDIT_ITEM,
   EXPORT,
   IMPORT,
+  /** Why nothing syncs behind a VPN, and how to leave this app out of it. */
+  VPN,
 }
 
 /** The item being edited, held apart from the list so Cancel is free. */
@@ -1336,6 +1338,10 @@ class PorygonViewModel(
     importText = ""
     importNote = ""
     sheet = Sheet.IMPORT
+  }
+
+  fun openVpnHelp() {
+    sheet = Sheet.VPN
   }
 
   fun onImportTextChange(value: String) {

@@ -508,6 +508,10 @@ first window, and Doze item (or any edit) crossing without either app opened.
       aside: the 19:30 window after the reboot, the 20:16 Home'd window, and Sam never finding the
       Pixel. Seen 2026-10-24, 20:30, from the Share tab ("Network 10ca69 — VPN is on") and
       `dumpsys connectivity`. Those three go back to be rerun with the VPN off.
+- [ ] *Decided (Hugo, 2026-10-25): the Lists banner says "VPN is on", and a tap opens the exclude
+      fix. In code: `syncHeadline` puts the VPN first whenever there is someone to sync with
+      (`FormatTest`), and the banner opens a sheet on split tunnelling in exclude mode. To see on
+      the next build: Proton on with PorygonList inside the tunnel, the banner and the sheet.*
 - [ ] **With a VPN on, nothing syncs, and only the Share tab says why.** The Lists screen reads
       "Waiting for Sam" as though the other phone were the problem. Anyone who keeps a VPN always
       on — as Hugo does — gets no sync and no reason. **For Hugo:** say "VPN is on" in the status

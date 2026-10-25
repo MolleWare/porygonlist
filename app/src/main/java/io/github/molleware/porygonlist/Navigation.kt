@@ -41,6 +41,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import io.github.molleware.porygonlist.data.net.BackgroundSync
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
+import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.WifiWatch
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.ui.PorygonViewModel
@@ -51,6 +52,7 @@ import io.github.molleware.porygonlist.ui.components.ExportSheet
 import io.github.molleware.porygonlist.ui.components.ImportSheet
 import io.github.molleware.porygonlist.ui.components.Tab
 import io.github.molleware.porygonlist.ui.components.TabBar
+import io.github.molleware.porygonlist.ui.components.VpnSheet
 import io.github.molleware.porygonlist.ui.nameFor
 import io.github.molleware.porygonlist.ui.networkLabel
 import io.github.molleware.porygonlist.ui.editSyncNote
@@ -207,6 +209,8 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onDelete = viewModel::deleteList,
                   onMoveList = viewModel::moveList,
                   onSetPinned = viewModel::setPinned,
+                  vpnOn = (discovery as? DiscoveryDecision.Hold)?.reason == HoldReason.VPN,
+                  onExplainVpn = viewModel::openVpnHelp,
                   modifier = Modifier.fillMaxSize(),
                 )
               }
@@ -419,6 +423,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
             onAdd = viewModel::runImport,
             onDismiss = viewModel::closeSheet,
           )
+        Sheet.VPN -> VpnSheet(onDismiss = viewModel::closeSheet)
         null -> Unit
       }
     }

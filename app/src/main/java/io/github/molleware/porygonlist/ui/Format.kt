@@ -244,13 +244,20 @@ private fun writerOf(version: GroceryItem, other: GroceryItem): DeviceId {
   return (differing.maxOrNull() ?: version.touchedAt).device
 }
 
-/** The banner's headline: whether everyone you share with has caught up. */
-fun syncHeadline(state: AppState): String {
+/**
+ * The banner's headline: whether everyone you share with has caught up.
+ *
+ * [vpnOn] puts the reason first when a VPN is what stops this phone syncing. Otherwise the banner
+ * read "Waiting for Sam" as though the other phone were the problem, and only the Share tab said
+ * why (Pixel, always-on Proton, 2026-10-24).
+ */
+fun syncHeadline(state: AppState, vpnOn: Boolean = false): String {
   val shared = state.visibleLists.filter { it.others(state.localDevice).isNotEmpty() }
   val everyone = shared.flatMap { it.others(state.localDevice) }.distinctBy { it.device }
   val behind = shared.flatMap { it.behind(state.localDevice, state.deliveredTo) }.distinctBy { it.device }
   return when {
     everyone.isEmpty() -> "Nobody to sync with yet"
+    vpnOn -> "VPN is on"
     behind.isEmpty() -> "In step with ${names(everyone)}"
     else -> "Waiting for ${names(behind)}"
   }
