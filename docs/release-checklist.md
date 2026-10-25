@@ -243,10 +243,18 @@ for every test; Ava's real lists only come into it for the unpairing test, which
       had both people again, in step, with no sharing again needed — S5 Alpha had all 8 items on
       both, both after-unpair edits and the stuck Window item included. Note for Hugo: pairing
       again undoes an unpairing entirely, lists and all.*
-- [ ] Ava's lists match the backup — the backup script run again, and the two compared; anything
-      missing pasted back from the PL1 lines.
-- [ ] Throwaway lists deleted on both phones; stay-awake, font size and alarm permission as they
-      were before the session.
+- [x] Ava's lists match the backup — the backup script run again, and the two compared; anything
+      missing pasted back from the PL1 lines. *2026-10-25, after the unpair test and again after
+      the cleanup: the same 8 lists, same order, same names, items, quantities and ticks. Nothing
+      needed pasting back.*
+- [x] Throwaway lists deleted on both phones; stay-awake, font size and alarm permission as they
+      were before the session. *No S5 list left on either. Hers: font 0.801, timeout 5 min,
+      alarms default, stay-awake and airplane mode off. Pixel: font 1.0, alarms default, stay-awake
+      off; its wifi left on, as Hugo asked. Both with their quarter-hour job booked.*
+
+**Still to run, on the next build:** her app sent Home, then a natural window — it should now
+exchange; two closed phones in Doze at a quarter hour; both rebooted with alarms allowed, then the
+first window, and Doze item (or any edit) crossing without either app opened.
 
 ### Found in the session
 
