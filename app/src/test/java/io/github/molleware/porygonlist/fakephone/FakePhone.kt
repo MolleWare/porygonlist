@@ -316,7 +316,8 @@ private class Console(
     s.visibleLists().forEachIndexed { i, list ->
       val people = list.people.filter { it.present }.joinToString { it.name.ifEmpty { it.device.value.take(6) } }
       say("[$i] ${list.name}  — $people${if (list.id == s.activeListId) "  (open)" else ""}")
-      list.liveItems.forEach { say("      ${if (it.checked) "[x]" else "[ ]"} ${it.label()}") }
+      // In the order a screen draws them, which is the shared order — not the order stored here.
+      list.orderedItems.forEach { say("      ${if (it.checked) "[x]" else "[ ]"} ${it.label()}") }
     }
     // What a screen would show: a clash answered on the other phone is stored but no longer asked.
     s.openConflicts.forEach { say("conflict (${it.kind}) on ${it.itemName}: mine ${it.yours.label()} / theirs ${it.theirs.label()}") }

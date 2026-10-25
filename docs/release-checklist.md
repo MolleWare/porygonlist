@@ -91,17 +91,24 @@ needed except to install. Proton stays on, with PorygonList excluded:
 - [ ] Alarms allowed: the alarm and a quarter-hour job both booked; the job's runs end in
       milliseconds; after an alarm window from a closed app, no job 20576 left pending.
 - [ ] Revoke alarms: a quarter-hour job is booked without anything else happening.
-- [ ] Paste 200 items: "Add to …" in reach.
-- [ ] Two clashes at once against Sam: two cards on Trio, answered one at a time; one left
-      unanswered survives an app restart.
-- [ ] Items added on the Pixel and on Sam to a fresh list: the same order on both.
+- [x] Paste 200 items: "Add to …" in reach. *Build of 15:53: the field stops at its cap and scrolls,
+      "Add to T Clash" and Cancel above the keyboard; added, and Sam had all 204.*
+- [x] Two clashes at once against Sam: two cards on Trio, answered one at a time; one left
+      unanswered survives an app restart. *On a fresh list, T Clash: Sam offline set Apples ×3 and
+      Bread ×4, the Pixel ×2 and ×5; back online, two cards on each phone, each saying what both
+      did. "Keep Sam's" on Apples: ×3 on both, and Sam's Apples card closed by the answer; the
+      Bread card stayed on both, and on the Pixel through an app restart.*
+- [x] Items added on the Pixel and on Sam to a fresh list: the same order on both. *T Clash, each
+      adding one while Sam was offline: Apples, Bread, Pixel pear, Sam plum on both. (The fake
+      phone printed its stored order until `orderedItems` replaced it in its dump.)*
 - [ ] PorygonList put inside Proton's tunnel: the banner says "VPN is on", and a tap opens the fix.
 - [x] Alarms not allowed: the "Allow alarms" card on the Lists screen; app closed, a job window
       started by 5 past the quarter hour (`dumpsys jobscheduler`: the job shows a deadline).
       *Build of 15:53: the card shows under the banner. Job 20569 booked with Delay to 16:00 and
       Deadline to 16:05; it ran at 16:00:32. The next, 20578, ran at 16:15:02, listened on the
       same port and called Sam within a second; Home item 10 crossed.*
-- [ ] **By hand (Hugo):** no "Edit order" any more (`e565a78`). On a list, hold an item's name:
+- [x] **By hand (Hugo):** no "Edit order" any more (`e565a78`). *"Feels good", Hugo, build of
+      15:53, 2026-10-25.* On a list, hold an item's name:
       the edit sheet; hold its right side: it lifts with a tick and drags, Thirty end to end. On
       the Lists screen, the same with a list card, and Pin to top / Unpin in its card. Taps on
       either side of a card still open the list; a quick swipe still scrolls.
