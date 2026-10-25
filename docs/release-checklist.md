@@ -33,8 +33,8 @@ be true, not how to check it.
       travels and closes the card on the other phone. (`be31359`)
 - [x] **The sync banner's "a moment ago" is hard-coded.** It gives the last confirmed handover.
 - [x] **Copy that assumes exactly two people.** Everyone on the list is named now.
-- [ ] **Dragging a row past the edge of the screen does not scroll.** Written (`512c68d`). It
-      scrolls on the Pixel (session 3, by script); the feel by hand is still to try.
+- [x] **Dragging a row past the edge of the screen does not scroll.** Written (`512c68d`). It
+      scrolls on the Pixel (session 3, by script); by hand, 2026-10-25, Hugo: "feels nice".
 - [x] **Backups.** Off, by decision (above).
 - [x] **README is out of date.** Updated in `63b366a`.
 - [x] **A shared list arrives silently.** Its card reads "new, from Ava" until first opened.
@@ -86,8 +86,10 @@ leave her phone only what is hers. Needs the next build on the Pixel.
 
 ### Meanwhile: by hand (Hugo)
 
-- [ ] Drag a row of the 30-item list "Thirty" end to end: does the edge scroll feel right?
-- [ ] TalkBack on, once through every screen by ear.
+- [x] Drag a row of the 30-item list "Thirty" end to end: does the edge scroll feel right? *Yes,
+      2026-10-25.*
+- [x] ~~TalkBack on, once through every screen by ear.~~ *Not for 0.1.0 (Hugo, 2026-10-25); moved
+      to After 0.1.0.*
 - [ ] The release key and its password backed up off this machine.
 - [ ] Play Console: account, app entry, Play App Signing with our key, data safety form, location
       declaration, content rating.
@@ -97,20 +99,20 @@ leave her phone only what is hers. Needs the next build on the Pixel.
 Each is written up under *Found in the session*. Once decided, the fix and its tests land in a
 day; the merge ones then go on the two-phone list above.
 
-- [ ] A second clash while a card is open is settled silently: cards as a list (a state-format
-      change), the newer edit clash takes the slot, or accept one card for 0.1.0.
-- [ ] Unarranged items order differently on each phone: give every item a position when added, or
-      order unplaced items by something both phones share.
-- [ ] Revoking alarms stops background sync until the app is opened: keep a job beside the alarm,
-      a slow watchdog job, or accept until "Sync is one switch".
-- [ ] Two closed phones in Doze have 30 s to find each other: remembered addresses across process
-      death, a longer window when alarms align, or a retry inside the window.
-- [ ] The app sent Home goes on announcing a phone that cannot be reached: stop discovery when the
-      app leaves the screen, and leave it to the windows?
-- [ ] Small ones: a long paste pushes "Add to …" off the sheet; "Stop sharing …?" opens under the
-      tab bar; a kept private copy reads exactly like a same-named list of one's own; an
-      already-paired code still asks "Someone new, or a phone replacing one?"; "new, from someone"
-      once the sender is unpaired.
+Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
+
+- [ ] Two clashes at once → **several cards**: every clash its own card, on its own list, nothing
+      settled silently. A state-format change, so a migration and its tests.
+- [ ] Unarranged items order differently → **a position when added**: every new item gets a shared
+      position at once. Also fixes "an item added before the first tick jumps to the top".
+- [ ] Revoking alarms stops sync → **a backup job**: the quarter-hour job stays booked beside the
+      alarm and stands aside while the alarm is armed, so there are never two windows.
+- [ ] Two phones in Doze miss each other → **remember addresses**: each peer's last address kept
+      across process death, so a fresh window calls at once instead of waiting on mDNS.
+- [ ] The app sent Home goes on announcing → **stop when it leaves the screen**: discovery stops
+      when the app is no longer visible, and the windows do the rest.
+- [ ] Small ones → **only the paste sheet**: cap the field so "Add to …" stays reachable. The rest
+      moved to After 0.1.0.
 
 ### Meanwhile: release preparation
 
@@ -146,7 +148,7 @@ and the Pixel's half; the S24 FE's own discovery and screens still need her phon
       phones, session 1.
 - [x] About: the version reads 0.1.0, both links open the browser. *Pixel, session 3: Source code
       and Report a problem both open in Brave.*
-- [ ] Edit order on a 30-item list: drag end to end, the screen scrolls along at the edges, the
+- [x] Edit order on a 30-item list: drag end to end, the screen scrolls along at the edges, the
       speed feels right, and the bottom zone sits above the tab bar. *Session 3, Pixel, by script
       (`device.sh drag`): Row01 held just above the tab bar scrolled the list to the end and dropped
       below Row30 — about 22 rows in 3 s. Whether that speed feels right is left for a hand; the
@@ -156,7 +158,9 @@ and the Pixel's half; the S24 FE's own discovery and screens still need her phon
       dragged above Spare by its handle, still there after another restart.*
 - [x] The list card's avatars sit against the right edge (`d679f81`). *Pixel, 2026-10-21: "Fake shop"
       shared from the laptop fake phone, L and H flush right on the card.*
-- [ ] TalkBack through every screen, then the largest font size: nothing unlabelled, nothing clipped.
+- [x] TalkBack through every screen, then the largest font size: nothing unlabelled, nothing clipped.
+      *For 0.1.0: the label dumps and the largest font, both clean on both phones (below). Listening
+      with TalkBack itself is left for after 0.1.0 (Hugo, 2026-10-25).*
       *Pixel, 2026-10-21: every screen's controls dumped (lists, a list, its edit sheet, Edit
       order, Shop, Staples, Share, Settings, pairing) — one unlabelled, the sheet's backdrop; and
       every screen at font 2 — avatars and "Change" broke. All three fixed below; recheck on the
@@ -618,3 +622,9 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
 - [ ] **Sync is one switch in Settings.** Turning it on needs alarms allowed; without them it stays
       off. This replaces today's two modes, "on the quarter hour" with alarms and "around the
       quarter hour" without, so sync is simple and predictable: on and on time, or off.
+- [ ] **Small wording and layout from session 5** (left out of 0.1.0, 2026-10-25): "Stop sharing
+      …?" opens under the tab bar; a kept private copy reads exactly like a same-named list of
+      one's own; an already-paired code still asks "Someone new, or a phone replacing one?"; "new,
+      from someone" once the sender is unpaired.
+- [ ] **A TalkBack pass by ear.** Every screen, listening for anything unclear or said twice. The
+      labels themselves are checked for 0.1.0 by dumps on both phones.
