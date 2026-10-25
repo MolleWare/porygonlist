@@ -115,6 +115,19 @@ class SyncCoordinator(
     }
   }
 
+  /**
+   * Calls every reachable peer once more, whatever it last acknowledged.
+   *
+   * For the start of a background window. An exchange carries both ways, so this is how a window
+   * collects what a peer could not deliver while this phone's network was blocked — on the S24 FE,
+   * an app sent Home is firewalled outside its windows, and in a window it owed nothing and had
+   * never lost sight of the peer, so before this nobody called until the app was opened.
+   */
+  fun callEveryoneOnce() {
+    acknowledged.clear()
+    learned.value++
+  }
+
   fun stop() {
     synchronized(this) {
       job?.cancel()

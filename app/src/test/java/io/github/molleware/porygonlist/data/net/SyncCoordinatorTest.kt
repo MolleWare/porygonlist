@@ -268,6 +268,27 @@ class SyncCoordinatorTest {
   private fun Phone.has(name: String) = name in repo.now.visibleLists.single().liveItems.map { it.name.value }
 
   @Test
+  fun `a background window calls even a peer it owes nothing, and brings back what that peer had`() {
+    // Seen on hardware, 2026-10-24: Ava's app sent Home on the S24 FE, so Android blocked its
+    // network outside the windows. The Pixel's edit could not get in, and in her window she owed it
+    // nothing and had never lost sight of it — so nobody called, and it waited for her to open the app.
+    val (ava, hugo) = pair()
+    hugo.pushTo(avaId, avaKey, "Ava")
+    ava.pushTo(hugoId, hugoKey, "Hugo")
+    hugo.adds("Window item", hugoId, 50)
+    val before = calls.get()
+
+    ava.pushTo(hugoId, hugoKey, "Hugo")
+    assertEquals("an ordinary look owes Hugo nothing", before, calls.get())
+
+    ava.coordinator.callEveryoneOnce()
+    ava.pushTo(hugoId, hugoKey, "Hugo")
+
+    assertEquals(before + 1, calls.get())
+    assertTrue("the call carried Hugo's edit back", ava.has("Window item"))
+  }
+
+  @Test
   fun `a stale discovery record does not stop a call to where the peer said it is`() {
     // Seen on hardware: Ava came back onto the wifi on a new port and called the Pixel, which went
     // on dialling the port discovery remembered, so her answer waited until its screen woke.

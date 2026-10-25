@@ -49,7 +49,8 @@ class SyncWindow(private val context: Context) {
 
     // Read in one go, not off the monitor's flow — whose first value has no fingerprint yet, which
     // made every window on hardware give up as "unidentifiable" before announcing anything.
-    val snapshot = AndroidNetworkMonitor(context).current()
+    val monitor = AndroidNetworkMonitor(context)
+    val snapshot = settledSnapshot { monitor.current() }
     when (backgroundPlan(snapshot, state)) {
       BackgroundPlan.RUN -> Unit
       // Woke somewhere it should not be — a reboot while away, a network since un-approved, nobody
@@ -63,7 +64,12 @@ class SyncWindow(private val context: Context) {
 
     val endpoint = Graph.syncEndpoint()
     val discovery = Graph.peerDiscovery(context)
-    Graph.syncCoordinator(context).start()
+    Graph.syncCoordinator(context).apply {
+      start()
+      // A window exists to exchange, so it calls everyone once: owing nothing is no reason to miss
+      // what a peer has been holding for this phone while it could not be reached.
+      callEveryoneOnce()
+    }
 
     // The open app may already be listening — a frozen process wakes up into this window with its
     // discovery still set up. Then the window only has to keep the process awake; starting a second
@@ -90,6 +96,29 @@ class SyncWindow(private val context: Context) {
   companion object {
     /** Long enough to find a peer, resolve it and exchange; short enough to cost next to nothing. */
     const val WINDOW_MS = 30_000L
+
+    /**
+     * The network, once the system lets this process see it, or offline after [SETTLE_MS].
+     *
+     * A window started from the background begins firewalled: Android blocks a background app's
+     * network, and lifts that for a job or a foreground service a moment after it starts, not as it
+     * starts. Until then the active network reads as none. Seen on the Pixel, 2026-10-24: the 19:30
+     * alarm's window read "offline" at 19:30:00 and stood aside in 25 ms, while the firewall allowed
+     * the app only later — so a phone on its home wifi missed its quarter hour.
+     */
+    internal suspend fun settledSnapshot(read: () -> NetworkSnapshot): NetworkSnapshot {
+      var snapshot = read()
+      var waited = 0L
+      while (!snapshot.isUsable && waited < SETTLE_MS) {
+        delay(SETTLE_STEP_MS)
+        waited += SETTLE_STEP_MS
+        snapshot = read()
+      }
+      return snapshot
+    }
+
+    private const val SETTLE_MS = 5_000L
+    private const val SETTLE_STEP_MS = 250L
 
     private val busy = AtomicBoolean(false)
   }
