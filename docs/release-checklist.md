@@ -95,6 +95,10 @@ needed except to install. Proton stays on, with PorygonList excluded:
 - [ ] PorygonList put inside Proton's tunnel: the banner says "VPN is on", and a tap opens the fix.
 - [ ] Alarms not allowed: the "Allow alarms" card on the Lists screen; app closed, a job window
       started by 5 past the quarter hour (`dumpsys jobscheduler`: the job shows a deadline).
+- [ ] **By hand (Hugo):** no "Edit order" any more (`e565a78`). On a list, hold an item's name:
+      the edit sheet; hold its right side: it lifts with a tick and drags, Thirty end to end. On
+      the Lists screen, the same with a list card, and Pin to top / Unpin in its card. Taps on
+      either side of a card still open the list; a quick swipe still scrolls.
 
 - [x] The Pixel's app sent Home, the fake phone edits, the Pixel's next natural window collects it.
       *2026-10-24, build of 20:27, alarms allowed: sent Home at 21:17; Sam added Home item 7 at
