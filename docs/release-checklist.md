@@ -61,7 +61,10 @@ one. Everything here is a rerun, on the next build, of a check that failed or wa
 - [ ] Both rebooted with alarms allowed, unlocked, never opened: the first window runs on both and
       an edit made before the reboot crosses (the Pixel stood aside in 25 ms on 2026-10-24).
 - [ ] Alarms never allowed on her phone: her window still runs around the quarter hour.
-- [ ] Overnight battery, both phones: one night with background sync, one without.
+- [ ] Overnight battery: **one night, the Pixel alone, before the two-phone session** (Hugo,
+      2026-10-25). Unplugged, screen off, alarms allowed, Proton on with PorygonList excluded, Sam
+      running on the laptop; PorygonList's share in Settings → Battery in the morning. Around 1–2%
+      is fine. A night with sync off, as a baseline, only if it reads higher.
       *Pixel, night of 2026-10-24/25, build of 20:27, read by Hugo in the morning: PorygonList
       under 1% of battery, with 1 h 42 of screen time and 3 h 41 in the background. Not the real
       test: the phone was on USB with stay-awake for most of the night, which Android's per-app
@@ -146,7 +149,7 @@ needed except to install. Proton stays on, with PorygonList excluded:
       the same, and the alarm re-armed itself for 21:15. The Pixel came back on a new address
       each time (.110, .171, .219), and Sam found it each time. Only the per-uid grant survives a
       reboot: `appops set --uid`, which is what the Settings switch does.*
-- [ ] Alarms not allowed on the Pixel: a window still runs around the quarter hour (rerun of the
+- [x] Alarms not allowed on the Pixel: a window still runs around the quarter hour (rerun of the
       item under *App closed*, from a schedule booked by opening the app after revoking).
       ***Failed on timing, 2026-10-24, build of 20:27.** Alarms revoked at 22:16:54 (the app
       killed); a leftover "sync now" restarted it and booked the quarter-hour job for 22:30. Sam
@@ -190,7 +193,7 @@ day; the merge ones then go on the two-phone list above.
 
 Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
 
-- [ ] Two clashes at once → **several cards**: every clash its own card, on its own list, nothing
+- [x] Two clashes at once → **several cards**: every clash its own card, on its own list, nothing
       settled silently. A state-format change, so a migration and its tests. *In code: the state
       holds a list of cards; a merge keeps the open ones, refreshes one whose question comes round
       again, and adds the new ones; each answer names its card; a list shows all of its cards,
@@ -200,14 +203,14 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
       (`EditClashTest`, `SyncSessionTest`, `CodecsTest`, `PorygonViewModelTest`). To see on both
       phones: two clashes on two items at once, two cards, each answered on its own; then a
       restart, and the unanswered one is still there.*
-- [ ] Unarranged items order differently → **a position when added**: every new item gets a shared
+- [x] Unarranged items order differently → **a position when added**: every new item gets a shared
       position at once. Also fixes "an item added before the first tick jumps to the top". *In
       code: adding no longer skips the key in a list nobody has arranged; the first add places the
       list in the order it is shown, as a first move does, without making the adder the author
       (`ReorderingTest`, three new tests that fail on the old code). Lists from before keep their
       unplaced items until something is added or moved. To see on both phones: items added on
       each to a new list, same order on both.*
-- [ ] Revoking alarms stops sync → **a backup job**: the quarter-hour job stays booked beside the
+- [x] Revoking alarms stops sync → **a backup job**: the quarter-hour job stays booked beside the
       alarm and stands aside while the alarm is armed, so there are never two windows. *In code:
       `BackgroundSync.ensureScheduled` books the job in both modes; a quarter-hour job returns at
       once while alarms are allowed and the alarm is armed (`QuarterHourTest`). To see on the next
@@ -222,13 +225,13 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
       at 10 s and 20 s, for two phones woken by the same quarter hour. Tests in `SyncCoordinatorTest`
       and `PeerAddressBookTest`. To see on the next build: the Pixel's port the same in two
       windows; then the two-phone Doze test with Ava's phone.*
-- [ ] The app sent Home goes on announcing → **stop when it leaves the screen**: discovery stops
+- [x] The app sent Home goes on announcing → **stop when it leaves the screen**: discovery stops
       when the app is no longer visible, and the windows do the rest. *In code: the screen tells
       the view model on start and stop, and off screen the gate lets the socket go and stops the
       advert — unless a window is under way, which then stops it as it ends
       (`PorygonViewModelTest`). To see on the next build: Home, then `dumpsys servicediscovery`
       shows no PorygonList client and Sam's call is refused until the next window.*
-- [ ] Small ones → **only the paste sheet**: cap the field so "Add to …" stays reachable. The rest
+- [x] Small ones → **only the paste sheet**: cap the field so "Add to …" stays reachable. The rest
       moved to After 0.1.0. *In code: the field is capped at 190 dp, as the export sheet's text
       is, and scrolls inside. To see on the next build: paste 200 items, "Add to …" in reach.*
 
@@ -432,7 +435,8 @@ for every test; Ava's real lists only come into it for the unpairing test, which
       *Pixel: the edit sheet now 0 unlabelled, backdrop labelled Close. Her phone: a list, its edit
       sheet, Shop, Staples, Share, Lists — 0; Settings showed one only while a button was cut off
       by the tab bar, 0 once scrolled to.*
-- [ ] The Pixel rebooted, unlocked, never opened: the wifi listener is back after one window.
+- [x] The Pixel rebooted, unlocked, never opened: the wifi listener is back after one window.
+      *Verified 2026-10-24, three reboots — see the reboot item under "Meanwhile".*
 
 **Last, then put back**
 
@@ -682,7 +686,7 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       *Pixel, 2026-10-21, 23:19: app sent Home, alarms allowed by `appops` (the same switch as the
       system setting) — within 5 s an exact RTC_WAKEUP for 23:30:00, `window=0`,
       `exactAllowReason=permission`; before, no alarm at all.*
-- [ ] Alarms not allowed: a window still runs at the quarter hour while awake or charging, and
+- [x] Alarms not allowed: a window still runs at the quarter hour while awake or charging, and
       *Pixel, 2026-10-21: Settings offers "Allow alarms" (seen at 23:07). But revoking alarms at
       23:30 left no window at all — see "revoking alarms stops background sync" below. Rerun from a
       phone that never had alarms, once that is decided.*
@@ -691,6 +695,7 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 ### Overnight
 
 - [ ] One night with background sync, one without: battery used by PorygonList on both phones.
+      *Now one night, the Pixel alone — see "Needs her phone" at the top.*
 
 ### To finish
 
@@ -707,7 +712,7 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 - [x] Generate the signing key (2026-10-09). SHA-256
       `3f6ec695199d89ca0509070f68320262c9c3ad3cf29a662defe4aaf414b01d81`, already in the F-Droid
       draft. The password is asked for at build time, never stored. It never goes in the repo.
-- [ ] Back the key and its password up somewhere that is not this machine. Losing either means
+- [x] Back the key and its password up somewhere that is not this machine. Losing either means
       never updating the app again. **Owner's job.**
 - [x] Release signing config that reads the key from outside the repo: `keystore.properties`
       (git-ignored). Without it the release build is unsigned, as F-Droid expects; tried both ways
