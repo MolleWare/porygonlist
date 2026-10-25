@@ -62,6 +62,12 @@ one. Everything here is a rerun, on the next build, of a check that failed or wa
       an edit made before the reboot crosses (the Pixel stood aside in 25 ms on 2026-10-24).
 - [ ] Alarms never allowed on her phone: her window still runs around the quarter hour.
 - [ ] Overnight battery, both phones: one night with background sync, one without.
+      *Pixel, night of 2026-10-24/25, build of 20:27, read by Hugo in the morning: PorygonList
+      under 1% of battery, with 1 h 42 of screen time and 3 h 41 in the background. Not the real
+      test: the phone was on USB with stay-awake for most of the night, which Android's per-app
+      figure leaves out, and the night was test traffic (three reboots, alarm windows every quarter
+      hour, a forced Doze). Still to do on the next build: a night unplugged, screen off, alarms
+      allowed, then one with sync off.*
 - [ ] Anything from *Decisions* below that changes how two phones merge — several cards, an order
       for unarranged items — checked on both phones, since the fake phone shares the Pixel's code.
 - [ ] Put back: her lists compared with the backup, test lists deleted, her settings as before.
