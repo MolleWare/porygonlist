@@ -72,6 +72,21 @@ The Pixel is firewalled in the background just as hers is (`blocked=APP_BACKGROU
 2026-10-21), and `./scripts/fakephone.sh` never sleeps, so these prove the Pixel's half now and
 leave her phone only what is hers. Needs the next build on the Pixel.
 
+**On the next build** (`2ec442b`…`833d0c9`, none of it on a phone yet), Pixel and Sam, no Hugo
+needed except to install. Proton stays on, with PorygonList excluded:
+
+- [ ] Sent Home: no PorygonList client in `dumpsys servicediscovery`; Sam's call refused until the
+      next window, which then exchanges.
+- [ ] The same port in two windows in a row (`/proc/net/tcp6`), and a fresh process's first call
+      going straight to Sam's kept address.
+- [ ] Alarms allowed: the alarm and a quarter-hour job both booked; the job's runs end in
+      milliseconds; after an alarm window from a closed app, no job 20576 left pending.
+- [ ] Revoke alarms: a quarter-hour job is booked without anything else happening.
+- [ ] Paste 200 items: "Add to …" in reach.
+- [ ] Two clashes at once against Sam: two cards on Trio, answered one at a time; one left
+      unanswered survives an app restart.
+- [ ] Items added on the Pixel and on Sam to a fresh list: the same order on both.
+
 - [x] The Pixel's app sent Home, the fake phone edits, the Pixel's next natural window collects it.
       *2026-10-24, build of 20:27, alarms allowed: sent Home at 21:17; Sam added Home item 7 at
       21:18 and its calls timed out every minute (the Home'd app still advertised port 36507 — the
@@ -99,6 +114,17 @@ leave her phone only what is hers. Needs the next build on the Pixel.
       reboot: `appops set --uid`, which is what the Settings switch does.*
 - [ ] Alarms not allowed on the Pixel: a window still runs around the quarter hour (rerun of the
       item under *App closed*, from a schedule booked by opening the app after revoking).
+      ***Failed on timing, 2026-10-24, build of 20:27.** Alarms revoked at 22:16:54 (the app
+      killed); a leftover "sync now" restarted it and booked the quarter-hour job for 22:30. Sam
+      added Job item 9 at 22:17 (refused: port closed). The job turned READY at 22:30, every
+      constraint satisfied, app in the ACTIVE bucket, phone awake and on USB — and JobScheduler
+      did not start it for 35 minutes. Asked to run it without forcing at 23:05, it ran at once,
+      the firewall lifted and it exchanged with Sam both ways. So the window works; the schedule
+      without alarms can be over half an hour late even in the best case. **For Hugo:** accept for
+      0.1.0 — the Settings card already says "Syncing around the quarter hour … may wake late",
+      and the store's "Good to know" says the same, though its feature line ("on every quarter
+      hour") does not — or ask for alarms more firmly, or bring "Sync is one switch" (alarms
+      required) forward.**
 - [ ] Store screenshots on the final build, with the fake phone as the other person: demo mode,
       throwaway lists, 3–6 into `fastlane/…/phoneScreenshots/`.
 
