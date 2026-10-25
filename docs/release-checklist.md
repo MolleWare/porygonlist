@@ -142,7 +142,9 @@ needed except to install. Proton stays on, with PorygonList excluded:
       "on the dot with alarms allowed", and "Good to know" mentions the VPN. To see on the next
       build: alarms not allowed, the Lists card; a job window started by 5 past the quarter hour.*
 - [ ] Store screenshots on the final build, with the fake phone as the other person: demo mode,
-      throwaway lists, 3–6 into `fastlane/…/phoneScreenshots/`.
+      throwaway lists, 3–6 into `fastlane/…/phoneScreenshots/`. *Chosen (Hugo, 2026-10-25): the
+      Lists screen ("In step with Sam"), a list with who added what and a few ticked, the Shop
+      view, and pairing / Share.*
 
 ### Meanwhile: by hand (Hugo)
 
