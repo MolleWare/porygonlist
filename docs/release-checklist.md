@@ -695,6 +695,11 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       test: the phone was on USB with stay-awake for most of the night, which Android's per-app
       figure leaves out, and the night was test traffic (three reboots, alarm windows every quarter
       hour, a forced Doze).*
+      *Night of 2026-10-25/26, build of 15:53: set up at 23:16 — alarms allowed (next 23:30, the
+      backup job beside it), stay-awake off, `dumpsys batterystats --reset` with full wake history,
+      app closed, battery 72%, Proton on with the app excluded; Sam adds an item to Trio every hour
+      until 08:00. Read in the morning from `dumpsys batterystats` for uid 10348: estimated mAh and
+      share, wakeups (expect ~4 an hour), wake-lock time (~30 s a window), bytes.*
 
 ### To finish
 
