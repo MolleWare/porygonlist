@@ -685,7 +685,7 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 
 ### Overnight battery (the Pixel alone)
 
-- [ ] **One night, the Pixel alone, before the two-phone session** (Hugo, 2026-10-25; it was a
+- [x] **One night, the Pixel alone, before the two-phone session** (Hugo, 2026-10-25; it was a
       night with sync and one without, on both phones). Unplugged, screen off, alarms allowed,
       Proton on with PorygonList excluded, Sam running on the laptop; PorygonList's share in
       Settings → Battery in the morning. Around 1–2% is fine. A night with sync off, as a baseline,
@@ -700,6 +700,15 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       app closed, battery 72%, Proton on with the app excluded; Sam adds an item to Trio every hour
       until 08:00. Read in the morning from `dumpsys batterystats` for uid 10348: estimated mAh and
       share, wakeups (expect ~4 an hour), wake-lock time (~30 s a window), bytes.*
+      ***Passed, 2026-10-26 06:40.** 7 h 23 min on battery, screen off 99%; the phone 72% → 65%,
+      303 mAh drained in all. PorygonList: **0.43 mAh — 0.14% of the night's drain, 0.01% of the
+      battery.** 29 alarm wakeups (4 an hour), 0.5 s of wake locks, 16.6 s of CPU, the wifi radio
+      busy 5 s. All 29 windows exchanged with Sam both ways, every hourly item crossed. Two things
+      seen: the foreground service counts 2 h 25 min (about 5 min a window, not 30 s) — the
+      window's wait runs on a clock that stops while the phone sleeps, and nothing holds it awake;
+      left as it is, since it costs almost nothing and the exchange happens at the window's start.
+      And 13 MB each way overnight: every exchange sends every shared list whole, and T Clash has
+      204 items — small in energy on wifi, but it grows with lists (see After 0.1.0).*
 
 ### To finish
 
@@ -816,3 +825,7 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
       had that job, and both have updated past it — the Pixel shows only the one-off jobs. Testing
       it means installing a 9 October build over today's state file, which may not read it. The
       code that replaces it (`SyncJob.ensureScheduled`) can go once no phone could still have it.
+- [ ] **Send only what changed.** Every exchange sends every shared list whole: 13 MB each way on
+      the battery night (2026-10-25/26), with a 204-item test list and several exchanges per
+      window. Cheap on wifi today, but it grows with lists and people. A payload of what the peer
+      has not acknowledged would shrink it to a few items.
