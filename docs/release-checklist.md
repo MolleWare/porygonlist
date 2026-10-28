@@ -524,6 +524,14 @@ the Pixel's own code.
       At the quarter hour both processes start and listen on the ports they had in W1, each calls
       the other's kept address (`PeerAddressBook`) without waiting on mDNS, and Doze item reaches
       the Pixel. Then `dumpsys battery reset` and `deviceidle unforce` on both.
+      *Half-run, 23:45. Both apps killed at 23:38 and in forced deep IDLE, each with an exact alarm
+      for 23:45:00: both processes started at 23:45:00.06, listened on the ports they had in W1
+      (44083 and 33657, so the kept port works), connected to each other both ways within 2 s —
+      too quick for a fresh mDNS search, so the kept addresses were used — and closed at
+      23:45:30. **But it does not prove the item crossed in the window:** Doze item went in on
+      hers at 23:38:35 while the Pixel's app was still running (killed 23:38:41), so it crossed
+      then. Rerun with the order fixed: kill the Pixel's app first, then add on hers, then kill
+      hers. And never `KEYCODE_SLEEP` without Hugo: it locked both phones (as in session 5).*
 - [ ] **W3, both rebooted with alarms allowed, unlocked, never opened** (Q+30). "Reboot item"
       added on the Pixel first. After Hugo unlocks both: the boot broadcast reaches WifiWatch and
       arms an exact alarm on each (`dumpsys alarm`); at the quarter hour both windows run — neither
@@ -532,6 +540,11 @@ the Pixel's own code.
 
 When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-window items, the
 *remember addresses* decision, and the "sent Home, never synced" finding.
+
+**Paused 23:47, 2026-10-27: both phones locked** (W2's screen-off). Left to run once Hugo
+unlocks them: W2 again (00:00 or any quarter hour), W3, the Proton banner, pairing again, and
+putting back. Left as they are meanwhile: alarms allowed on both — hers to go back to default —
+S6 Alpha on both, S6 Clash and S6 Order still on hers; stay-awake already off, both out of Doze.
 
 **Last, then put back**
 
