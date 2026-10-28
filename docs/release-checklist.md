@@ -502,7 +502,11 @@ the Pixel's own code.
       (ticked) on both.*
 - [ ] Pixel only, by Hugo in Proton: PorygonList put inside the tunnel — the Lists banner reads
       "VPN is on", a tap opens the split-tunnelling sheet. Excluded again after. (Ticks the item
-      under *Meanwhile* too.)
+      under *Meanwhile* too.) *Half-run 2026-10-28 06:55: with PorygonList inside the tunnel the
+      Share tab read "Network 10ca69 — VPN is on", but the Lists banner said "Nobody to sync with
+      yet" — by design, that wins — because deleting S6 Alpha on Ava's phone had left the Pixel's
+      copy "just you". Needs a list shared with someone; re-adding Ava would have sent S6 Alpha
+      back to her returned phone. Proton left as found: disconnected, PorygonList excluded.*
 
 **Windows** — each on the next natural quarter hour, Q.
 
