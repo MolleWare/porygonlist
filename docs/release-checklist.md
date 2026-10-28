@@ -600,12 +600,14 @@ When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-wind
       *Verified, Pixel, session 6: set to 12-hour, sent Home and back, "Ava, 23:12" read "Ava,
       11:12 PM"; back to 24-hour, "23:12" again.* *Also seen tonight: a phone with nobody paired
       asks "Someone new, or a phone replacing one?" too (After 0.1.0, with the rest).*
-- [ ] **The Delete button disappeared from a list's edit card.** Two ways: the card hid it with
+- [x] **The Delete button disappeared from a list's edit card.** Two ways: the card hid it with
       only one list left, though the view model has deleted the last list since `26ea4c3`; and four
       buttons in one row overran the card at a large font size or on the narrower S24 FE, pushing
       Delete off the end. Fixed (`825b6f9`): Delete is always offered and the buttons wrap.
       *Session 3, Pixel: at font scale 2, Delete wraps onto a second row; again on the 2026-10-21
       build. The one-list case is still to see — it means deleting every other list on a phone.*
+      *Verified, Pixel, session 6: S6 Alpha its only list, held — Save, Cancel, Sharing, Pin to
+      top, Delete.*
 - [x] **At the largest font the sync banner breaks.** The headline took the row and the detail was
       squeezed into a sliver beside it, broken mid-word ("noth/ing", "han/ded"), and the pill radius
       turned the tall banner into an oval that clipped it. Fixed (`825b6f9`): the detail wraps under
@@ -738,6 +740,15 @@ When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-wind
       *Verified 2026-10-24, three reboots on the build of 20:27: the listener came back from the
       boot broadcast itself, before any window ran (one broadcast, about a second after the
       process started), and its window exchanged with Sam. See the reboot item under "Meanwhile".*
+- [ ] **A state file the app cannot read is overwritten with a blank one, silently.** Seen as a
+      scare in session 6: the Pixel came up empty after the install, which turned out to be
+      Hugo's own identity reset, not a fault. But `FileListRepository.load` treats an unreadable
+      file exactly like a missing one — `runCatching { decode }.getOrNull()`, then a blank state
+      persisted 300 ms later — so any decode bug in a future update would wipe every list and
+      pairing on every phone that updates, with no trace and no way back (no backups, by
+      decision). **For Hugo:** keep the unreadable file aside (`porygonlist.state.unreadable-<time>`)
+      before starting blank, and/or refuse to start blank and say so; at the least, decode the
+      previous release's files in a test before each release.
 
 ### App closed
 
