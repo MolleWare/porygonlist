@@ -448,10 +448,11 @@ for every test; Ava's real lists only come into it for the unpairing test, which
 
 Both phones on USB through the host's adb (`ANDROID_ADB_SERVER_PORT=5037`), stay-awake on, the
 home wifi. Throwaway lists named "S6 …". On her phone only `scripts/testlists.py` looks at lists —
-never `device.sh read` or a screenshot of her Lists screen. About 1 h 30: setup and the in-app
+never `device.sh read` or a screenshot of her Lists screen. About 2 h: setup and the in-app
 checks first, then three natural quarter-hour windows in a row (a forced `jobscheduler run -f`
-does not lift her firewall), then pairing again and putting back. Hugo is needed to unlock both
-phones after the reboot, and for Proton.
+does not lift her firewall), then pairing again and putting back. Build before she arrives, and
+time the in-app checks to end at Q−5 so W1 starts without a wait; a missed quarter hour costs 15
+min. Hugo is needed to unlock both phones after the reboot, and for Proton.
 
 To see whether a window exchanged without the app's own open-time sync muddying it: put the
 *other* phone in airplane mode (`cmd connectivity airplane-mode enable`) before opening the list
