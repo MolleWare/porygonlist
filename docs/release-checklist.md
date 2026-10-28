@@ -49,21 +49,9 @@ Planned 2026-10-25. The details of each item are further down; this is the order
 ### Needs her phone
 
 Her S24 FE is the only stock-Android phone, and the only peer that sleeps and reboots like a real
-one. Everything here is a rerun, on the next build, of a check that failed or was left half-done.
-
-- [ ] Before anything: her lists backed up read-only (the scratch backup script, counts only), the
-      new build installed over hers with `install-all.sh release --no-launch`, both phones on USB.
-- [ ] Her app sent Home, then her next natural quarter-hour window: it exchanges with the Pixel
-      without being opened (fix `8c3b4c5`, failed 2026-10-24). Use a natural window — a forced
-      `jobscheduler run -f` does not lift her firewall.
-- [ ] Alarms allowed on both, both apps closed (`am kill`), both in deep Doze: they exchange at
-      the next quarter hour (failed 2026-10-24; both fixes in `8c3b4c5` bear on it).
-- [ ] Both rebooted with alarms allowed, unlocked, never opened: the first window runs on both and
-      an edit made before the reboot crosses (the Pixel stood aside in 25 ms on 2026-10-24).
-- [ ] Alarms never allowed on her phone: her window still runs around the quarter hour.
-- [ ] Anything from *Decisions* below that changes how two phones merge — several cards, an order
-      for unarranged items — checked on both phones, since the fake phone shares the Pixel's code.
-- [ ] Put back: her lists compared with the backup, test lists deleted, her settings as before.
+one. Everything it is needed for — the three windows session 5 left failed, the merge decisions on
+both phones, pairing again — is now *Session 6*, under *The two-phone session*, in the order to
+run it.
 
 ### Meanwhile: the Pixel and the laptop fake phone
 
@@ -385,11 +373,12 @@ for every test; Ava's real lists only come into it for the unpairing test, which
       phone, then on the Pixel. *Her app force-stopped, Rice added on the Pixel, 70 s, her app
       started: Rice there 8.2 s later. The same the other way with Oats: 8.4 s. Nothing edited to
       prompt either.*
-- [ ] A forced background window on her phone exchanges, then goes quiet. *Failed 2026-10-24 —
+- **Carried to session 6 (W1).** A forced background window on her phone exchanges, then goes
+      quiet. *Failed 2026-10-24 —
       found below: with her app sent Home, neither a forced window (17:51) nor her own at 18:01
       exchanged, though the Pixel had Window item waiting. Fixed in code; rerun on the next build.*
-- [ ] Alarms allowed on both: two closed phones, both in Doze, exchange at the next quarter hour.
-      *2026-10-24: alarms allowed on both (each armed 18:45:00 exact), both apps closed by `am kill`
+- **Carried to session 6 (W2).** Alarms allowed on both: two closed phones, both in Doze,
+      exchange at the next quarter hour. *2026-10-24: alarms allowed on both (each armed 18:45:00 exact), both apps closed by `am kill`
       (no process), Doze item added on hers first, both unplugged by `dumpsys` and forced into deep
       IDLE. At 18:45:00 exactly both processes started and both listened (Pixel 37913, hers
       37011) until 18:45:30, then closed. Whether they exchanged is not yet seen: the socket watcher
@@ -402,8 +391,8 @@ for every test; Ava's real lists only come into it for the unpairing test, which
       in session 4 only because the fake phone never sleeps. **For Hugo:** this is the overnight
       case the alarms exist for. Ideas: keep last-known peer addresses across process death, a
       longer window when alarms align both phones, or a retry inside the window.
-- [ ] Her phone rebooted, unlocked, never opened: the wifi listener is back after one window, and it
-      catches up (needs Ava to unlock it). *Run it with alarms still allowed: exact alarms do not
+- **Carried to session 6 (W3).** Her phone rebooted, unlocked, never opened: the wifi listener is
+      back after one window, and it catches up (needs Ava to unlock it). *Run it with alarms still allowed: exact alarms do not
       survive a reboot, and with alarms allowed the quarter-hour jobs are cancelled, so after a
       reboot the wifi listener is the only thing that can start the schedule again — the very
       listener that went missing on the Pixel. Worth seeing whether anything runs at all.*
@@ -453,9 +442,83 @@ for every test; Ava's real lists only come into it for the unpairing test, which
       alarms default, stay-awake and airplane mode off. Pixel: font 1.0, alarms default, stay-awake
       off; its wifi left on, as Hugo asked. Both with their quarter-hour job booked.*
 
-**Still to run, on the next build:** her app sent Home, then a natural window — it should now
-exchange; two closed phones in Doze at a quarter hour; both rebooted with alarms allowed, then the
-first window, and Doze item (or any edit) crossing without either app opened.
+**Still to run, on the next build:** the three carried items above, now W1–W3 of *Session 6*.
+
+### Session 6: both real phones
+
+Both phones on USB through the host's adb (`ANDROID_ADB_SERVER_PORT=5037`), stay-awake on, the
+home wifi. Throwaway lists named "S6 …". On her phone only `scripts/testlists.py` looks at lists —
+never `device.sh read` or a screenshot of her Lists screen. About 1 h 30: setup and the in-app
+checks first, then three natural quarter-hour windows in a row (a forced `jobscheduler run -f`
+does not lift her firewall), then pairing again and putting back. Hugo is needed to unlock both
+phones after the reboot, and for Proton.
+
+To see whether a window exchanged without the app's own open-time sync muddying it: put the
+*other* phone in airplane mode (`cmd connectivity airplane-mode enable`) before opening the list
+that should have the item. `scripts/watch-sockets.py <HH:MM:SS> 90 <pixel serial>:10348 <her
+serial>:10508` started a minute before each window shows both processes and ports.
+
+**Before**
+
+- [ ] Her lists backed up: `python3 -I scripts/backup-lists.py backup <her serial>
+      ~/porygonlist-backups/ava-<date>/` (counts only), with her font scale, screen timeout and
+      alarm permission written beside it. Session 5's count found none of her real lists shared
+      with Hugo; if that has changed, ask Hugo before the unpairing test.
+- [ ] The build from `main` on both, lists and pairing kept: `./scripts/install-all.sh release
+      --no-launch`. Her phone is still on session 5's `d784102` build, so all six decisions are new
+      to her; the Pixel has them since the build of 15:53, 2026-10-25.
+- [ ] Pixel: Proton on with PorygonList excluded (uid 10348 outside the VPN's `Uids`), alarms
+      allowed. Hers: alarms not allowed, as she keeps them.
+- [ ] "S6 Alpha" made on the Pixel and shared with Ava: "new, from Hugo" on her card; one item
+      added on each side, on the other in under 5 s.
+
+**In-app, both phones open** — the merge decisions, which the fake phone could only check against
+the Pixel's own code.
+
+- [ ] Two clashes at once on "S6 Clash": her phone in airplane mode sets Apples ×3 and Bread ×4,
+      the Pixel ×2 and ×5; back online, two cards on each, each saying what both did. "Keep
+      Hugo's" on Apples on hers: ×2 on both, the Pixel's Apples card closes within 5 s, Bread's
+      stays on both. Both apps restarted: Bread's card still on both; answer it on the Pixel.
+- [ ] Items added on each to a fresh "S6 Order", one of them while she is in airplane mode: the
+      same order on both. Then one added on the Pixel before her first tick arrives stays where it
+      was added, not at the top.
+- [ ] Pixel only, by Hugo in Proton: PorygonList put inside the tunnel — the Lists banner reads
+      "VPN is on", a tap opens the split-tunnelling sheet. Excluded again after. (Ticks the item
+      under *Meanwhile* too.)
+
+**Windows** — each on the next natural quarter hour, Q.
+
+- [ ] **W1, her app sent Home, alarms not allowed on hers.** At Q−5 her app sent Home; at Q−3
+      "Home item" added on the Pixel to S6 Alpha. Between then and Q, the Pixel's calls are refused
+      and her `dumpsys servicediscovery` has no PorygonList client. Her
+      `dumpsys jobscheduler io.github.molleware.porygonlist` shows the job with a deadline 5 min
+      past Q; by then her window has run, the item is on her phone, and her port is closed again
+      within 30 s. Settles: her app sent Home, a background window then quiet, alarms never
+      allowed on hers.
+- [ ] **W2, two closed phones in deep Doze, alarms allowed on both** (Q+15). Hers allowed with
+      `appops set --uid 10508 SCHEDULE_EXACT_ALARM allow`; "Doze item" added on hers; both apps
+      `am kill`ed, screens off, `dumpsys battery unplug` and `deviceidle force-idle deep` on both.
+      At the quarter hour both processes start and listen on the ports they had in W1, each calls
+      the other's kept address (`PeerAddressBook`) without waiting on mDNS, and Doze item reaches
+      the Pixel. Then `dumpsys battery reset` and `deviceidle unforce` on both.
+- [ ] **W3, both rebooted with alarms allowed, unlocked, never opened** (Q+30). "Reboot item"
+      added on the Pixel first. After Hugo unlocks both: the boot broadcast reaches WifiWatch and
+      arms an exact alarm on each (`dumpsys alarm`); at the quarter hour both windows run — neither
+      stands aside — and Reboot item reaches her phone. After the reboot the Pixel needs the host's
+      adb over USB again.
+
+When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-window items, the
+*remember addresses* decision, and the "sent Home, never synced" finding.
+
+**Last, then put back**
+
+- [ ] Pairing again starts fresh: the Pixel unpairs Ava, then pairs again with her code. Nothing
+      comes back on its own: each keeps a private copy of S6 Alpha, the Share tab says so, and
+      sharing it again brings both people back.
+- [ ] Her lists match: `backup-lists.py backup` again into a new folder, then `backup-lists.py
+      compare` with the first — "identical", or the missing ones pasted back from `paste.txt`.
+- [ ] S6 lists deleted on both; her font, timeout, alarms, stay-awake and airplane mode as before,
+      the Pixel's alarms and stay-awake as before.
 
 ### Found in the session
 
@@ -468,13 +531,15 @@ first window, and Doze item (or any edit) crossing without either app opened.
       time she comes back onto the wifi (40821 → 33323 → 44291); the Pixel kept dialling the old one.
       Fixed (`a304778`): the peer's own address and discovery's are tried in turn, freshest first.
       *Needs the next release build to see on phones.*
-- [ ] **Open: after an app restart, the first exchange waited for an edit.** The memory is in
+- [x] **After an app restart, the first exchange waited for an edit.** The memory is in
       process, so after the update Ava knew nowhere to call, and the Pixel — which saw Ava at
       23:23:45 — had not called her five minutes later. An edit on the Pixel started it at once.
       A closed app's background window starts with no memory the same way.
       *2026-10-21, Pixel and the laptop fake phone: does not happen between them — restarting
       either one, it called the other within 1–3 s with no edit. Both discover each other fine,
-      which the S24 FE did not; still to see with her phone.*
+      which the S24 FE did not; still to see with her phone.* *Verified with her phone, session
+      5: her app restarted, Rice from the Pixel there 8.2 s later; the other way, Oats in 8.4 s;
+      nothing edited to prompt either (the restart item under Session 5).*
 - [x] **Keeping a removal never closed the other phone's "keep which?" card.** Both phones confirm
       the removal while the card waits, so its tombstone is collected; keeping the removal then had
       nothing to rewrite, nothing travelled, and the other card stayed open for good — offering to
