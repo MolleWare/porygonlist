@@ -461,28 +461,45 @@ serial>:10508` started a minute before each window shows both processes and port
 
 **Before**
 
-- [ ] Her lists backed up: `python3 -I scripts/backup-lists.py backup <her serial>
+- [x] Her lists backed up: `python3 -I scripts/backup-lists.py backup <her serial>
       ~/porygonlist-backups/ava-<date>/` (counts only), with her font scale, screen timeout and
       alarm permission written beside it. Session 5's count found none of her real lists shared
-      with Hugo; if that has changed, ask Hugo before the unpairing test.
-- [ ] The build from `main` on both, lists and pairing kept: `./scripts/install-all.sh release
+      with Hugo; if that has changed, ask Hugo before the unpairing test. *2026-10-27 22:45, into
+      `ava-2026-10-27/`: 9 lists, every title and count matching its card; none shared with
+      Hugo. Hers: font 0.801, timeout 5 min, alarms default, stay-awake and airplane mode off.*
+- [x] The build from `main` on both, lists and pairing kept: `./scripts/install-all.sh release
       --no-launch`. Her phone is still on session 5's `d784102` build, so all six decisions are new
-      to her; the Pixel has them since the build of 15:53, 2026-10-25.
-- [ ] Pixel: Proton on with PorygonList excluded (uid 10348 outside the VPN's `Uids`), alarms
-      allowed. Hers: alarms not allowed, as she keeps them.
-- [ ] "S6 Alpha" made on the Pixel and shared with Ava: "new, from Hugo" on her card; one item
-      added on each side, on the other in under 5 s.
+      to her; the Pixel has them since the build of 15:53, 2026-10-25. *Installed from `26b2cf9`
+      at 22:48, 2026-10-27, both updated in place. Her 9 lists read back identical afterwards. The
+      Pixel came up empty — Hugo had deleted its identity since the battery night — so it was
+      paired again by link: her phone asked "Someone new, or a phone replacing one?" and offered
+      only "Add hugo"; the Pixel, with nobody paired, asked the same before "Add Ava". Its wifi
+      approved again as "Network 0833af".*
+- [x] Pixel: Proton on with PorygonList excluded (uid 10348 outside the VPN's `Uids`), alarms
+      allowed. Hers: alarms not allowed, as she keeps them. *Both on the home wifi, stay-awake on.*
+- [x] "S6 Alpha" made on the Pixel and shared with Ava: "new, from Hugo" on her card; one item
+      added on each side, on the other in under 5 s. *Her card: "S6 Alpha · 1 item · new, from
+      hugo". Ava one on the Pixel 3 s after Add; Pixel two on hers in 5 s, both counting the
+      screen reads.*
 
 **In-app, both phones open** — the merge decisions, which the fake phone could only check against
 the Pixel's own code.
 
-- [ ] Two clashes at once on "S6 Clash": her phone in airplane mode sets Apples ×3 and Bread ×4,
+- [x] Two clashes at once on "S6 Clash": her phone in airplane mode sets Apples ×3 and Bread ×4,
       the Pixel ×2 and ×5; back online, two cards on each, each saying what both did. "Keep
       Hugo's" on Apples on hers: ×2 on both, the Pixel's Apples card closes within 5 s, Bread's
       stays on both. Both apps restarted: Bread's card still on both; answer it on the Pixel.
-- [ ] Items added on each to a fresh "S6 Order", one of them while she is in airplane mode: the
+      *23:10: both cards on both phones 13 s after airplane mode went off, worded from each side.
+      "Keep hugo's" on Apples on hers: the Pixel's Apples card gone in 2.5 s, Bread's left on
+      both. Both apps force-stopped and started: Bread's card still on both. "Keep Ava's" on the
+      Pixel: hers gone in 2.4 s; Apples ×2, Bread ×4 on both. Noticed: the kept Apples ×2 —
+      Hugo's value — reads "Ava, just now" on the Pixel, credited to whoever answered.*
+- [x] Items added on each to a fresh "S6 Order", one of them while she is in airplane mode: the
       same order on both. Then one added on the Pixel before her first tick arrives stays where it
-      was added, not at the top.
+      was added, not at the top. *23:12: One and Two (Pixel), Three (hers), then Four on hers in
+      airplane mode and Five on the Pixel — One, Two, Three, Five, Four on both. Then One ticked on
+      hers in airplane mode while Six was added on the Pixel: Two, Three, Five, Four, Six, One
+      (ticked) on both.*
 - [ ] Pixel only, by Hugo in Proton: PorygonList put inside the tunnel — the Lists banner reads
       "VPN is on", a tap opens the split-tunnelling sheet. Excluded again after. (Ticks the item
       under *Meanwhile* too.)
@@ -569,15 +586,20 @@ When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-wind
       sat under Milk on both phones: adding keyed after the highest position, which is the
       trolley's. Fixed: new items go above the first ticked one (`645010e`). *Session 3, Pixel:
       Parmesan ticked, then Jam added — Jam lands above it.*
-- [ ] **An item added before the other phone's first tick arrives jumps to the top.** Butter was
+- [x] **An item added before the other phone's first tick arrives jumps to the top.** Butter was
       added on the Pixel while its copy was still unarranged, so it had no position, and unplaced
       items always sort first. Only happens in the window around a list's first arrangement.
+      *Verified fixed, session 6 (S6 Order): Six added on the Pixel while her tick was offline
+      stayed below Four on both phones.*
 - [x] A flaky view-model test (a different one failed each run): pairing work outlived the test.
       Fixed with an injectable IO dispatcher (`3c199c1`); five full runs green.
-- [ ] Copy: Share with no list says "Nobody else has this list yet."; pairing an already-paired
+- [x] Copy: Share with no list says "Nobody else has this list yet."; pairing an already-paired
       phone asks "Someone new, or a phone replacing one?"; times are always 24-hour.
       *Times: decided (Hugo, 2026-10-25) to follow the phone's 12/24-hour setting; in code, read
       again on every return to the app (`FormatTest`). The other two are under After 0.1.0.*
+      *Verified, Pixel, session 6: set to 12-hour, sent Home and back, "Ava, 23:12" read "Ava,
+      11:12 PM"; back to 24-hour, "23:12" again.* *Also seen tonight: a phone with nobody paired
+      asks "Someone new, or a phone replacing one?" too (After 0.1.0, with the rest).*
 - [ ] **The Delete button disappeared from a list's edit card.** Two ways: the card hid it with
       only one list left, though the view model has deleted the last list since `26ea4c3`; and four
       buttons in one row overran the card at a large font size or on the narrower S24 FE, pushing
@@ -684,7 +706,8 @@ When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-wind
       S5 Big" nor Cancel could be reached; Back was the only way out. Batches of 50 fitted. A long
       list sent as text is exactly what the sheet is for. Not fixed: cap the field's height and let
       it scroll inside, or let the sheet scroll.
-- [ ] **Two small things from the removal tests.** "Stop sharing this list with …?" opens with its
+- [x] ~~**Two small things from the removal tests.**~~ *Moved to After 0.1.0 (Hugo, 2026-10-25).*
+      "Stop sharing this list with …?" opens with its
       Remove and Keep sharing buttons below the tab bar, until the screen is scrolled by hand. And
       the copy a removed phone keeps carries the same name, so with a same-named list of its own
       the two cards read identically ("S5 Twin · A · 1 item · just you", twice).

@@ -82,7 +82,10 @@ def go_lists(phone):
     phone.adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
     time.sleep(1.5)
     root = phone.dump()
-    target = find(root, "All lists") or find(root, "Lists")
+    # Not `or`: an element without children is falsy, so "All lists" would be skipped.
+    target = find(root, "All lists")
+    if target is None:
+        target = find(root, "Lists")
     if target is not None:
         tap_centre(phone, target)
     for _ in range(4):
