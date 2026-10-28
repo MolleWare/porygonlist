@@ -545,16 +545,21 @@ When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-wind
 unlocks them: W2 again (00:00 or any quarter hour), W3, the Proton banner, pairing again, and
 putting back. Left as they are meanwhile: alarms allowed on both — hers to go back to default —
 S6 Alpha on both, S6 Clash and S6 Order still on hers; stay-awake already off, both out of Doze.
+**Ended 2026-10-28 morning:** her phone put back and given back before W2–W3, the Proton banner
+and pairing again could run; they wait for the next time her phone is lent.
 
 **Last, then put back**
 
 - [ ] Pairing again starts fresh: the Pixel unpairs Ava, then pairs again with her code. Nothing
       comes back on its own: each keeps a private copy of S6 Alpha, the Share tab says so, and
       sharing it again brings both people back.
-- [ ] Her lists match: `backup-lists.py backup` again into a new folder, then `backup-lists.py
+- [x] Her lists match: `backup-lists.py backup` again into a new folder, then `backup-lists.py
       compare` with the first — "identical", or the missing ones pasted back from `paste.txt`.
+      *2026-10-28 06:50 PDT, after deleting her S6 lists: 9 lists, "identical".*
 - [ ] S6 lists deleted on both; her font, timeout, alarms, stay-awake and airplane mode as before,
-      the Pixel's alarms and stay-awake as before.
+      the Pixel's alarms and stay-awake as before. *Hers done 2026-10-28 (S6 Alpha, Clash and Order
+      deleted, alarms back to default, the rest checked; phone given back). The Pixel still holds S6
+      Alpha with alarms allowed, for W2/W3.*
 
 ### Found in the session
 
