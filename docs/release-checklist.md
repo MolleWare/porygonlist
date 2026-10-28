@@ -506,13 +506,18 @@ the Pixel's own code.
 
 **Windows** — each on the next natural quarter hour, Q.
 
-- [ ] **W1, her app sent Home, alarms not allowed on hers.** At Q−5 her app sent Home; at Q−3
+- [x] **W1, her app sent Home, alarms not allowed on hers.** At Q−5 her app sent Home; at Q−3
       "Home item" added on the Pixel to S6 Alpha. Between then and Q, the Pixel's calls are refused
       and her `dumpsys servicediscovery` has no PorygonList client. Her
       `dumpsys jobscheduler io.github.molleware.porygonlist` shows the job with a deadline 5 min
       past Q; by then her window has run, the item is on her phone, and her port is closed again
       within 30 s. Settles: her app sent Home, a background window then quiet, alarms never
-      allowed on hers.
+      allowed on hers. ***Passed, 23:30.** Her app Home'd at 23:25, Home item added on the Pixel
+      at 23:27: she had no listening socket until the window, and the Pixel's call at 23:30:10
+      was refused. Her job (deadline 23:35) started at 23:30:56, listened on 44083 — the port she
+      had at 23:05 — and called the Pixel twice within 3 s; her socket was gone at 23:31:26. The
+      Pixel then read "in step" with her, and with the Pixel in airplane mode her S6 Alpha already
+      held Home item.*
 - [ ] **W2, two closed phones in deep Doze, alarms allowed on both** (Q+15). Hers allowed with
       `appops set --uid 10508 SCHEDULE_EXACT_ALARM allow`; "Doze item" added on hers; both apps
       `am kill`ed, screens off, `dumpsys battery unplug` and `deviceidle force-idle deep` on both.
@@ -684,7 +689,7 @@ When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-wind
       (a state-format change, so the migration rule applies), or the second edit clash wins the
       slot over an older one, or the one-card limit is accepted for 0.1.0.
       *Decided: several cards (Hugo, 2026-10-25). Fixed in code — see the decision above.*
-- [ ] **With the app sent Home, her phone never synced until it was opened.** Android firewalls a
+- [x] **With the app sent Home, her phone never synced until it was opened.** Android firewalls a
       backgrounded app (`blockedReasons=40`, APP_BACKGROUND) except while a job runs. Her app,
       merely sent Home, kept its discovery and socket, so the Pixel kept finding her and its calls
       timed out, each failure dropping her address. In her window — the natural one at 18:01, when
@@ -693,7 +698,8 @@ When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-wind
       Fixed in code, not yet committed: every background window calls each reachable peer once,
       whatever it last acknowledged, and an exchange carries both ways (`SyncCoordinatorTest`).
       *Needs a rebuild.* It also settles the open question below in practice: on the S24 FE an
-      app sent Home announces a phone nobody can reach.
+      app sent Home announces a phone nobody can reach. *Verified fixed, session 6 W1: her
+      app sent Home, the Pixel's edit reached her in her next natural window, unopened.*
 - [x] **Items never arranged show in a different order on each phone.** *Verified fixed on the
       Pixel against Sam, build of 15:53: a fresh list, the same order on both.* After the unpair test S5
       Alpha held the same 8 items on both, but the last three in a different order (Pixel: Window
@@ -754,14 +760,16 @@ When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-wind
 
 The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 
-- [ ] A forced background window advertises and exchanges, then goes quiet. *2026-10-21, Pixel
+- [x] A forced background window advertises and exchanges, then goes quiet. *2026-10-21, Pixel
       with the app sent Home, and the laptop fake phone Sam: Sam's call timed out while the app was
       away; the forced job (id now 20578, not 20569) exchanged with Sam within 1 s, and its port
       was closed after the 30 s window. But the advert the open app had started at 22:20 was still
       registered at 22:43 — found below. Rerun on the next build with the app swiped away.*
       *22:48 build: swiped away, the process went entirely and the advert with it; the forced
       window itself was already seen to exchange and close its port. What is left is the
-      mid-case in "a closed app went on announcing itself" below.*
+      mid-case in "a closed app went on announcing itself" below.* *Session 6 W1, her phone, a
+      natural window: no socket while Home'd, the window listened and exchanged, and the socket
+      was gone 30 s after the job started.*
 - [x] On a wifi that is not approved, nothing is announced. *Pixel, by hand, Hugo, 2026-10-21.*
 - [x] Joining the home wifi starts the schedule and runs a window; joining another stops it.
       *Pixel, by hand, Hugo, 2026-10-21.*
