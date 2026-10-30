@@ -196,7 +196,7 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
       once while alarms are allowed and the alarm is armed (`QuarterHourTest`). To see on the next
       build: alarms allowed, both the alarm and job 20569 or 20578 pending, the job's runs ending
       in milliseconds; then revoke, and a window still runs near the next quarter hour.*
-- [ ] Two phones in Doze miss each other → **remember addresses**: each peer's last address kept
+- [x] Two phones in Doze miss each other → **remember addresses**: each peer's last address kept
       across process death, so a fresh window calls at once instead of waiting on mDNS. *In code,
       three parts: the last good address of each peer kept in a file beside the state for a day
       (`PeerAddressBook`), and not dropped when a call fails, since the peer may only be asleep;
@@ -204,7 +204,9 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
       window listened on a new port (41389 at 21:04, 37667 at 21:15); and the window looks again
       at 10 s and 20 s, for two phones woken by the same quarter hour. Tests in `SyncCoordinatorTest`
       and `PeerAddressBookTest`. To see on the next build: the Pixel's port the same in two
-      windows; then the two-phone Doze test with Ava's phone.*
+      windows; then the two-phone Doze test with Ava's phone.* *Session 6 W2, 2026-10-29 21:15:
+      both closed and in deep Doze, both woke on their kept ports (33657, 44083), and Doze item
+      reached the Pixel in that window.*
 - [x] The app sent Home goes on announcing → **stop when it leaves the screen**: discovery stops
       when the app is no longer visible, and the windows do the rest. *In code: the screen tells
       the view model on start and stop, and off screen the gate lets the socket go and stops the
@@ -527,7 +529,7 @@ the Pixel's own code.
       had at 23:05 — and called the Pixel twice within 3 s; her socket was gone at 23:31:26. The
       Pixel then read "in step" with her, and with the Pixel in airplane mode her S6 Alpha already
       held Home item.*
-- [ ] **W2, two closed phones in deep Doze, alarms allowed on both** (Q+15). Hers allowed with
+- [x] **W2, two closed phones in deep Doze, alarms allowed on both** (Q+15). Hers allowed with
       `appops set --uid 10508 SCHEDULE_EXACT_ALARM allow`; "Doze item" added on hers; both apps
       `am kill`ed, screens off, `dumpsys battery unplug` and `deviceidle force-idle deep` on both.
       At the quarter hour both processes start and listen on the ports they had in W1, each calls
@@ -541,11 +543,22 @@ the Pixel's own code.
       hers at 23:38:35 while the Pixel's app was still running (killed 23:38:41), so it crossed
       then. Rerun with the order fixed: kill the Pixel's app first, then add on hers, then kill
       hers. And never `KEYCODE_SLEEP` without Hugo: it locked both phones (as in session 5).*
-- [ ] **W3, both rebooted with alarms allowed, unlocked, never opened** (Q+30). "Reboot item"
+      ***Passed, 21:15, 2026-10-29.** The Pixel's app killed at 21:06:31, Doze item added on hers
+      at 21:06:34 — her card then read "waiting for hugo", so it had not crossed — hers killed at
+      21:07:09; both in forced deep IDLE with an exact alarm for 21:15. At 21:15:00 both started,
+      listened on 33657 and 44083, and closed at 21:15:30. With her phone in airplane mode the
+      Pixel then held Doze item ("Ava, 21:06"), last handover 21:15. Screens left on this time, but
+      `dumpsys battery unplug` switches stay-awake off, so both still timed out and locked.*
+- [x] **W3, both rebooted with alarms allowed, unlocked, never opened** (Q+30). "Reboot item"
       added on the Pixel first. After Hugo unlocks both: the boot broadcast reaches WifiWatch and
       arms an exact alarm on each (`dumpsys alarm`); at the quarter hour both windows run — neither
       stands aside — and Reboot item reaches her phone. After the reboot the Pixel needs the host's
-      adb over USB again.
+      adb over USB again. ***Passed, 21:30, 2026-10-29.** Reboot item added on the Pixel at 21:20
+      with her phone in airplane mode ("waiting for Ava"), her app killed, airplane off, both
+      rebooted at 21:20:23. Hugo unlocked both by 21:26:50; BOOT_COMPLETED took about a minute to
+      reach the app, and by 21:27:55 each had an exact alarm for 21:30:00 (the persisted job was
+      also booked). At 21:30:00 both listened on their kept ports for 30 s; with the Pixel in
+      airplane mode her S6 Alpha held Reboot item, "in step with hugo".*
 
 When W1–W3 pass, tick under *App closed* the two-closed-phones and forced-window items, the
 *remember addresses* decision, and the "sent Home, never synced" finding.
@@ -805,7 +818,8 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       *Pixel, 2026-10-21: rebooted, unlocked, never opened; the persisted job's window at 23:02
       exchanged with the fake phone Sam, which had added Rice while the Pixel was closed. The wifi
       listener did not come back with it — see "background sync was off after a reboot" above.*
-- [ ] Alarms allowed on both: two closed phones, in Doze, exchange at the next :00/:15/:30/:45.
+- [x] Alarms allowed on both: two closed phones, in Doze, exchange at the next :00/:15/:30/:45.
+      *Session 6 W2, 2026-10-29 21:15, both real phones — see W2.*
       *Pixel side, 2026-10-21: app closed, screen off, `dumpsys battery unplug` and `deviceidle
       force-idle` (deep IDLE) at 23:20; at 23:30:00 exactly it called the fake phone Sam. Sam never
       sleeps, so "two closed phones" waits for Ava's phone.*
