@@ -91,7 +91,8 @@ under *Overnight battery*, further down.
 - [x] Items added on the Pixel and on Sam to a fresh list: the same order on both. *T Clash, each
       adding one while Sam was offline: Apples, Bread, Pixel pear, Sam plum on both. (The fake
       phone printed its stored order until `orderedItems` replaced it in its dump.)*
-- [ ] PorygonList put inside Proton's tunnel: the banner says "VPN is on", and a tap opens the fix.
+- [x] PorygonList put inside Proton's tunnel: the banner says "VPN is on", and a tap opens the fix.
+      *Session 6, 2026-10-29 20:54.*
 - [x] Alarms not allowed: the "Allow alarms" card on the Lists screen; app closed, a job window
       started by 5 past the quarter hour (`dumpsys jobscheduler`: the job shows a deadline).
       *Build of 15:53: the card shows under the banner. Job 20569 booked with Delay to 16:00 and
@@ -500,13 +501,17 @@ the Pixel's own code.
       airplane mode and Five on the Pixel — One, Two, Three, Five, Four on both. Then One ticked on
       hers in airplane mode while Six was added on the Pixel: Two, Three, Five, Four, Six, One
       (ticked) on both.*
-- [ ] Pixel only, by Hugo in Proton: PorygonList put inside the tunnel — the Lists banner reads
+- [x] Pixel only, by Hugo in Proton: PorygonList put inside the tunnel — the Lists banner reads
       "VPN is on", a tap opens the split-tunnelling sheet. Excluded again after. (Ticks the item
       under *Meanwhile* too.) *Half-run 2026-10-28 06:55: with PorygonList inside the tunnel the
       Share tab read "Network 10ca69 — VPN is on", but the Lists banner said "Nobody to sync with
       yet" — by design, that wins — because deleting S6 Alpha on Ava's phone had left the Pixel's
       copy "just you". Needs a list shared with someone; re-adding Ava would have sent S6 Alpha
       back to her returned phone. Proton left as found: disconnected, PorygonList excluded.*
+      *Passed 2026-10-29 20:54, S6 Alpha shared with Ava again: inside the tunnel the banner read
+      "VPN is on · Nothing syncs while it is on · tap to keep both"; the tap opened "A VPN is on"
+      on split tunnelling in exclude mode. Excluded again, reconnected: uid 10348 outside, "In
+      step with Ava".*
 
 **Windows** — each on the next natural quarter hour, Q.
 
@@ -674,11 +679,12 @@ and pairing again could run; they wait for the next time her phone is lent.
       aside: the 19:30 window after the reboot, the 20:16 Home'd window, and Sam never finding the
       Pixel. Seen 2026-10-24, 20:30, from the Share tab ("Network 10ca69 — VPN is on") and
       `dumpsys connectivity`. Those three go back to be rerun with the VPN off.
-- [ ] *Decided (Hugo, 2026-10-25): the Lists banner says "VPN is on", and a tap opens the exclude
+- [x] *Decided (Hugo, 2026-10-25): the Lists banner says "VPN is on", and a tap opens the exclude
       fix. In code: `syncHeadline` puts the VPN first whenever there is someone to sync with
       (`FormatTest`), and the banner opens a sheet on split tunnelling in exclude mode. To see on
       the next build: Proton on with PorygonList inside the tunnel, the banner and the sheet.*
-- [ ] **With a VPN on, nothing syncs, and only the Share tab says why.** The Lists screen reads
+      *Seen on the Pixel, session 6 (2026-10-29 20:54).*
+- [x] **With a VPN on, nothing syncs, and only the Share tab says why.** The Lists screen reads
       "Waiting for Sam" as though the other phone were the problem. Anyone who keeps a VPN always
       on — as Hugo does — gets no sync and no reason. **For Hugo:** say "VPN is on" in the status
       card, and/or mention in the store text that a VPN stops sync and how to get round it.
