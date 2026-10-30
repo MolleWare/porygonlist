@@ -569,22 +569,40 @@ putting back. Left as they are meanwhile: alarms allowed on both — hers to go 
 S6 Alpha on both, S6 Clash and S6 Order still on hers; stay-awake already off, both out of Doze.
 **Ended 2026-10-28 morning:** her phone put back and given back before W2–W3, the Proton banner
 and pairing again could run; they wait for the next time her phone is lent.
+**Resumed 2026-10-29 20:45–21:45, both phones:** a fresh backup of hers first
+(`ava-2026-10-29/`, 11 lists — her first 9 unchanged since the 28th, two new since), S6 Alpha
+shared with her again, then the Proton banner, W2, W3, pairing again and putting back.
 
 **Last, then put back**
 
-- [ ] Pairing again starts fresh: the Pixel unpairs Ava, then pairs again with her code. Nothing
+- [x] Pairing again starts fresh: the Pixel unpairs Ava, then pairs again with her code. Nothing
       comes back on its own: each keeps a private copy of S6 Alpha, the Share tab says so, and
-      sharing it again brings both people back.
+      sharing it again brings both people back. *2026-10-29 21:35: one tap on Unpair; the Pixel's
+      S6 Alpha read "just you", its Share tab "Nobody else has this list yet". Her code by link →
+      "That code is Ava's phone · Someone new, or a phone replacing one?" → Add Ava → "Paired with
+      Ava". 10 s on, both copies still "just you". Shared again from the Pixel: her phone got it as
+      "new, from hugo" — beside her private copy, so she had two "S6 Alpha" lists with the same six
+      items (see Found).*
 - [x] Her lists match: `backup-lists.py backup` again into a new folder, then `backup-lists.py
       compare` with the first — "identical", or the missing ones pasted back from `paste.txt`.
-      *2026-10-28 06:50 PDT, after deleting her S6 lists: 9 lists, "identical".*
-- [ ] S6 lists deleted on both; her font, timeout, alarms, stay-awake and airplane mode as before,
+      *2026-10-28 06:50 PDT, after deleting her S6 lists: 9 lists, "identical".* *2026-10-29
+      21:43, against that evening's backup: 11 lists, "identical".*
+- [x] S6 lists deleted on both; her font, timeout, alarms, stay-awake and airplane mode as before,
       the Pixel's alarms and stay-awake as before. *Hers done 2026-10-28 (S6 Alpha, Clash and Order
       deleted, alarms back to default, the rest checked; phone given back). The Pixel still holds S6
-      Alpha with alarms allowed, for W2/W3.*
+      Alpha with alarms allowed, for W2/W3.* *2026-10-29 21:44: both her S6 Alpha copies and the
+      Pixel's deleted; hers alarms default, font 0.801, timeout 300000, stay-awake and airplane
+      off; the Pixel's alarms allowed, stay-awake off; Proton on with PorygonList excluded.*
 
 ### Found in the session
 
+- [ ] **Sharing again after pairing again leaves her with two copies of the list.** Session 6,
+      2026-10-29: after the Pixel unpaired and re-paired Ava, each phone kept S6 Alpha as its own
+      private copy, as decided on 2026-10-25. Sharing the Pixel's copy again arrived on hers as a
+      new list, "new, from hugo", next to her private one — same name, same six items. Nothing is
+      lost, but she must notice and delete one. **For Hugo:** accept it (she deletes her old copy),
+      or have the arriving share offer to take the place of a private copy that came from the
+      same list.
 - [x] **Ava's phone never discovers the Pixel, so her edits never go out on their own.** Android's
       mDNS logs on both phones show every service found and expired in the same millisecond, and
       the S24 FE never sees the Pixel's service at all. Fixed (`aa0755c`): a caller tells the phone
