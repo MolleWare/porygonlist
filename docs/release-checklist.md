@@ -807,7 +807,7 @@ shared with her again, then the Proton banner, W2, W3, pairing again and putting
       *Verified 2026-10-24, three reboots on the build of 20:27: the listener came back from the
       boot broadcast itself, before any window ran (one broadcast, about a second after the
       process started), and its window exchanged with Sam. See the reboot item under "Meanwhile".*
-- [ ] **A state file the app cannot read is overwritten with a blank one, silently.** Seen as a
+- [x] **A state file the app cannot read is overwritten with a blank one, silently.** Seen as a
       scare in session 6: the Pixel came up empty after the install, which turned out to be
       Hugo's own identity reset, not a fault. But `FileListRepository.load` treats an unreadable
       file exactly like a missing one — `runCatching { decode }.getOrNull()`, then a blank state
@@ -815,7 +815,17 @@ shared with her again, then the Proton banner, W2, W3, pairing again and putting
       pairing on every phone that updates, with no trace and no way back (no backups, by
       decision). **For Hugo:** keep the unreadable file aside (`porygonlist.state.unreadable-<time>`)
       before starting blank, and/or refuse to start blank and say so; at the least, decode the
-      previous release's files in a test before each release.
+      previous release's files in a test before each release. *Decided (Hugo, 2026-10-29): keep
+      it, with rotating saves so only the latest change can be lost. In code (`SaveFileTest`):
+      each save is forced to storage before its rename, and the two saves before it are kept
+      (`porygonlist.state.1`, `.2`); a save that will not read falls back to the newest one that
+      does. If none reads — a reader fault in an update, since one build wrote them all — the
+      newest is copied to `porygonlist.state.unreadable`, never rotated or replaced, and new ids
+      start above any the lost state handed out. Every start tries that file again; once a build
+      reads it, its lists, phones and networks are merged back (what the phone has now wins) and
+      it goes after the merged save lands. Deleting the identity removes all of them. The
+      in-place fallback write is gone. To see on the next build: `ls` the app's files after a few
+      edits — needs `run-as`, so a debug build.*
 
 ### App closed
 

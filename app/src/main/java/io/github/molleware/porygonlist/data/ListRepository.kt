@@ -5,6 +5,7 @@ import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.HybridClock
 import io.github.molleware.porygonlist.data.sync.IdFactory
 import java.io.File
+import java.io.FileOutputStream
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,11 +76,27 @@ class FileListRepository(
 
   @Volatile private var node: LocalNode? = null
 
+  /**
+   * The saves before the current one, newest first. Each save moves them down a place, so a file
+   * that cannot be read — cut short by a crash or a dead battery just after a save — costs only the
+   * changes since the save before it.
+   */
+  private val previous = (1..KEPT_SAVES).map { File(file.parentFile, "${file.name}.$it") }
+
+  /**
+   * Set aside when no save at all can be read, and never rotated away. Every save was written by
+   * the same build, so a reader that fails on one fails on all of them: that is a fault in an
+   * update, not in the files, and the update that fixes it gets the lists back from here.
+   */
+  private val unreadable = File(file.parentFile, "${file.name}.unreadable")
+
+  /** Set once [unreadable] has been brought back: it goes after the save holding its lists lands. */
+  @Volatile private var unreadableRecovered = false
+
   override suspend fun load() {
     if (_state.value != null) return
     val me = identity().deviceId
-    val restored =
-      withContext(io) { runCatching { if (file.exists()) StateCodec.decode(file.readText()) else null }.getOrNull() }
+    val (restored, anySave) = withContext(io) { newestReadable() }
 
     // A file authored under a different identity is not this phone's state. That happens if the
     // keystore entry was cleared — the old items are unattributable, so start clean rather than
@@ -95,26 +112,70 @@ class FileListRepository(
     if (restored != null) {
       // Receipts may have arrived after the last save; settle anything they now make collectable.
       val settled = restored.pruneDeliveredTombstones()
-      node = settled.toNode()
-      _state.value = settled
-      if (settled != restored) schedulePersist(settled)
+      val recovered = withContext(io) { retryUnreadable(settled) }
+      val loaded = recovered ?: settled
+      node = loaded.toNode()
+      _state.value = loaded
+      if (loaded != restored) schedulePersist(loaded)
       return
     }
 
-    // A missing or unreadable file is a first run, not an error worth surfacing. The identity is
-    // not minted here any more: it comes from the keystore, which is what keeps it stable across
-    // reinstalls of this file and makes it something a peer can verify rather than merely believe.
-    val blank = AppState.empty(localDevice = me)
+    // The identity is not minted here any more: it comes from the keystore, which is what keeps it
+    // stable across reinstalls of this file and makes it something a peer can verify rather than
+    // merely believe.
+    val blank =
+      if (!anySave) {
+        AppState.empty(localDevice = me)
+      } else {
+        // Saves exist and none of them reads. They are kept for a later build to try again, and
+        // ids start above any the lost state can have handed out — counters only ever reach the
+        // thousands — so nothing made from here can share an id with an item a peer still holds.
+        withContext(io) { setAsideUnreadable() }
+        AppState.empty(localDevice = me).let { it.copy(idCounter = it.clockHead.wall) }
+      }
     node = blank.toNode()
     _state.value = blank
     schedulePersist(blank)
   }
 
+  /** The newest save that decodes, and whether there was any save at all. */
+  private fun newestReadable(): Pair<AppState?, Boolean> {
+    val saves = (listOf(file) + previous).filter { it.exists() }
+    val state = saves.firstNotNullOfOrNull { runCatching { StateCodec.decode(it.readText()) }.getOrNull() }
+    return state to saves.isNotEmpty()
+  }
+
+  /** Copies the newest save aside, unless an earlier failure already did: that one holds the lists. */
+  private fun setAsideUnreadable() {
+    if (unreadable.exists()) return
+    val newest = (listOf(file) + previous).firstOrNull { it.exists() } ?: return
+    runCatching { newest.copyTo(unreadable) }
+  }
+
+  /**
+   * Tries the set-aside file again: after an update with a fixed reader, its lists come back into
+   * [current], and the file goes. Null when there is nothing to bring back.
+   */
+  private fun retryUnreadable(current: AppState): AppState? {
+    if (!unreadable.exists()) return null
+    val kept = runCatching { StateCodec.decode(unreadable.readText()) }.getOrNull() ?: return null
+    // Readable now, but written under an identity this phone no longer has: unattributable, as
+    // above, so it goes rather than coming back.
+    if (kept.localDevice != current.localDevice) {
+      unreadable.delete()
+      return null
+    }
+    unreadableRecovered = true
+    return current.withRecovered(kept)
+  }
+
   override suspend fun reset() {
     // Any save still in flight belongs to the phone that has just ceased to exist; letting it land
-    // would put the old state back on disk moments after it was deleted.
+    // would put the old state back on disk moments after it was deleted. The earlier saves and any
+    // set-aside file go with it: they were authored by the same vanished device.
     pendingWrite?.cancel()
-    withContext(io) { writeLock.withLock { runCatching { file.delete() } } }
+    unreadableRecovered = false
+    withContext(io) { writeLock.withLock { (listOf(file, unreadable) + previous).forEach { runCatching { it.delete() } } } }
 
     val fresh = AppState.empty(localDevice = identity().deviceId)
     node = fresh.toNode()
@@ -146,20 +207,66 @@ class FileListRepository(
     pendingWrite =
       scope.launch(io) {
         delay(writeDelayMs)
-        writeLock.withLock { runCatching { writeAtomically(StateCodec.encode(snapshot)) } }
+        writeLock.withLock { runCatching { writeRotating(StateCodec.encode(snapshot)) } }
       }
   }
 
   /**
-   * Writes beside the real file and renames over it, so a kill mid-write leaves the previous state
-   * intact rather than a half-written one.
+   * Writes beside the real file, forces it to storage, moves the earlier saves down a place, and
+   * renames the new one in.
+   *
+   * The sync is what makes the rename safe: without it, a phone that dies just after a save can
+   * come back with the new name pointing at a file whose contents never reached storage. Any step
+   * failing leaves the newest readable save where [load] looks for it; the state stays in memory
+   * and the next save tries again. There is no fallback that writes over the real file in place.
    */
-  private fun writeAtomically(text: String) {
+  private fun writeRotating(text: String) {
     val tmp = File(file.parentFile, "${file.name}.tmp")
-    tmp.writeText(text)
-    if (!tmp.renameTo(file)) {
-      file.writeText(text)
-      tmp.delete()
+    FileOutputStream(tmp).use { out ->
+      out.write(text.toByteArray(Charsets.UTF_8))
+      out.fd.sync()
+    }
+    // Oldest slot first, so each file moves into a place just vacated.
+    for (i in previous.indices.reversed()) {
+      val from = if (i == 0) file else previous[i - 1]
+      if (from.exists()) from.renameTo(previous[i])
+    }
+    check(tmp.renameTo(file)) { "could not move the new save into place" }
+    if (unreadableRecovered) {
+      unreadable.delete()
+      unreadableRecovered = false
     }
   }
+
+  private companion object {
+    /** Saves kept besides the current one. Each is the whole state: a few KB. */
+    const val KEPT_SAVES = 2
+  }
+}
+
+/**
+ * [kept] — a state set aside when it could not be read — brought back into this one.
+ *
+ * What this phone has now wins wherever the two hold the same thing: a list that has come back from
+ * a peer since, or a phone paired again. Everything else in [kept] is added: the lists only it has,
+ * with their open questions; the phones and networks; the name and staples if none were set again.
+ * Receipts are not merged — losing them is safe, tombstones only stay longer.
+ */
+internal fun AppState.withRecovered(kept: AppState): AppState {
+  val here = lists.map { it.id }.toSet()
+  val back = kept.lists.filterNot { it.id in here }
+  val backIds = back.map { it.id }.toSet()
+  val pairedHere = peers.map { it.deviceId }.toSet()
+  val networksHere = networks.map { it.fingerprint }.toSet()
+  return copy(
+    displayName = displayName.ifBlank { kept.displayName },
+    idCounter = maxOf(idCounter, kept.idCounter),
+    clockHead = maxOf(clockHead, kept.clockHead),
+    lists = lists + back,
+    activeListId = if (lists.any { it.id == activeListId }) activeListId else kept.activeListId,
+    peers = peers + kept.peers.filterNot { it.deviceId in pairedHere },
+    networks = networks + kept.networks.filterNot { it.fingerprint in networksHere },
+    staples = staples.ifEmpty { kept.staples },
+    conflicts = conflicts + kept.conflicts.filter { it.listId in backIds },
+  )
 }
