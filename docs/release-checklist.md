@@ -596,7 +596,9 @@ shared with her again, then the Proton banner, W2, W3, pairing again and putting
 
 ### Found in the session
 
-- [ ] **Sharing again after pairing again leaves her with two copies of the list.** Session 6,
+- [x] **Sharing again after pairing again leaves her with two copies of the list.** *Decided (Hugo,
+      2026-10-29): accepted as it is — the second copy stays, and she deletes the one she doesn't
+      want.* Session 6,
       2026-10-29: after the Pixel unpaired and re-paired Ava, each phone kept S6 Alpha as its own
       private copy, as decided on 2026-10-25. Sharing the Pixel's copy again arrived on hers as a
       new list, "new, from hugo", next to her private one — same name, same six items. Nothing is
