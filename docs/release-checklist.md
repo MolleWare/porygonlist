@@ -67,13 +67,16 @@ under *Overnight battery*, further down.
       next window, which then exchanges. *Build of 15:53, 2026-10-25: Home at 15:56; the app's
       mDNS client stayed connected with no requests (nothing advertised or browsed), and its socket
       closed when the start-up "sync now" window ended, 4 s later. The 16:15 window exchanged.*
-- [ ] The same port in two windows in a row (`/proc/net/tcp6`), and a fresh process's first call
+- [x] The same port in two windows in a row (`/proc/net/tcp6`), and a fresh process's first call
       going straight to Sam's kept address. *Same port: yes — 37151 at 15:55 and again at 16:15.
       The kept-address call still to see from a killed process.* *16:30, alarms allowed, app killed
       at 16:23: the alarm started a fresh process at 16:30:00.04; Sam reached it at 16:30:01 on
       37151 — the port it had kept — and the Pixel called Sam back at 16:30:03. Which of the two
       addresses the Pixel used first is not visible (Sam's call taught it one too); the window
-      exchanged within a second either way, which is the point.*
+      exchanged within a second either way, which is the point.* *Settled by session 6 W2
+      (2026-10-29 21:15), both real phones killed and in deep Doze: each fresh process listened on
+      its W1 port (33657, 44083) and they were connected both ways within 2 s, too soon for an
+      mDNS search, so the kept addresses were called first.*
 - [x] Alarms allowed: the alarm and a quarter-hour job both booked; the job's runs end in
       milliseconds; after an alarm window from a closed app, no job 20576 left pending. *Alarm for
       16:30:00 and job 20569 both booked on the grant. At 16:30 the job started and returned at
@@ -1009,3 +1012,11 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
       the battery night (2026-10-25/26), with a 204-item test list and several exchanges per
       window. Cheap on wifi today, but it grows with lists and people. A payload of what the peer
       has not acknowledged would shrink it to a few items.
+- [ ] **Merge two lists into one.** Pick two lists and combine them, for example two people's
+      separate shopping lists for the same trip. Open: what happens to an item both lists hold, and
+      who keeps sharing the merged list when the two were shared with different people (Hugo,
+      2026-10-31).
+- [ ] **A small avatar for who added each item, on the list screen.** The Shop screen already shows
+      the adder's initial on items someone else added; the list screen only says it in the line of
+      small text under the name. Part of the gamification above, so it is designed with it. Open:
+      show it on every item or only on other people's, as in Shop (Hugo, 2026-10-31).
