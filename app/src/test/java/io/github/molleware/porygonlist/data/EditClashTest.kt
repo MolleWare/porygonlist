@@ -218,7 +218,7 @@ class EditClashTest {
   @Test
   fun `a question saved by an older build reads as a duplicate on the open list`() {
     val hugos = phone(hugo, hugosVersion, ava).receiving(ava, avasVersion, 2_200)
-    val old = StateCodec.encode(hugos).lines().joinToString("\n") { if (it.startsWith("conflict|")) "conflict" else it }
+    val old = asVersion10(StateCodec.encode(hugos)).lines().joinToString("\n") { if (it.startsWith("conflict|")) "conflict" else it }
 
     val back = StateCodec.decode(old)!!.conflicts.single()
     assertEquals(ConflictKind.DUPLICATE, back.kind)

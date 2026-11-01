@@ -340,7 +340,7 @@ scrolls to reach the field its own intro paragraph was describing.
 
 | Format | Marker | Carries |
 | --- | --- | --- |
-| State file | `PLSTATE9` | Everything: the owner's name, staples, peers, networks, receipts |
+| State file | `PLSTATE11` | Everything: the owner's name, staples, peers, networks, receipts |
 | Sync payload | `PLSYNC1` | Lists and people only |
 | Share message | `PL1` | Human-readable item run, no identity |
 
@@ -361,6 +361,12 @@ name comes back blank so first run asks once, the staples come back as the defau
 set, and the clash sentences are written afresh from the items. An emptied grid in
 a current file stays empty, because that is a state someone can actually reach.
 Versions before 6 lacked identity and are still refused.
+
+`PLSTATE11` ends with an `end` record holding a CRC-32 of everything before it,
+and a version 11 file without a matching one is refused. The reader skips a bad
+line rather than lose the file, so without it a save cut short read as a phone
+with no lists. The two saves before the current one are kept, and a refused save
+falls back to the newest that reads.
 
 ---
 

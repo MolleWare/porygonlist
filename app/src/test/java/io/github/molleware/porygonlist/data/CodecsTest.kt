@@ -279,6 +279,35 @@ class StateCodecTest {
   }
 
   @Test
+  fun `a save cut short anywhere does not read`() {
+    val whole = StateCodec.encode(AppState.seed(localDevice = ME, partner = THEM))
+
+    // Before the checksum, a cut after the meta line read as a phone with no lists. A cut of the
+    // final newline alone loses nothing, and reads.
+    for (length in 1 until whole.length - 1) {
+      assertNull("cut at $length of ${whole.length}", StateCodec.decode(whole.take(length)))
+    }
+    assertTrue("the whole save still reads", StateCodec.decode(whole) != null)
+  }
+
+  @Test
+  fun `a save with a changed character does not read`() {
+    val whole = StateCodec.encode(AppState.seed(localDevice = ME, partner = THEM))
+    val at = whole.indexOf("item|") + 20
+
+    assertNull(StateCodec.decode(whole.substring(0, at) + "#" + whole.substring(at + 1)))
+  }
+
+  @Test
+  fun `a version 10 save, which has no checksum, still reads`() {
+    // What the phones that tested 0.1.0 hold until their first save on a build with the checksum.
+    val original = AppState.seed(localDevice = ME, partner = THEM)
+    val restored = StateCodec.decode(asVersion10(StateCodec.encode(original)))!!
+
+    assertEquals(original.lists.map { it.name to it.items.size }, restored.lists.map { it.name to it.items.size })
+  }
+
+  @Test
   fun `a file with no identity is unreadable`() {
     val encoded = StateCodec.encode(single(item(1, "Butter")))
     val withoutMeta = encoded.lineSequence().filterNot { it.startsWith("meta|") }.joinToString("\n")
@@ -287,8 +316,9 @@ class StateCodecTest {
   }
 
   @Test
-  fun `one damaged line does not cost the rest of the file`() {
-    val encoded = StateCodec.encode(single(item(1, "Sourdough"), item(2, "Butter")))
+  fun `one damaged line does not cost the rest of a version 10 file`() {
+    // A version 11 file with a damaged line is refused instead, so the save before it is read.
+    val encoded = asVersion10(StateCodec.encode(single(item(1, "Sourdough"), item(2, "Butter"))))
     val damaged = encoded.lineSequence().joinToString("\n") { if (it.contains("|Sourdough|")) "item|1|oops" else it }
 
     val restored = StateCodec.decode(damaged)!!

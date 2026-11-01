@@ -76,10 +76,12 @@ class StateMigrationTest {
     return text
       .lineSequence()
       .filter { it.isNotBlank() }
+      // Version 9 had no closing checksum.
+      .filterNot { it.startsWith("end|") }
       .map { line ->
         val f = line.split('|')
         when (f.getOrNull(0)) {
-          "PLSTATE10" -> "PLSTATE9"
+          "PLSTATE11" -> "PLSTATE9"
           // meta's fifth field is the open list.
           "meta" -> f.toMutableList().also { it[4] = legacy.getValue(it[4]) }.joinToString("|")
           // A version 9 person record stopped at formerDevices: it had no way to say somebody had
@@ -187,7 +189,7 @@ class StateMigrationTest {
     // A version 10 file already on a phone has no stamp on its list records. Reading one as the
     // beginning of time means any real rename from elsewhere wins, which is the right default.
     val unstamped =
-      StateCodec.encode(current())
+      asVersion10(StateCodec.encode(current()))
         .lineSequence()
         .map { if (it.startsWith("list|")) it.split('|').take(4).joinToString("|") else it }
         .joinToString("\n")

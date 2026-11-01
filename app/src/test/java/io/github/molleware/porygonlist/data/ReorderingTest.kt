@@ -230,7 +230,7 @@ class ReorderingTest {
 
   @Test
   fun `an item written before reordering reads as never placed`() {
-    val line = StateCodec.encode(stateOf(list(1)))
+    val line = asVersion10(StateCodec.encode(stateOf(list(1))))
     // Drop the three position columns, as a file from an older build would have them.
     val old = line.lines().joinToString("\n") { l -> if (l.startsWith("item|")) l.split('|').dropLast(3).joinToString("|") else l }
     val back = StateCodec.decode(old)!!

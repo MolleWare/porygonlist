@@ -828,7 +828,26 @@ shared with her again, then the Proton banner, W2, W3, pairing again and putting
       reads it, its lists, phones and networks are merged back (what the phone has now wins) and
       it goes after the merged save lands. Deleting the identity removes all of them. The
       in-place fallback write is gone. To see on the next build: `ls` the app's files after a few
-      edits — needs `run-as`, so a debug build.*
+      edits — needs `run-as`, so a debug build.* *Seen on the Pixel, 2026-11-01, with a debug
+      copy installed beside the release app under its own package name (so the release install,
+      its lists and its pairing were untouched), then removed. Three adds: the current save and
+      `.1`, `.2` one change apart each. Two faults found and fixed on the way, below; on the fixed
+      build: a save cut to 60 bytes refused, the app back with the save before and its name, the
+      cut file gone and the id counter past it; all three saves unreadable, a blank start with the
+      newest set aside, and that file, once readable, merged back and removed; a version 10 save
+      alone read, and rewritten as version 11 at the first edit.*
+- [x] **A save cut short after its first lines still read, as a phone with no lists.** Found
+      checking the saves above, 2026-11-01: cut to 60 bytes, the Pixel's copy opened on the naming
+      screen with nothing in it, and the earlier saves, which held the lists, were never tried —
+      the reader skips a bad line rather than lose the file, and no lists is a real state. Fixed:
+      the state file is version 11, ending with a checksum of everything before it, and a version
+      11 file without a matching one does not read (`StateCodecTest`). Version 10 files, which both
+      phones hold, read as before.
+- [x] **Falling back to an earlier save handed its ids out again, and kept the bad save as a
+      backup.** Found the same way: after the fallback, the next item took Charlie's id, though
+      Charlie may already be on another phone; and the bad save moved into `.1`, so two bad saves
+      in a row left no backup that read. Fixed: a save passed over is removed, and the id counter
+      jumps past anything it could have handed out (`SaveFileTest`).
 
 ### App closed
 

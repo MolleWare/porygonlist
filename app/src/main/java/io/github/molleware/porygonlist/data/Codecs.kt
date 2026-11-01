@@ -4,6 +4,7 @@ import io.github.molleware.porygonlist.data.crypto.DeviceIdentity
 import io.github.molleware.porygonlist.data.net.NetworkFingerprint
 import io.github.molleware.porygonlist.data.sync.Records
 import java.util.Base64
+import java.util.zip.CRC32
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
@@ -86,9 +87,14 @@ object ShareCodec {
  * without inventing authorship, so they are rejected rather than half-read.
  *
  * Version 7 adds the owner's name to the `meta` record. Version 6 is still read; see [READABLE].
+ *
+ * Version 11 ends with an `end` record holding a checksum of everything before it, and a version 11
+ * file without a matching one is refused. The reader skips a malformed line rather than lose the
+ * file, and a state with no lists is real, so without it a save cut short after its `meta` line read
+ * as a phone with no lists, and the earlier saves that still held them were never tried.
  */
 object StateCodec {
-  private const val VERSION = "PLSTATE10"
+  private const val VERSION = "PLSTATE11"
 
   /**
    * Formats this build can read.
@@ -99,7 +105,10 @@ object StateCodec {
    * once, the staples grid comes back empty, and the clash sentences are written afresh from the
    * items. Everything they carry — authorship, stamps, tombstones — is read as before.
    */
-  private val READABLE = setOf("PLSTATE6", "PLSTATE7", "PLSTATE8", "PLSTATE9", VERSION)
+  private val READABLE = setOf("PLSTATE6", "PLSTATE7", "PLSTATE8", "PLSTATE9", "PLSTATE10", VERSION)
+
+  /** Versions that end with an `end` record, and are refused without a matching one. */
+  private val SEALED = setOf(VERSION)
 
   /**
    * Versions whose list ids are already global.
@@ -108,9 +117,25 @@ object StateCodec {
    * files are migrated on read: see [migrateListIds]. Nothing is invented and nothing is lost — the
    * ids are internal, never shown, and every reference to them is rewritten in the same pass.
    */
-  private val WITH_GLOBAL_LIST_IDS = setOf(VERSION)
+  private val WITH_GLOBAL_LIST_IDS = setOf("PLSTATE10", VERSION)
 
-  fun encode(state: AppState): String = buildString {
+  fun encode(state: AppState): String {
+    val body = encodeBody(state)
+    return body + record("end", checksum(body)) + "\n"
+  }
+
+  private fun checksum(text: String): String =
+    CRC32().apply { update(text.toByteArray(Charsets.UTF_8)) }.value.toString(16)
+
+  /** Whether [text] ends with an `end` record whose checksum matches everything before it. */
+  private fun sealed(text: String): Boolean {
+    val withoutLast = text.removeSuffix("\n")
+    val cut = withoutLast.lastIndexOf('\n') + 1
+    if (cut == 0) return false
+    return withoutLast.substring(cut) == record("end", checksum(text.substring(0, cut)))
+  }
+
+  private fun encodeBody(state: AppState): String = buildString {
     appendLine(VERSION)
     appendLine(
       record(
@@ -199,6 +224,7 @@ object StateCodec {
     val lines = text.lineSequence().filter { it.isNotBlank() }.toList()
     val version = lines.firstOrNull()?.trim()
     if (version !in READABLE) return null
+    if (version in SEALED && !sealed(text)) return null
 
     var localDevice: DeviceId? = null
     var idCounter = 0L
