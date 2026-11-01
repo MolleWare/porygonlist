@@ -64,6 +64,46 @@ The build pins `jvmToolchain(21)` and deliberately does not use Gradle's
 toolchain auto-provisioning, so a missing JDK 21 fails the build rather than
 silently downloading one. Install JDK 21 and point `JAVA_HOME` at it.
 
+### In a container
+
+`./scripts/dev.sh` runs the same build in a podman container instead, with
+Debian's JDK 21 and an Android SDK installed by F-Droid's `sdkmanager`: the
+setup F-Droid's build server uses, and nothing to install on the machine but
+podman. It exists mainly so a coding agent can be given wide rights in there
+without them reaching the rest of the machine. The container sees this
+repository and little else; release signing and `git push` stay outside it, and
+it refuses to start while a signing key is inside the repository (see
+`keystore.properties.example`).
+
+```sh
+./scripts/dev.sh                # Claude Code in the container
+./scripts/dev.sh shell          # a shell in the container
+./scripts/dev.sh start          # start the container and leave it running
+./scripts/dev.sh stop           # stop the container
+./scripts/dev.sh autostart      # start it at every login (autostart off to undo)
+```
+
+The first run builds the image, which takes a few minutes. Any of these starts
+the container when it is not running, and it keeps running after the command
+ends, until `./scripts/dev.sh stop`, logout or shutdown. `autostart` installs a
+systemd user service, `porygonlist-dev`, that starts it again at each login; if
+a start fails, `systemctl --user status porygonlist-dev` says why.
+
+To work in it from VS Code, with the Dev Containers extension and its
+`dev.containers.dockerPath` setting set to `podman`:
+
+1. Start the container: `./scripts/dev.sh start`, or once
+   `./scripts/dev.sh autostart` and never again.
+2. Open the command palette (Ctrl+Shift+P), run **Dev Containers: Attach to
+   Running Container…** and pick `porygonlist-dev`.
+3. Open this repository's folder in the new window.
+
+After the first time, **File → Open Recent** goes straight back to it whenever
+the container is running.
+
+Phones connect over wireless debugging. The container has its own adb key, so
+pair each phone once from inside it with `adb pair`.
+
 ### Fonts
 
 The app draws in the phone's own system font, by decision for 0.1.0: nothing to

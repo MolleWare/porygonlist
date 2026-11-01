@@ -5,12 +5,15 @@
 #   ./scripts/dev.sh [claude args]      Claude Code in the container
 #   ./scripts/dev.sh remote [name]      the same, driven from the phone (see scripts/remote.sh)
 #   ./scripts/dev.sh shell              a shell in the container
+#   ./scripts/dev.sh start              start the container and leave it running, for VS Code
 #   ./scripts/dev.sh stop               stop the container, ending every session in it
+#   ./scripts/dev.sh autostart [off]    start it at every login, or no longer
 #
 # One container, porygonlist-dev, started by the first of these and shared by the rest, so every
 # session talks to the same adb server and Gradle daemon. VS Code joins it the same way: with the
 # Dev Containers extension set to podman, run "Dev Containers: Attach to Running Container", pick
-# porygonlist-dev and open this folder there.
+# porygonlist-dev and open this folder there. Once the container starts at login, File → Open
+# Recent goes straight back to it after a reboot.
 #
 # What the container gets:
 #   - this repository, read-write, at the same path as on the host: Claude Code files its memory
@@ -116,9 +119,54 @@ case "${1:-}" in
     fi
     exec "${inhibit[@]}" podman exec "${tty[@]}" "$CONTAINER" ./scripts/remote.sh "$@"
     ;;
+  start)
+    start
+    info "$CONTAINER is running. In VS Code: File → Open Recent, or Attach to Running Container."
+    ;;
   stop)
     podman stop "$CONTAINER" >/dev/null 2>&1 || true
     info "$CONTAINER stopped"
+    ;;
+  autostart)
+    # A systemd user service that runs `dev.sh start` at login and `dev.sh stop` at logout. It is
+    # written into ~/.config rather than kept in the repository because it holds this folder's
+    # path. A failed start, such as a key found in the repository, shows in
+    # `systemctl --user status porygonlist-dev`.
+    unit="porygonlist-dev.service"
+    unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+    case "${2:-on}" in
+      on)
+        # systemd reads a double-quoted argument as one, and % as the start of a specifier.
+        script="\"${REPO_ROOT//%/%%}/scripts/dev.sh\""
+        mkdir -p "$unit_dir"
+        cat >"$unit_dir/$unit" <<EOF
+# Written by ./scripts/dev.sh autostart; ./scripts/dev.sh autostart off removes it.
+[Unit]
+Description=PorygonList development container
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=$script start
+ExecStop=$script stop
+# The first start after an edit to container/Containerfile builds the image.
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=default.target
+EOF
+        systemctl --user daemon-reload
+        systemctl --user enable --now "$unit"
+        info "$CONTAINER now starts at every login. ./scripts/dev.sh autostart off to undo."
+        ;;
+      off)
+        systemctl --user disable "$unit" 2>/dev/null || true
+        rm -f "$unit_dir/$unit"
+        systemctl --user daemon-reload
+        info "$CONTAINER no longer starts at login. A running one keeps running."
+        ;;
+      *) die "Use: ./scripts/dev.sh autostart [on|off]" ;;
+    esac
     ;;
   *)
     start
