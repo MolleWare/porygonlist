@@ -193,6 +193,9 @@ object StateCodec {
           list.nameAt.encode(),
           list.pinned.bool(),
           list.arrivedFrom?.value.orEmpty(),
+          // Several names in one field: written as a record of their own, so a name holding a comma
+          // or a bar comes back whole. Empty for a list that is not a kept copy.
+          if (list.wasSharedWith.isEmpty()) "" else Records.line(list.wasSharedWith),
         )
       )
       list.people.forEach {
@@ -247,6 +250,7 @@ object StateCodec {
     val nameStamps = mutableMapOf<String, Hlc>()
     val pins = mutableSetOf<String>()
     val arrivals = mutableMapOf<String, DeviceId>()
+    val sharedWith = mutableMapOf<String, List<String>>()
     val people = mutableMapOf<String, MutableList<Person>>()
     val items = mutableMapOf<String, MutableList<GroceryItem>>()
 
@@ -305,6 +309,8 @@ object StateCodec {
               if (f.getOrNull(5) == "1") pins += id
               // Absent before shared lists said who they came from: read as already seen.
               f.getOrNull(6)?.takeIf { it.isNotEmpty() }?.let { arrivals[id] = DeviceId(it) }
+              // Absent before kept copies said who they were shared with: read as not a kept copy.
+              f.getOrNull(7)?.takeIf { it.isNotEmpty() }?.let { sharedWith[id] = Records.split(it) }
             }
             "person" -> {
               val device = DeviceId(f[2])
@@ -363,6 +369,7 @@ object StateCodec {
           nameAt = nameStamps[raw] ?: GroceryList.none.nameAt,
           pinned = raw in pins,
           arrivedFrom = arrivals[raw],
+          wasSharedWith = sharedWith[raw].orEmpty(),
         )
       }
 

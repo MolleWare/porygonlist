@@ -161,6 +161,29 @@ class FormatTest {
     assertEquals("just you", listCardMeta(solo, localDevice = me, delivered = DeliveryLog()))
   }
 
+  // ── The copy kept after being taken off a shared list ────────────────────
+
+  private val kept = list.copy(people = listOf(Person(me, "Ava", "A")), wasSharedWith = listOf("Hugo"))
+
+  @Test
+  fun `a kept copy says who it was shared with, not just you`() {
+    assertEquals("was shared with Hugo", listCardMeta(kept, me, DeliveryLog()))
+    assertEquals("was shared with Hugo & Sam", listCardMeta(kept.copy(wasSharedWith = listOf("Hugo", "Sam")), me, DeliveryLog()))
+  }
+
+  @Test
+  fun `a kept copy still gives way to a question or a new arrival`() {
+    assertEquals("a change needs you", listCardMeta(kept, me, DeliveryLog(), needsAnswer = true))
+    assertEquals("new, from Hugo", listCardMeta(kept.copy(arrivedFrom = hugo), me, DeliveryLog(), paired = listOf(hugoPaired)))
+  }
+
+  @Test
+  fun `shared with someone again, it reads as any shared list`() {
+    val sharedAgain = kept.copy(people = kept.people + Person(sam, "Sam", "S"))
+
+    assertEquals("not handed over yet", listCardMeta(sharedAgain, me, DeliveryLog()))
+  }
+
   // ── A list someone shared, not yet opened ─────────────────────────────────
 
   private val hugoPaired = TrustedPeer(hugo, byteArrayOf(1), "Hugo", pairedAt = now)

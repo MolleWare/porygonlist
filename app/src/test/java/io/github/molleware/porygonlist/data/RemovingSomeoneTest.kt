@@ -8,6 +8,7 @@ import io.github.molleware.porygonlist.data.sync.HybridClock
 import io.github.molleware.porygonlist.data.sync.IdFactory
 import io.github.molleware.porygonlist.data.sync.ItemId
 import io.github.molleware.porygonlist.data.sync.ListId
+import io.github.molleware.porygonlist.data.sync.SyncCodec
 import io.github.molleware.porygonlist.data.sync.SyncPayload
 import io.github.molleware.porygonlist.data.sync.SyncResult
 import io.github.molleware.porygonlist.data.sync.payloadFor
@@ -122,6 +123,56 @@ class RemovingSomeoneTest {
     assertEquals(listOf("item 1", "item 2"), copy.liveItems.map { it.name.value })
     assertEquals(listOf(ava), copy.people.map { it.device })
     assertTrue("new item ids, so the two lists can never be merged into each other", copy.items.none { it.id.value.startsWith(hugo.value) })
+  }
+
+  @Test
+  fun `the kept copy notes who it was shared with`() {
+    // Session 5: the copy read exactly like her own list of the same name.
+    val after = removalReaching(phone(ava, shared(hugo, ava, sam), hugo, sam))
+
+    assertEquals(listOf("Hug", "Sam"), after.visibleLists.single().wasSharedWith)
+  }
+
+  @Test
+  fun `sharing the kept copy again makes it an ordinary shared list`() {
+    val copy = removalReaching(phone(ava, shared(hugo, ava), hugo)).visibleLists.single()
+
+    assertEquals(emptyList<String>(), copy.withPersonAdded(sam, "Sam", at(3_000, ava)).wasSharedWith)
+  }
+
+  @Test
+  fun `who the copy was shared with never leaves the phone`() {
+    val copy = removalReaching(phone(ava, shared(hugo, ava), hugo)).visibleLists.single().copy(wasSharedWith = listOf("Zelda"))
+    val sent = SyncCodec.encode(SyncPayload(ava, at(3_000, ava), listOf(copy)))
+
+    assertFalse(sent.contains("Zelda"))
+    assertEquals(emptyList<String>(), SyncCodec.decode(sent)!!.lists.single().wasSharedWith)
+  }
+
+  @Test
+  fun `the note survives a restart, whatever the names hold`() {
+    val names = listOf("Hugo, the tall one", "Sam | Léa", "back\\slash")
+    val copy = removalReaching(phone(ava, shared(hugo, ava), hugo)).let { s ->
+      s.copy(lists = s.lists.map { if (it.id == s.activeListId) it.copy(wasSharedWith = names) else it })
+    }
+
+    val restored = StateCodec.decode(StateCodec.encode(copy))!!
+
+    assertEquals(names, restored.visibleLists.single().wasSharedWith)
+  }
+
+  @Test
+  fun `older saves read as no kept copy, and lose nothing else`() {
+    val avas = removalReaching(phone(ava, shared(hugo, ava), hugo)).let { s ->
+      s.copy(lists = s.lists.map { it.copy(pinned = true, arrivedFrom = hugo) })
+    }
+
+    for (old in listOf(as010(StateCodec.encode(avas)), asVersion10(as010(StateCodec.encode(avas))))) {
+      val restored = StateCodec.decode(old)!!.visibleLists.single()
+      assertEquals(emptyList<String>(), restored.wasSharedWith)
+      assertTrue("the fields before it still read", restored.pinned && restored.arrivedFrom == hugo)
+      assertEquals(listOf("item 1", "item 2"), restored.liveItems.map { it.name.value })
+    }
   }
 
   @Test

@@ -140,11 +140,14 @@ fun GroceryList.others(localDevice: DeviceId) = people.filter { it.present && it
 fun GroceryList.partnerName(localDevice: DeviceId): String = others(localDevice).firstOrNull()?.name ?: "them"
 
 /** Several people as running text: "Ava", "Ava & Sam", "Ava, Sam & Léa". */
-fun names(people: List<Person>): String =
-  when (people.size) {
+fun names(people: List<Person>): String = joinNames(people.map { it.name })
+
+/** [names] for names alone, such as the ones a kept copy remembers. */
+fun joinNames(names: List<String>): String =
+  when (names.size) {
     0 -> "nobody"
-    1 -> people.single().name
-    else -> people.dropLast(1).joinToString(", ") { it.name } + " & " + people.last().name
+    1 -> names.single()
+    else -> names.dropLast(1).joinToString(", ") + " & " + names.last()
   }
 
 /** "is" for one person, "are" for more — or whichever pair of words is given. */
@@ -223,6 +226,9 @@ fun listCardMeta(
     // Until it is first opened, a list someone shared says so — the one thing that tells it apart
     // from a list of your own with the same name.
     list.arrivedFrom != null -> "new, from ${list.nameFor(list.arrivedFrom, localDevice, paired)}"
+    // The copy kept after being taken off a shared list, which would otherwise read exactly like a
+    // list of your own with the same name.
+    others.isEmpty() && list.wasSharedWith.isNotEmpty() -> "was shared with ${joinNames(list.wasSharedWith)}"
     others.isEmpty() -> "just you"
     list.liveItems.any { it.editing } -> "${others.first().name} is adding to it"
     behind.isEmpty() -> "in step with ${names(others)}"

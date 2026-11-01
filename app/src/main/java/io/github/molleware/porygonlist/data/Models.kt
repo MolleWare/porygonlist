@@ -158,6 +158,16 @@ data class GroceryList(
    * [pinned]: never sent, kept through merges, and cleared by opening the list.
    */
   val arrivedFrom: DeviceId? = null,
+  /**
+   * Who this list was shared with, by name, when this phone was taken off it and kept it as its own
+   * — see [keptAsPrivate]. Empty for every other list. It is what tells a kept copy apart from a
+   * list of your own with the same name (session 5).
+   *
+   * This phone's own note, like [pinned]: never sent, kept through merges. A rename or a removed
+   * item leaves it alone, since it says where the list came from rather than what is on it; sharing
+   * the list again clears it, as from then on it is an ordinary shared list.
+   */
+  val wasSharedWith: List<String> = emptyList(),
 ) {
   /**
    * Items still on the list — everything anyone sees, counts or sends.
@@ -326,10 +336,11 @@ data class GroceryList(
         people =
           people.map {
             if (it.wasEver(device) && !it.present) it.copy(removed = it.removed.set(false, at)) else it
-          }
+          },
+        wasSharedWith = emptyList(),
       )
     } else {
-      copy(people = people + Person(device, name, initialOf(name), removed = Field(false, at)))
+      copy(people = people + Person(device, name, initialOf(name), removed = Field(false, at)), wasSharedWith = emptyList())
     }
 
   /**
@@ -392,6 +403,8 @@ data class GroceryList(
    * New ids for the list and its items, because the original is still somebody else's, and this
    * phone may one day be put back on it — two lists sharing item ids would then be merged into each
    * other. Everything else is as it stood: names, quantities, ticks, order, who added what.
+   *
+   * Who it was shared with is noted on the copy, as it stood at that moment, so its card can say so.
    */
   fun keptAsPrivate(id: ListId, newItemId: () -> ItemId, localDevice: DeviceId): GroceryList {
     val me = personFor(localDevice)
@@ -403,6 +416,7 @@ data class GroceryList(
       people = listOf(Person(localDevice, me?.name.orEmpty(), me?.initial.orEmpty())),
       nameAt = nameAt,
       pinned = pinned,
+      wasSharedWith = people.filter { it.present && it.device != localDevice }.map { it.name }.filter { it.isNotBlank() },
     )
   }
 
