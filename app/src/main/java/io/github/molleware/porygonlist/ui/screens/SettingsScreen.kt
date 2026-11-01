@@ -61,6 +61,7 @@ import io.github.molleware.porygonlist.theme.Shapes
 import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
 import io.github.molleware.porygonlist.ui.components.Avatar
+import io.github.molleware.porygonlist.ui.components.systemGlyphs
 import io.github.molleware.porygonlist.ui.components.BackLink
 import io.github.molleware.porygonlist.ui.components.PorygonTextField
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
@@ -303,7 +304,8 @@ private fun AvatarChoices(initial: String, chosen: String, onChoose: (String) ->
     verticalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     AvatarOption(initial, Avatars.NONE, "Your initial", selected = chosen == Avatars.NONE) { onChoose(Avatars.NONE) }
-    Avatars.free.forEach { choice ->
+    // Only what this phone can draw: an emoji its fonts lack would be an empty circle to choose.
+    Avatars.choosable(systemGlyphs::canDraw).forEach { choice ->
       AvatarOption(initial, choice.id, "${choice.name} avatar", selected = chosen == choice.id) { onChoose(choice.id) }
     }
   }

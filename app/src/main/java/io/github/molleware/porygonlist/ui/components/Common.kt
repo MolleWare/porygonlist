@@ -46,7 +46,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.Paint
 import io.github.molleware.porygonlist.data.Avatars
+import io.github.molleware.porygonlist.data.GlyphCheck
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent100
 import io.github.molleware.porygonlist.theme.Bg
@@ -99,7 +101,8 @@ fun Avatar(
     // full wherever it matters; this is a mark, not text to read.
     val density = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1f)) {
-      val emoji = Avatars.emojiOf(avatar)
+      // One the system font cannot draw — newer emoji on an older Android — is the initial instead.
+      val emoji = remember(avatar) { Avatars.emojiOf(avatar, systemGlyphs::canDraw) }
       if (emoji == null) {
         Text(initial, color = contentColor, style = PorygonType.MetaBold.copy(fontSize = fontSize))
       } else {
@@ -117,6 +120,13 @@ fun Avatar(
 
 /** An avatar's emoji, as a share of its circle's width. */
 private const val EMOJI_SCALE = 0.5f
+
+/**
+ * Whether the system font, fallbacks included, has a glyph for an emoji: 🥦 and 🥑 are newer than
+ * some Android versions the app runs on, and an avatar drawn as an empty box says nothing. First
+ * asked when an avatar is drawn, never at startup.
+ */
+internal val systemGlyphs = GlyphCheck { Paint().hasGlyph(it) }
 
 /** The small coloured status dot: 9dp beside sync copy, 11dp on a list card. */
 @Composable

@@ -84,6 +84,28 @@ class AvatarTest {
     assertEquals("🍎", Avatars.emojiOf("apple"))
   }
 
+  @Test
+  fun `an emoji this phone cannot draw is the initial, and is not offered`() {
+    val noBroccoli: (String) -> Boolean = { it != "🥦" }
+
+    assertNull(Avatars.emojiOf("broccoli", noBroccoli))
+    assertEquals("🍎", Avatars.emojiOf("apple", noBroccoli))
+    assertEquals(listOf("apple", "carrot", "avocado", "lemon", "mushroom"), Avatars.choosable(noBroccoli).map { it.id })
+  }
+
+  @Test
+  fun `whether an emoji can be drawn is asked once, then remembered`() {
+    val asked = mutableListOf<String>()
+    val glyphs = GlyphCheck { asked += it; it != "🥦" }
+
+    repeat(3) {
+      assertTrue(glyphs.canDraw("🍎"))
+      assertFalse(glyphs.canDraw("🥦"))
+    }
+
+    assertEquals(listOf("🍎", "🥦"), asked)
+  }
+
   // ── Choosing ──────────────────────────────────────────────────────────────
 
   @Test
