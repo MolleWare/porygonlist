@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.Avatars
 import io.github.molleware.porygonlist.data.FileListRepository
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
@@ -246,6 +247,7 @@ private class Console(
         vm.onRenameDraftChange(rest)
         vm.saveRename()
       }
+      "avatar" -> vm.chooseAvatar(if (rest == "none") Avatars.NONE else rest)
       "leave", "deletelist" -> vm.deleteList(state.activeListId)
       "share" -> vm.addPersonToActiveList(peer(rest))
       "kick" -> vm.removePersonFromActiveList(peer(rest))
@@ -311,10 +313,10 @@ private class Console(
 
   private fun dump() {
     val s = state
-    say("me: ${s.displayName} ${s.localDevice.value}, wifi ${if (wifi.isOnline) "on" else "off"}, socket ${vm.listeningPort ?: "-"}")
+    say("me: ${s.displayName}${s.avatar.value.worn()} ${s.localDevice.value}, wifi ${if (wifi.isOnline) "on" else "off"}, socket ${vm.listeningPort ?: "-"}")
     s.peers.forEach { say("peer: ${it.name} ${it.deviceId.value}") }
     s.visibleLists().forEachIndexed { i, list ->
-      val people = list.people.filter { it.present }.joinToString { it.name.ifEmpty { it.device.value.take(6) } }
+      val people = list.people.filter { it.present }.joinToString { it.name.ifEmpty { it.device.value.take(6) } + it.avatar.value.worn() }
       say("[$i] ${list.name}  — $people${if (list.id == s.activeListId) "  (open)" else ""}")
       // In the order a screen draws them, which is the shared order — not the order stored here.
       list.orderedItems.forEach { say("      ${if (it.checked) "[x]" else "[ ]"} ${it.label()}") }
@@ -322,6 +324,9 @@ private class Console(
     // What a screen would show: a clash answered on the other phone is stored but no longer asked.
     s.openConflicts.forEach { say("conflict (${it.kind}) on ${it.itemName}: mine ${it.yours.label()} / theirs ${it.theirs.label()}") }
   }
+
+  /** " (apple)" for someone wearing an avatar, nothing for the initial. By id, as it travels. */
+  private fun String.worn() = if (this == Avatars.NONE) "" else " ($this)"
 
   private fun GroceryItem.label() =
     name.value + (if (qty.value > 1) " ×${qty.value}" else "") + (if (removed.value) " (removed)" else "")
@@ -347,6 +352,7 @@ private class Console(
   companion object {
     const val HELP =
       "state | lists | code | pair <link> | found | open <list|index> | newlist <name> | renamelist <name> | leave | " +
+        "avatar <id>|none | " +
         "share <peer> | kick <peer> | unpair <peer> | add <item> | bulk <n> [prefix] | tick <item> | " +
         "rename <item> => <name> | qty <item> <n> | remove <item> | keep mine|theirs|both | offline | online | quit"
   }

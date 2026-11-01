@@ -258,6 +258,22 @@ class PorygonViewModelTest {
     assertEquals("", vm.nameDraft)
   }
 
+  @Test
+  fun `choosing an avatar wears it on your lists, stamped, and a new list starts with it`() = runTest(dispatcher) {
+    repo.load()
+    val before = state().clockHead
+
+    vm.chooseAvatar("lemon")
+    vm.onListDraftChange("Hardware shop")
+    vm.createList()
+
+    assertEquals("lemon", state().avatar.value)
+    assertTrue("stamped by this phone's clock", state().avatar.at > before)
+    for (list in state().lists) {
+      assertEquals(list.name, state().avatar, list.people.single { it.device == state().localDevice }.avatar)
+    }
+  }
+
   // ── Lists ─────────────────────────────────────────────────────────────────
 
   @Test

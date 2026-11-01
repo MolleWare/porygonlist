@@ -7,14 +7,22 @@ import android.os.Build
 import android.provider.Settings
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,12 +33,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.Avatars
 import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.net.BackgroundSync
 import io.github.molleware.porygonlist.data.sync.DeviceId
@@ -63,6 +77,7 @@ fun SettingsScreen(
   nameDraft: String,
   onNameDraftChange: (String) -> Unit,
   onSaveName: () -> Unit,
+  onChooseAvatar: (String) -> Unit,
   onPair: () -> Unit,
   onUnpair: (DeviceId) -> Unit,
   confirmingDelete: Boolean,
@@ -85,6 +100,7 @@ fun SettingsScreen(
         contentColor = Accent100,
         size = 46.dp,
         fontSize = PorygonType.CardHeading.fontSize,
+        avatar = state.avatar.value,
       )
       Column(Modifier.weight(1f)) {
         Text(state.displayName, style = PorygonType.CardHeading, color = TextInk)
@@ -115,6 +131,19 @@ fun SettingsScreen(
       PrimaryButton("Save", onSaveName, modifier = Modifier.heightIn(min = 46.dp), style = PorygonType.BodyLarge)
     }
 
+    SectionLabel("Your avatar", Modifier.padding(top = 26.dp, bottom = 10.dp))
+    Text(
+      "Shows instead of your initial, on your lists and on theirs.",
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(bottom = 10.dp),
+    )
+    AvatarChoices(
+      initial = state.displayName.take(1).uppercase(),
+      chosen = state.avatar.value,
+      onChoose = onChooseAvatar,
+    )
+
     SectionLabel("This phone", Modifier.padding(top = 26.dp, bottom = 10.dp))
     Column(Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 14.dp)) {
       Text(deviceId.value, style = PorygonType.RowName, color = TextInk)
@@ -136,7 +165,7 @@ fun SettingsScreen(
       )
     } else {
       Column(verticalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-        state.peers.forEach { PeerRow(it) { onUnpair(it.deviceId) } }
+        state.peers.forEach { PeerRow(it, state.avatarOf(it.deviceId)) { onUnpair(it.deviceId) } }
       }
     }
     SecondaryButton("Pair a phone", onPair, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
@@ -257,8 +286,54 @@ private fun AboutCard() {
   }
 }
 
+/**
+ * Your initial, then every avatar there is to choose, each as it would look on your lists.
+ *
+ * One tap wears it; there is nothing to confirm, as choosing again is just as quick. An avatar this
+ * build does not know — chosen on a newer one, perhaps — marks none of them.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PeerRow(peer: TrustedPeer, onUnpair: () -> Unit) {
+private fun AvatarChoices(initial: String, chosen: String, onChoose: (String) -> Unit) {
+  FlowRow(
+    Modifier.selectableGroup(),
+    horizontalArrangement = Arrangement.spacedBy(6.dp),
+    verticalArrangement = Arrangement.spacedBy(6.dp),
+  ) {
+    AvatarOption(initial, Avatars.NONE, "Your initial", selected = chosen == Avatars.NONE) { onChoose(Avatars.NONE) }
+    Avatars.free.forEach { choice ->
+      AvatarOption(initial, choice.id, "${choice.name} avatar", selected = chosen == choice.id) { onChoose(choice.id) }
+    }
+  }
+}
+
+/** One circle to choose, ringed when it is the one worn, and a whole thumb's width to hit. */
+@Composable
+private fun AvatarOption(initial: String, avatar: String, label: String, selected: Boolean, onClick: () -> Unit) {
+  Box(
+    Modifier.size(48.dp)
+      .clip(CircleShape)
+      .border(2.dp, if (selected) Accent800 else Color.Transparent, CircleShape)
+      // Announced as a choice among several, with its name and whether it is the one worn.
+      .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+      .semantics { contentDescription = label },
+    contentAlignment = Alignment.Center,
+  ) {
+    Avatar(
+      initial = initial,
+      background = Accent,
+      contentColor = Accent100,
+      size = 40.dp,
+      fontSize = PorygonType.BodyLarge.fontSize,
+      avatar = avatar,
+      // The label above says it; the letter is not read out as well.
+      modifier = Modifier.clearAndSetSemantics {},
+    )
+  }
+}
+
+@Composable
+private fun PeerRow(peer: TrustedPeer, avatar: String, onUnpair: () -> Unit) {
   Row(
     Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 12.dp),
     verticalAlignment = Alignment.CenterVertically,
@@ -270,6 +345,7 @@ private fun PeerRow(peer: TrustedPeer, onUnpair: () -> Unit) {
       contentColor = Accent2100,
       size = 34.dp,
       fontSize = PorygonType.BodyLarge.fontSize,
+      avatar = avatar,
     )
     Column(Modifier.weight(1f)) {
       Text(peer.name, style = PorygonType.RowName, color = TextInk)

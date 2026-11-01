@@ -260,6 +260,7 @@ fun ShareScreen(
             contentColor = Accent2100,
             size = 34.dp,
             fontSize = PorygonType.BodyLarge.fontSize,
+            avatar = state.avatarOf(peer.deviceId),
           )
           Column(Modifier.weight(1f)) {
             Text(peer.name, style = PorygonType.RowName, color = TextInk)
@@ -533,6 +534,7 @@ private fun PersonRow(
         contentColor = if (isYou) Accent100 else Accent2100,
         size = 34.dp,
         fontSize = PorygonType.BodyLarge.fontSize,
+        avatar = person.avatar.value,
       )
       Column(Modifier.weight(1f)) {
         Text(if (isYou) "You" else person.name, style = PorygonType.RowName, color = TextInk)

@@ -38,10 +38,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.Avatars
 import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.ConflictKind
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
+import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.ItemId
 import io.github.molleware.porygonlist.data.sync.DeviceId
@@ -236,7 +238,7 @@ fun ListDetailScreen(
       ItemRow(
         item = item,
         subLabel = itemSubLabel(item, list, state.localDevice),
-        partnerInitial = list.others(state.localDevice).firstOrNull()?.initial ?: "?",
+        partner = list.others(state.localDevice).firstOrNull(),
         onToggle = { onToggleChecked(item.id) },
         onEdit = { onEditItem(item) },
         handle = handle,
@@ -420,7 +422,8 @@ private fun ClearTicked(
 private fun ItemRow(
   item: GroceryItem,
   subLabel: String,
-  partnerInitial: String,
+  /** Who the "editing" mark shows; null draws a question mark. */
+  partner: Person?,
   onToggle: () -> Unit,
   onEdit: () -> Unit,
   /** Held to move the row; goes on its right side, where the grip is. */
@@ -472,7 +475,15 @@ private fun ItemRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
-        Avatar(partnerInitial, Accent2, Accent2100, size = 22.dp, fontSize = PorygonType.Tiny.fontSize)
+        Avatar(
+          partner?.initial ?: "?",
+          Accent2,
+          Accent2100,
+          size = 22.dp,
+          fontSize = PorygonType.Tiny.fontSize,
+          avatar = partner?.avatar?.value ?: Avatars.NONE,
+          name = partner?.name?.ifBlank { null },
+        )
         Text("editing", style = PorygonType.Tiny.copy(fontSize = PorygonType.TabLabel.fontSize * 1.1), color = Accent2800)
       }
     }

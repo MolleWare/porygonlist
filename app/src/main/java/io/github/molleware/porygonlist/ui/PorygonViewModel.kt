@@ -260,6 +260,9 @@ class PorygonViewModel(
     nameDraft = ""
   }
 
+  /** Wears avatar [id] from the catalog on every list, or the initial again for an empty one. */
+  fun chooseAvatar(id: String) = repo.update { s, node -> s.withAvatar(id, node.clock.tick()) }
+
   /** The id other phones know this one by. Shown so two people can check they paired with each other. */
   val deviceId: DeviceId
     get() = identity().deviceId
@@ -750,7 +753,7 @@ class PorygonViewModel(
       // their first list `1`, so two unrelated lists could not be told apart once they met.
       val id = node.ids.nextList()
       val accent = ListAccent.entries[s.lists.size % ListAccent.entries.size]
-      val you = Person(s.localDevice, s.displayName, initialOf(s.displayName))
+      val you = Person(s.localDevice, s.displayName, initialOf(s.displayName), avatar = s.avatar)
       s.copy(lists = s.lists + GroceryList(id, name, accent, items = emptyList(), people = listOf(you)), activeListId = id)
     }
     listDraft = ""

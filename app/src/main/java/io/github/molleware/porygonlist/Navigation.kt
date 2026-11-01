@@ -285,6 +285,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   nameDraft = viewModel.nameDraft,
                   onNameDraftChange = viewModel::onNameDraftChange,
                   onSaveName = viewModel::saveName,
+                  onChooseAvatar = viewModel::chooseAvatar,
                   onPair = {
                     viewModel.startPairing()
                     backStack.add(PairPhone)

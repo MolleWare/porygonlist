@@ -132,13 +132,15 @@ fun ListsScreen(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text("porygonlist", style = PorygonType.Wordmark, color = TextInk)
-      // Your own initial, and the way in to everything about this phone rather than about a list.
+      // Your own initial or avatar, and the way in to everything about this phone rather than about
+      // a list. Already labelled, so the avatar itself goes unsaid.
       Avatar(
         initial = state.displayName.take(1).uppercase(),
         background = Accent,
         contentColor = Accent100,
         size = 38.dp,
         fontSize = PorygonType.BodyLarge.fontSize,
+        avatar = state.avatar.value,
         modifier = Modifier.clip(CircleShape).clickable(onClick = onOpenSettings).semantics { contentDescription = "You and this phone" },
       )
     }
@@ -480,6 +482,9 @@ private fun ListCard(
             background = if (isYou) Accent else Accent2,
             contentColor = if (isYou) Accent100 else Accent2100,
             ringColor = Bg,
+            avatar = person.avatar.value,
+            // The stack says who is on the list, which the line beside it does not always.
+            name = person.name.ifBlank { null },
           )
         }
       }

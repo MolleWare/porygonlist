@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.molleware.porygonlist.data.Avatars
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent100
 import io.github.molleware.porygonlist.theme.Bg
@@ -69,7 +70,14 @@ import io.github.molleware.porygonlist.theme.TextInk
 @Composable
 fun tabBarClearance(): Dp = if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) 16.dp else 88.dp
 
-/** A person's initial in a filled circle. Overlapping avatars tuck under each other by 7dp. */
+/**
+ * A person's initial in a filled circle, or the avatar they chose in its place. Overlapping avatars
+ * tuck under each other by 7dp.
+ *
+ * [avatar] is an [Avatars] id. None, or one this build does not know, draws [initial]. A screen
+ * reader never hears the emoji: it hears [name] where one is given — where the avatar is the only
+ * thing saying who someone is — and nothing where the person is named beside it already.
+ */
 @Composable
 fun Avatar(
   initial: String,
@@ -79,6 +87,8 @@ fun Avatar(
   size: Dp = 26.dp,
   fontSize: TextUnit = PorygonType.Meta.fontSize,
   ringColor: Color? = null,
+  avatar: String = Avatars.NONE,
+  name: String? = null,
 ) {
   Box(
     modifier.size(size).clip(CircleShape).background(background).then(if (ringColor != null) Modifier.border(2.dp, ringColor, CircleShape) else Modifier),
@@ -89,10 +99,24 @@ fun Avatar(
     // full wherever it matters; this is a mark, not text to read.
     val density = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1f)) {
-      Text(initial, color = contentColor, style = PorygonType.MetaBold.copy(fontSize = fontSize))
+      val emoji = Avatars.emojiOf(avatar)
+      if (emoji == null) {
+        Text(initial, color = contentColor, style = PorygonType.MetaBold.copy(fontSize = fontSize))
+      } else {
+        // Sized from the circle alone, for the same reason: half its width, which an emoji glyph
+        // overruns by about a quarter, leaves a margin all round at every size the app draws.
+        Text(
+          emoji,
+          style = TextStyle(fontSize = (size.value * EMOJI_SCALE).sp),
+          modifier = Modifier.clearAndSetSemantics { if (name != null) contentDescription = name },
+        )
+      }
     }
   }
 }
+
+/** An avatar's emoji, as a share of its circle's width. */
+private const val EMOJI_SCALE = 0.5f
 
 /** The small coloured status dot: 9dp beside sync copy, 11dp on a list card. */
 @Composable

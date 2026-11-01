@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.GroceryItem
+import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.sync.ItemId
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent2300
@@ -113,7 +114,7 @@ fun ShopScreen(
           subLabel = shopSubLabel(item, list, state.localDevice),
           // Whoever added it — not the first other person on the list, which put Sam's initial on
           // an item an unpaired phone had added (Pixel, 2026-10-21). Unknown, no mark at all.
-          adderInitial = list.personFor(item.createdBy)?.initial?.ifEmpty { null },
+          adder = list.personFor(item.createdBy)?.takeIf { it.initial.isNotEmpty() },
           createdByOther = item.createdBy != state.localDevice,
           onToggle = { onToggleChecked(item.id) },
         )
@@ -187,7 +188,8 @@ private fun ClearTrolley(
 private fun ShopItemRow(
   item: GroceryItem,
   subLabel: String,
-  adderInitial: String?,
+  /** Whoever added it, when there is an initial to show for them. */
+  adder: Person?,
   createdByOther: Boolean,
   onToggle: () -> Unit,
 ) {
@@ -215,8 +217,8 @@ private fun ShopItemRow(
       Text(subLabel, style = PorygonType.ShopMeta, color = Neutral700, modifier = Modifier.padding(top = 3.dp))
     }
     // Marks something the other person put on the list, so you know whose errand it is.
-    if (createdByOther && !item.checked && adderInitial != null) {
-      Avatar(adderInitial, Accent2300, Accent2900)
+    if (createdByOther && !item.checked && adder != null) {
+      Avatar(adder.initial, Accent2300, Accent2900, avatar = adder.avatar.value, name = adder.name.ifBlank { null })
     }
   }
 }
