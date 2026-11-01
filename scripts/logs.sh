@@ -17,7 +17,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
-readonly PACKAGE="io.github.molleware.porygonlist"
+readonly PACKAGE="$APPLICATION_ID"
 
 require_device
 

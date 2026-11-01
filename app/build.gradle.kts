@@ -49,6 +49,16 @@ android {
     }
 
     buildTypes {
+        debug {
+            // `./scripts/install.sh beside`: a debug build under its own package, installed beside
+            // the release app, so testing a change never touches a phone's own lists and pairing.
+            // Debug and release share a package but not a key, so a plain debug install would
+            // need the release app uninstalled first.
+            if (providers.gradleProperty("beside").isPresent) {
+                applicationIdSuffix = ".next"
+                versionNameSuffix = "-next"
+            }
+        }
         release {
             if (signing != null) signingConfig = signingConfigs.getByName("release")
             // R8: shrink, optimize and obfuscate. Also the prerequisite for

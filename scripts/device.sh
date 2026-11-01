@@ -59,8 +59,9 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
-readonly PACKAGE="io.github.molleware.porygonlist"
-readonly ACTIVITY="$PACKAGE/.MainActivity"
+readonly PACKAGE="$APPLICATION_ID"
+# The class keeps its name when the package gets a suffix, so it is written out in full.
+readonly ACTIVITY="$PACKAGE/io.github.molleware.porygonlist.MainActivity"
 readonly CAPTURES="$REPO_ROOT/captures"
 
 # Long enough for a Compose transition, short enough not to be annoying.

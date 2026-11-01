@@ -17,6 +17,11 @@ if [[ -z "${PORYGONLIST_DEV_CONTAINER:-}" && -f "$REPO_ROOT/scripts/env.local.sh
   source "$REPO_ROOT/scripts/env.local.sh"
 fi
 
+# Which install the scripts drive. PORYGONLIST_BESIDE=1 picks the debug build installed beside the
+# release app by `./scripts/install.sh beside`, so a test never touches the phone's own lists.
+APPLICATION_ID="io.github.molleware.porygonlist${PORYGONLIST_BESIDE:+.next}"
+readonly APPLICATION_ID
+
 info() { printf '\n==> %s\n' "$*"; }
 warn() { printf '\nwarning: %s\n' "$*" >&2; }
 die()  { printf '\nerror: %s\n' "$*" >&2; exit 1; }
