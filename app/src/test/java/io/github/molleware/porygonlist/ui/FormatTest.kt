@@ -6,6 +6,7 @@ import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
+import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.ListId
@@ -158,6 +159,58 @@ class FormatTest {
     val solo = list.copy(people = listOf(Person(me, "Ava", "A")))
 
     assertEquals("just you", listCardMeta(solo, localDevice = me, delivered = DeliveryLog()))
+  }
+
+  // ── A list someone shared, not yet opened ─────────────────────────────────
+
+  private val hugoPaired = TrustedPeer(hugo, byteArrayOf(1), "Hugo", pairedAt = now)
+
+  @Test
+  fun `a new list still names its sender once they are unpaired`() {
+    val arrived = list.copy(arrivedFrom = hugo)
+    val unpaired = stateWith(arrived).copy(peers = listOf(hugoPaired)).retireDevice(hugo, Hlc(now, 0, me))
+
+    // Off the list, but kept on it as a tombstone until his phone hears, and his name with it.
+    assertEquals("new, from Hugo", listCardMeta(unpaired.lists.single(), localDevice = me, delivered = DeliveryLog()))
+  }
+
+  @Test
+  fun `a sender the list no longer names is named from pairing`() {
+    // He left, everyone heard, and his tombstone was collected; this phone is still paired with his.
+    val forgotten = list.copy(people = listOf(Person(me, "Ava", "A")), arrivedFrom = hugo)
+
+    assertEquals("new, from Hugo", listCardMeta(forgotten, me, DeliveryLog(), paired = listOf(hugoPaired)))
+  }
+
+  @Test
+  fun `a sender nobody here knows any more is someone`() {
+    val forgotten = list.copy(people = listOf(Person(me, "Ava", "A")), arrivedFrom = hugo)
+
+    assertEquals("new, from someone", listCardMeta(forgotten, me, DeliveryLog(), paired = emptyList()))
+  }
+
+  // ── The clock on the Lists screen ─────────────────────────────────────────
+
+  private val sundayAfternoon = ZonedDateTime.of(2026, 11, 1, 14, 5, 30, 0, utc).toInstant().toEpochMilli()
+
+  @Test
+  fun `the clock reads the day, the date and the time`() {
+    assertEquals("Sunday 1 November · 14:05", clockLine(sundayAfternoon, utc, is24Hour = true))
+  }
+
+  @Test
+  fun `the clock follows the phone's 12 or 24 hour setting`() {
+    val twelve = clockLine(sundayAfternoon, utc, is24Hour = false)
+
+    // The AM/PM marker is the phone's language's own; the hour is what the setting decides.
+    assertTrue(twelve, twelve.startsWith("Sunday 1 November · 2:05") && !twelve.contains("14"))
+  }
+
+  @Test
+  fun `the clock waits exactly until the next minute`() {
+    assertEquals(29_500, millisToNextMinute(sundayAfternoon + 500))
+    val onTheMinute = ZonedDateTime.of(2026, 11, 1, 14, 6, 0, 0, utc).toInstant().toEpochMilli()
+    assertEquals("a full minute from the minute itself", 60_000, millisToNextMinute(onTheMinute))
   }
 
   // ── In step, from receipts ────────────────────────────────────────────────

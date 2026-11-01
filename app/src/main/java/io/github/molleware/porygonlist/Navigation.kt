@@ -149,8 +149,8 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
 
     // A pairing link opened from outside — a camera app that read someone's QR code, or a tap on a
     // link in a message. It fills the field and opens the screen; it does not pair. The person still
-    // answers "is this someone new, or a replacement?" exactly as they would for a pasted code,
-    // which is what keeps an intent from any app on the phone from being an act of trust.
+    // taps Add, or answers "someone new, or a replacement?", exactly as they would for a pasted
+    // code, which is what keeps an intent from any app on the phone from being an act of trust.
     //
     // Sits below the first-run gate deliberately: until there is a name, there is nobody to pair as,
     // so the link waits rather than being dropped.

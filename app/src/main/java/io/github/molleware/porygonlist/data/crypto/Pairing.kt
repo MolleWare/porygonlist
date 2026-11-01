@@ -114,8 +114,8 @@ object PairingCodec {
    * readable by [decode] so that codes already sent as plain text keep working.
    *
    * Opening one of these never pairs anything. It carries the code to the pairing screen and stops
-   * there, in front of the same "is this someone new?" question a pasted code faces — otherwise any
-   * app or web page able to fire an intent could add itself as a trusted peer.
+   * there, in front of the same Add button a pasted code faces — otherwise any app or web page able
+   * to fire an intent could add itself as a trusted peer.
    *
    * [at] is where this phone is listening right now, and it is what turns one scan into a pairing
    * instead of two. The scanner reads the code, connects straight back, and hands over its own key

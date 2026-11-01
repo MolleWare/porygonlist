@@ -11,7 +11,9 @@ import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListRepository
 import io.github.molleware.porygonlist.data.LocalNode
 import io.github.molleware.porygonlist.data.Origin
+import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.Staple
+import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.WordTrie
 import io.github.molleware.porygonlist.data.seed
 import io.github.molleware.porygonlist.data.crypto.InMemoryIdentityStore
@@ -945,6 +947,43 @@ class PorygonViewModelTest {
 
     assertTrue(state().activeList.people.any { it.device == peer })
     assertTrue("and then they are no longer offered", vm.peersNotOnActiveList(state()).isEmpty())
+  }
+
+  @Test
+  fun `a code from a phone already paired says so, and offers nothing`() = runTest(dispatcher) {
+    repo.load()
+    val code = otherPhone("Ava")
+    vm.onPairCodeChange(code)
+    vm.pairAsNew()
+    testScheduler.advanceUntilIdle()
+
+    vm.onPairCodeChange(code)
+
+    assertNull("nothing to add and nothing to replace", vm.pendingInvite)
+    assertEquals("Ava's phone is already paired.", vm.pairNote)
+    assertEquals(1, state().peers.size)
+  }
+
+  @Test
+  fun `with nobody paired a code goes straight to adding`() = runTest(dispatcher) {
+    repo.load()
+    // The seeded lists name Ava, but no phone is paired with this one.
+
+    vm.onPairCodeChange(otherPhone("Sam"))
+
+    assertEquals("Sam", vm.pendingInvite?.displayName)
+    assertEquals(emptyList<Person>(), vm.replaceCandidates(state()))
+  }
+
+  @Test
+  fun `a new code is asked about when a paired person could be holding it`() = runTest(dispatcher) {
+    repo.load()
+    val ava = state().activeList.people.first { it.device != state().localDevice }
+    repo.update { s, _ -> s.copy(peers = listOf(TrustedPeer(ava.device, byteArrayOf(1), "Ava", pairedAt = 0))) }
+
+    vm.onPairCodeChange(otherPhone("Ava"))
+
+    assertEquals(listOf(ava.device), vm.replaceCandidates(state()).map { it.device })
   }
 
   @Test

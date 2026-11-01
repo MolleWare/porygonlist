@@ -432,33 +432,32 @@ class PorygonViewModel(
     pairCode = value
     val trimmed = value.trim()
     val invite = PairingCodec.decode(trimmed)
-    pendingInvite = invite?.takeIf { it.deviceId != identity().deviceId }
+    // The id is the key's, so the same id is the same phone: there is nothing to add or replace.
+    val paired = invite?.let { state.value?.peerFor(it.deviceId) }
+    pendingInvite = invite?.takeIf { it.deviceId != identity().deviceId && paired == null }
     pairNote =
       when {
         trimmed.isEmpty() -> ""
         invite == null -> "That does not look like a pairing code."
         invite.deviceId == identity().deviceId -> "That is this phone's own code."
+        paired != null -> "${paired.name}'s phone is already paired."
         else -> ""
       }
   }
 
   /**
-   * People who might be holding the phone in the pasted code.
+   * People who might be holding the phone in the pasted code, or the one that just paired itself.
    *
-   * Anyone already on a list, other than this phone and the code's own device. Offering them is
-   * what makes a replaced handset expressible at all: without it, a new phone can only ever be a
-   * new person, and the old id goes on being waited on for receipts it will never send.
+   * Offering them is what makes a replaced handset expressible at all: without it, a new phone can
+   * only ever be a new person, and the old id goes on being waited on for receipts it will never
+   * send. Who counts is [AppState.replaceableBy]; with nobody, the screen goes straight to adding.
    */
-  fun replaceCandidates(state: AppState): List<Person> =
-    state.lists
-      .flatMap { it.people }
-      .distinctBy { it.device }
-      // The phone in question is excluded whether it is still a question or has already paired
-      // itself: a just-added person is on the list now, and offering them as somebody they might
-      // be replacing would let them replace themselves.
-      .filterNot {
-        it.device == state.localDevice || it.device == pendingInvite?.deviceId || it.device == justPaired?.deviceId
-      }
+  fun replaceCandidates(state: AppState): List<Person> {
+    val asked = pendingInvite?.deviceId ?: justPaired?.deviceId ?: return emptyList()
+    // Both cards can be up at once. Neither phone is offered as the other's predecessor: a
+    // just-added person is on a list now, and could otherwise be "replaced" by themselves.
+    return state.replaceableBy(asked).filterNot { it.device == justPaired?.deviceId }
+  }
 
   /**
    * The list this pairing is being done in order to share, if it was started that way.

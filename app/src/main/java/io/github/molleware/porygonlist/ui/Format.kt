@@ -7,6 +7,7 @@ import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
+import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
@@ -52,6 +53,25 @@ fun relativeTime(
     else -> then.format(DATE)
   }
 }
+
+private val DAY = DateTimeFormatter.ofPattern("EEEE d MMMM")
+
+/**
+ * The date and time at the top of the Lists screen: "Sunday 1 November · 14:05".
+ *
+ * The time follows the same 12/24-hour setting as every other time in the app.
+ */
+fun clockLine(
+  now: Long = System.currentTimeMillis(),
+  zone: ZoneId = ZoneId.systemDefault(),
+  is24Hour: Boolean = ClockFormat.is24Hour,
+): String {
+  val at = Instant.ofEpochMilli(now).atZone(zone)
+  return "${at.format(DAY)} · ${at.format(if (is24Hour) TIME_24 else TIME_12)}"
+}
+
+/** How long until the clock next reads a new minute, so a clock on screen can wait exactly that. */
+fun millisToNextMinute(now: Long = System.currentTimeMillis()): Long = 60_000 - Math.floorMod(now, 60_000L)
 
 /**
  * The line under an approved network. It is written once, when the network is approved, and stored,
@@ -102,9 +122,16 @@ fun conflictSide(
   zone: ZoneId = ZoneId.systemDefault(),
 ): String = "${list.nameFor(item.createdBy, localDevice)} added it ${whenPhrase(item.at, now, zone)}"
 
-/** How someone is referred to in running text: "you" on this device, their name anywhere else. */
-fun GroceryList.nameFor(peer: DeviceId, localDevice: DeviceId): String =
-  if (peer == localDevice) "you" else personFor(peer)?.name ?: "someone"
+/**
+ * How someone is referred to in running text: "you" on this device, their name anywhere else.
+ *
+ * The list's own people come first, left ones included. [paired] is the fallback for someone the
+ * list has forgotten — once everyone has heard they left, they are gone from it — while this phone
+ * still knows their name from pairing.
+ */
+fun GroceryList.nameFor(peer: DeviceId, localDevice: DeviceId, paired: List<TrustedPeer> = emptyList()): String =
+  if (peer == localDevice) "you"
+  else personFor(peer)?.name ?: paired.firstOrNull { it.deviceId == peer }?.name ?: "someone"
 
 /** The other people on a list — everyone who is not this device, and has not left it. */
 fun GroceryList.others(localDevice: DeviceId) = people.filter { it.present && it.device != localDevice }
@@ -186,6 +213,8 @@ fun listCardMeta(
   delivered: DeliveryLog,
   /** A "keep which?" or duplicate card is waiting on this list. It is asked only inside the list. */
   needsAnswer: Boolean = false,
+  /** The phones paired with this one, for naming a sender the list itself no longer names. */
+  paired: List<TrustedPeer> = emptyList(),
 ): String {
   val others = list.others(localDevice)
   val behind = list.behind(localDevice, delivered)
@@ -193,7 +222,7 @@ fun listCardMeta(
     needsAnswer -> "a change needs you"
     // Until it is first opened, a list someone shared says so — the one thing that tells it apart
     // from a list of your own with the same name.
-    list.arrivedFrom != null -> "new, from ${list.nameFor(list.arrivedFrom, localDevice)}"
+    list.arrivedFrom != null -> "new, from ${list.nameFor(list.arrivedFrom, localDevice, paired)}"
     others.isEmpty() -> "just you"
     list.liveItems.any { it.editing } -> "${others.first().name} is adding to it"
     behind.isEmpty() -> "in step with ${names(others)}"

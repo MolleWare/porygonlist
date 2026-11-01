@@ -15,10 +15,15 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -553,32 +558,43 @@ private fun PersonRow(
       }
     }
 
+    // People sit near the foot of the screen, so the question opened below the fold and its two
+    // buttons stayed under the tab bar until scrolled to (session 5, both phones). It scrolls itself
+    // into view instead, once it has been measured.
+    val question = remember { BringIntoViewRequester() }
+    LaunchedEffect(confirming) {
+      if (!confirming) return@LaunchedEffect
+      withFrameNanos {}
+      question.bringIntoView()
+    }
     if (confirming) {
-      Text(
-        "Stop sharing this list with ${person.name}?",
-        style = PorygonType.Meta,
-        color = TextInk,
-        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-      )
-      Text(
-        "They keep the copy they have.",
-        style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
-        color = Neutral700,
-        modifier = Modifier.padding(bottom = 12.dp),
-      )
-      Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-        PrimaryButton(
-          "Remove",
-          onConfirmRemove,
+      Column(Modifier.bringIntoViewRequester(question)) {
+        Text(
+          "Stop sharing this list with ${person.name}?",
           style = PorygonType.Meta,
-          contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+          color = TextInk,
+          modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
         )
-        SecondaryButton(
-          "Keep sharing",
-          onCancelRemove,
-          style = PorygonType.Meta,
-          contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        Text(
+          "They keep the copy they have.",
+          style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+          color = Neutral700,
+          modifier = Modifier.padding(bottom = 12.dp),
         )
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+          PrimaryButton(
+            "Remove",
+            onConfirmRemove,
+            style = PorygonType.Meta,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+          )
+          SecondaryButton(
+            "Keep sharing",
+            onCancelRemove,
+            style = PorygonType.Meta,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+          )
+        }
       }
     }
   }

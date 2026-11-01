@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,10 +42,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.lifecycleScope
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.net.BackgroundSync
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListAccent
+import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.theme.Accent
@@ -74,12 +78,16 @@ import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
+import io.github.molleware.porygonlist.ui.clockLine
 import io.github.molleware.porygonlist.ui.itemCountLabel
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.ui.listCardMeta
+import io.github.molleware.porygonlist.ui.millisToNextMinute
 import io.github.molleware.porygonlist.ui.syncDetail
 import io.github.molleware.porygonlist.ui.syncHeadline
 import io.github.molleware.porygonlist.ui.others
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** The home screen: who you share with, whether you are in step, and every list you keep. */
 @Composable
@@ -117,6 +125,7 @@ fun ListsScreen(
   Column(
     modifier.verticalScroll(scrollState).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = tabBarClearance())
   ) {
+    TodayLine(Modifier.padding(bottom = 2.dp))
     Row(
       Modifier.fillMaxWidth().padding(bottom = 16.dp),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -177,6 +186,7 @@ fun ListsScreen(
               list = list,
               localDevice = state.localDevice,
               delivered = state.deliveredTo,
+              paired = state.peers,
               needsAnswer = state.openConflictsOn(list.id).isNotEmpty(),
               onClick = { onOpenList(list.id) },
               onLongClick = { onStartRename(list) },
@@ -297,6 +307,29 @@ private fun ListEditCard(
 }
 
 /**
+ * Today's date and the time, at the top of the Lists screen.
+ *
+ * Its own composable so that each new minute redraws this line and nothing else: the time is read
+ * here and only here, never by the screen around it. It wakes on the minute, and only while the app
+ * is in sight; back in sight, it reads the clock at once rather than at the next minute.
+ */
+@Composable
+private fun TodayLine(modifier: Modifier = Modifier) {
+  var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+  LifecycleStartEffect(Unit) {
+    val ticking =
+      lifecycleScope.launch {
+        while (true) {
+          now = System.currentTimeMillis()
+          delay(millisToNextMinute(now))
+        }
+      }
+    onStopOrDispose { ticking.cancel() }
+  }
+  Text(clockLine(now), style = PorygonType.Meta, color = Neutral700, modifier = modifier)
+}
+
+/**
  * The sync banner: a status readout, worked out from delivery receipts.
  *
  * The detail drops under the headline when the two do not fit on one line — several names, a large
@@ -386,6 +419,7 @@ private fun ListCard(
   list: GroceryList,
   localDevice: DeviceId,
   delivered: DeliveryLog,
+  paired: List<TrustedPeer>,
   needsAnswer: Boolean,
   onClick: () -> Unit,
   onLongClick: () -> Unit,
@@ -424,7 +458,7 @@ private fun ListCard(
       Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         Text(itemCountLabel(list), style = PorygonType.Meta, color = Neutral700)
         Text("·", style = PorygonType.Meta, color = Neutral700.copy(alpha = 0.4f))
-        Text(listCardMeta(list, localDevice, delivered, needsAnswer), style = PorygonType.Meta, color = Neutral700)
+        Text(listCardMeta(list, localDevice, delivered, needsAnswer, paired), style = PorygonType.Meta, color = Neutral700)
       }
     }
     // At least a thumb's width, so a list shared with nobody — one avatar — is still easy to hold.

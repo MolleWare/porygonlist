@@ -740,6 +740,21 @@ data class AppState(
       .pruneDeliveredTombstones()
 
   /**
+   * The people whose phone [newDevice] could be replacing, for "Someone new, or a phone replacing
+   * one?" — empty when it can only be someone new, and then the question is not asked.
+   *
+   * A candidate's old phone is paired with this one and they are still on one of its lists: that is
+   * the id still waited on for receipts, which is all a replacement changes. Someone who was
+   * unpaired is left out — pairing again starts fresh (Hugo, 2026-10-25) — and with nobody paired
+   * at all there is nobody to replace. The asked-about phone is never its own predecessor.
+   */
+  fun replaceableBy(newDevice: DeviceId): List<Person> =
+    visibleLists
+      .flatMap { it.people }
+      .filter { it.present && it.device != localDevice && it.device != newDevice && peerFor(it.device) != null }
+      .distinctBy { it.device }
+
+  /**
    * Stops sharing one list with someone.
    *
    * A stamped tombstone, not a deletion, so the decision travels: to everyone still on the list, and

@@ -244,6 +244,10 @@ fun PairScreen(
     // A valid code is not acted on until it is clear *who* it is. Adding a stranger and recording
     // that someone replaced their handset look identical on the wire and are entirely different
     // things: the second retires an id that is still owed delivery receipts.
+    //
+    // Asked only when it could be a replacement. With nobody it could be replacing, the card is
+    // the Add button alone, which is still a tap: a code that arrived as a link never pairs by
+    // itself. A code for a phone already paired never gets here; the note above says so.
     if (pendingName != null) {
       Column(
         Modifier.fillMaxWidth()
@@ -254,11 +258,13 @@ fun PairScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
       ) {
         Text("That code is $pendingName's phone", style = PorygonType.CardHeading, color = TextInk)
-        Text(
-          "Someone new, or a phone replacing one?",
-          style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
-          color = Neutral700,
-        )
+        if (replaceCandidates.isNotEmpty()) {
+          Text(
+            "Someone new, or a phone replacing one?",
+            style = PorygonType.Meta.copy(lineHeight = PorygonType.Meta.fontSize * 1.5),
+            color = Neutral700,
+          )
+        }
         PrimaryButton(
           if (sharingList != null) "Add $pendingName to $sharingList" else "Add $pendingName",
           onPairAsNew,

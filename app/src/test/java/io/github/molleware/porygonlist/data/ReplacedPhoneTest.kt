@@ -154,4 +154,39 @@ class ReplacedPhoneTest {
     assertEquals("Hugo", list.personFor(hugoOld)?.name)
     assertEquals("Hugo", list.personFor(hugoNew)?.name)
   }
+
+  // ── Whether "Someone new, or a phone replacing one?" is asked at all ──────
+
+  private fun paired(devices: List<DeviceId>) = devices.map { TrustedPeer(it, byteArrayOf(1), it.value, pairedAt = 1_000) }
+
+  @Test
+  fun `someone on a list, on a paired phone, could be getting a new one`() {
+    val state = state(people = pair).copy(peers = paired(listOf(hugoOld)))
+
+    assertEquals(listOf("Hugo"), state.replaceableBy(hugoNew).map { it.name })
+  }
+
+  @Test
+  fun `with nobody paired a new code can only be someone new`() {
+    // Session 6: a phone with nobody paired asked the question anyway, before "Add Ava".
+    val state = state(people = pair)
+
+    assertEquals(emptyList<Person>(), state.replaceableBy(hugoNew))
+  }
+
+  @Test
+  fun `someone unpaired is not offered, because pairing again starts fresh`() {
+    val sam = DeviceId("SAMAAAAAAAAAAAAA")
+    val state =
+      state(people = pair + Person(sam, "Sam", "S")).copy(peers = paired(listOf(hugoOld, sam))).retireDevice(hugoOld, at(10_000))
+
+    assertEquals(listOf("Sam"), state.replaceableBy(hugoNew).map { it.name })
+  }
+
+  @Test
+  fun `a phone is never offered as its own predecessor`() {
+    val state = state(people = pair).copy(peers = paired(listOf(hugoOld)))
+
+    assertEquals(emptyList<Person>(), state.replaceableBy(hugoOld))
+  }
 }
