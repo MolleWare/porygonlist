@@ -114,8 +114,10 @@ private fun removedWhileEdited(remover: GroceryItem, editor: GroceryItem): Boole
  * An item present on only one side is taken as it stands. That is what makes a removal a tombstone
  * rather than an absence: if it simply vanished from the sender, the receiver would read its own
  * live copy as the only truth and hand it back.
+ *
+ * [from] is the phone [theirs] came from, when it is known: see `mergePeople` for what it settles.
  */
-fun merge(mine: GroceryList, theirs: GroceryList): ListMerge {
+fun merge(mine: GroceryList, theirs: GroceryList, from: DeviceId? = null): ListMerge {
   val merged = LinkedHashMap<String, GroceryItem>(mine.items.size + theirs.items.size)
   val clashes = mutableListOf<ItemMerge>()
 
@@ -144,7 +146,7 @@ fun merge(mine: GroceryList, theirs: GroceryList): ListMerge {
         name = named.name,
         nameAt = named.nameAt,
         items = merged.values.toList(),
-        people = mergePeople(mine.people, theirs.people),
+        people = mergePeople(mine.people, theirs.people, from),
       ),
     clashes = clashes,
     duplicates = duplicatesBetween(mine, theirs),
@@ -197,9 +199,9 @@ internal fun duplicatesBetween(mine: GroceryList, theirs: GroceryList): List<Con
  * Membership itself is last-writer-wins on [Person.removed]. A plain union would mean leaving a
  * list never stuck: the other phone's copy still lists you, so the next exchange would put you
  * back. Comparing the stamps makes the later decision the one that holds, whichever end made it.
- * [Person.avatar] is settled by its stamp in the same way.
+ * [Person.avatar] and [Person.name] are settled by their stamps in the same way.
  */
-private fun mergePeople(mine: List<Person>, theirs: List<Person>): List<Person> {
+private fun mergePeople(mine: List<Person>, theirs: List<Person>, from: DeviceId?): List<Person> {
   val people = mine.toMutableList()
 
   theirs.forEach { incoming ->
@@ -225,12 +227,33 @@ private fun mergePeople(mine: List<Person>, theirs: List<Person>): List<Person> 
     // handset reconciliation above so that adopting a newer phone cannot quietly drop a leaving.
     // Their avatar the same way: a phone from before avatars sends none, stamped at the beginning of
     // time, and so never undoes one chosen since.
+    // And their name, by its stamp, with the letter that goes with it.
+    val named = if (namesBetter(incoming, here, from)) incoming else here
     people[index] =
-      reconciled.copy(removed = here.removed.latest(incoming.removed), avatar = here.avatar.latest(incoming.avatar))
+      reconciled.copy(
+        removed = here.removed.latest(incoming.removed),
+        avatar = here.avatar.latest(incoming.avatar),
+        name = named.name,
+        initial = named.initial,
+        nameAt = named.nameAt,
+      )
   }
 
   return people
 }
+
+/**
+ * Whether [incoming]'s name for someone should replace [here]'s.
+ *
+ * A newer stamp wins. With neither stamped — a name nobody has changed since names were stamped,
+ * such as the one given at pairing, or one a 0.1.0 phone sends — the person's own phone, telling us
+ * about themselves, wins: nobody knows their name better. That is what corrects a name that went
+ * stale before names travelled. Anyone else's unstamped copy of them changes nothing, so an old
+ * name passed on can never undo a rename.
+ */
+private fun namesBetter(incoming: Person, here: Person, from: DeviceId?): Boolean =
+  if (incoming.nameAt.wall != 0L || here.nameAt.wall != 0L) incoming.nameAt > here.nameAt
+  else from != null && incoming.wasEver(from) && incoming.name.isNotBlank()
 
 /** The newest stamp anywhere on a list, for folding a peer's clock into this one after a merge. */
 fun GroceryList.newestStamp(): Hlc? = items.map { it.touchedAt }.maxOrNull()

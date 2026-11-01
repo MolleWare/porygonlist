@@ -1,6 +1,7 @@
 package io.github.molleware.porygonlist.data
 
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.Hlc
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -10,6 +11,9 @@ import org.junit.Test
 
 private val ME = DeviceId("avaphone01")
 private val THEM = DeviceId("hugophone2")
+
+/** Naming, at a moment none of these tests cares about. */
+private fun AppState.withDisplayName(name: String) = withDisplayName(name, Hlc(1_700_000_000_000, 0, ME))
 
 /** Rewrites the version marker, leaving the body alone. */
 private fun relabel(text: String, version: String): String =

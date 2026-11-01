@@ -259,6 +259,20 @@ class PorygonViewModelTest {
   }
 
   @Test
+  fun `a name is stamped when it is saved, and a new list starts with the stamp`() = runTest(dispatcher) {
+    repo.load()
+    val before = state().clockHead
+
+    vm.onNameDraftChange("Hugo")
+    vm.saveName()
+    vm.onListDraftChange("Hardware shop")
+    vm.createList()
+
+    assertTrue("stamped by this phone's clock", state().displayNameAt > before)
+    assertEquals(state().displayNameAt, state().activeList.people.single { it.device == state().localDevice }.nameAt)
+  }
+
+  @Test
   fun `choosing an avatar wears it on your lists, stamped, and a new list starts with it`() = runTest(dispatcher) {
     repo.load()
     val before = state().clockHead
@@ -963,6 +977,24 @@ class PorygonViewModelTest {
 
     assertTrue(state().activeList.people.any { it.device == peer })
     assertTrue("and then they are no longer offered", vm.peersNotOnActiveList(state()).isEmpty())
+  }
+
+  @Test
+  fun `someone added to a list goes on it by the newest name known for them`() = runTest(dispatcher) {
+    repo.load()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+    val peer = state().peers.single().deviceId
+    // She has renamed herself since pairing, and one list has heard.
+    repo.update { s, _ ->
+      s.copy(lists = s.lists.map { if (it.id == s.activeListId) it.copy(people = it.people + Person(peer, "Ava B", "A", nameAt = Hlc(5_000, 0, peer))) else it })
+    }
+    vm.onListDraftChange("Hardware shop")
+    vm.createList()
+
+    vm.addPersonToActiveList(peer)
+
+    assertEquals("Ava B", state().activeList.people.single { it.device == peer }.name)
   }
 
   @Test

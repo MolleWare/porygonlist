@@ -2,6 +2,7 @@ package io.github.molleware.porygonlist.data
 
 import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.Hlc
 import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -64,7 +65,7 @@ class SaveFileTest {
     repo.load()
     advanceUntilIdle()
     for (name in listOf("One", "Two", "Three")) {
-      repo.update { state, _ -> state.withDisplayName(name) }
+      repo.update { state, node -> state.withDisplayName(name, node.clock.tick()) }
       advanceUntilIdle()
     }
   }
@@ -149,7 +150,7 @@ class SaveFileTest {
 
   @Test
   fun `a later build that reads the set-aside save gets its lists back`() = runTest {
-    val lost = AppState.seed(localDevice = ME).withDisplayName("Ava")
+    val lost = AppState.seed(localDevice = ME).withDisplayName("Ava", Hlc(1_000, 0, ME))
     setAside.writeText(StateCodec.encode(lost))
     val sinceThen = AppState.empty(localDevice = ME).let { it.copy(idCounter = it.clockHead.wall) }
     file.writeText(StateCodec.encode(sinceThen))
@@ -158,6 +159,7 @@ class SaveFileTest {
 
     assertEquals(lost.lists.map { it.id }, state.lists.map { it.id })
     assertEquals("the name comes back with them", "Ava", state.displayName)
+    assertEquals("and so does when it was set, so it still travels as a rename", lost.displayNameAt, state.displayNameAt)
     assertEquals("the phones it was paired with", lost.peers, state.peers)
     assertEquals("ids stay above both", sinceThen.idCounter, state.idCounter)
     assertFalse("gone once the lists are saved again", setAside.exists())
@@ -170,7 +172,7 @@ class SaveFileTest {
     val renamed = lost.lists.first().copy(name = "Came back from a peer")
     val now = AppState.empty(localDevice = ME).copy(lists = listOf(renamed), displayName = "Ava")
 
-    val merged = now.withRecovered(lost.withDisplayName("Old name"))
+    val merged = now.withRecovered(lost.withDisplayName("Old name", Hlc(1_000, 0, ME)))
 
     assertEquals("Came back from a peer", merged.lists.first { it.id == renamed.id }.name)
     assertEquals(lost.lists.size, merged.lists.size)

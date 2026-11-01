@@ -93,8 +93,9 @@ object ShareCodec {
  * file, and a state with no lists is real, so without it a save cut short after its `meta` line read
  * as a phone with no lists, and the earlier saves that still held them were never tried.
  *
- * Avatars came within version 11, as three columns at the end of `meta` and of `person`: a save from
- * 0.1.0 reads as nobody having chosen one, and 0.1.0 reads one of these by ignoring them.
+ * Avatars came within version 11, as three columns at the end of `meta` and of `person`, and the
+ * stamp of a name as one more after them: a save from 0.1.0 reads as nobody having chosen an avatar
+ * or renamed since, and 0.1.0 reads one of these by ignoring them.
  */
 object StateCodec {
   private const val VERSION = "PLSTATE11"
@@ -152,6 +153,8 @@ object StateCodec {
         state.displayName,
         // Last, so a build from before avatars, which stops at the name, still reads this record.
         *Records.field(state.avatar) { it }.toTypedArray(),
+        // When the name was last set, after the avatar for the same reason.
+        state.displayNameAt.encode(),
       )
     )
 
@@ -219,6 +222,7 @@ object StateCodec {
             it.removed.at.encode(),
             // Their avatar and its stamp, last for the same reason the name is last on `meta`.
             *Records.field(it.avatar) { id -> id }.toTypedArray(),
+            it.nameAt.encode(),
           )
         )
       }
@@ -244,6 +248,7 @@ object StateCodec {
     var activeListId = ""
     var displayName = ""
     var avatar: Field<String>? = null
+    var displayNameAt: Hlc? = null
     // Each `conflict` line opens a card, and the `conflictitem` lines after it fill it in.
     val cards = mutableListOf<RawCard>()
     val networks = mutableListOf<ApprovedNetwork>()
@@ -276,6 +281,8 @@ object StateCodec {
               displayName = f.getOrNull(6).orEmpty()
               // Absent before avatars, including in every 0.1.0 save: the initial, as it was.
               avatar = Records.parseAvatar(f, from = 7, DeviceId(f[1]))
+              // Absent before names were stamped: never renamed since, so any rename outranks it.
+              displayNameAt = Records.parseStamp(f, at = 10, DeviceId(f[1]))
             }
             // Versions up to 8 wrote two ready-made sentences here. They are ignored rather than
             // read: the card works them out from the items now, and a stored one was already stale.
@@ -340,6 +347,7 @@ object StateCodec {
                     ),
                   // Absent before avatars, which reads as none chosen.
                   avatar = Records.parseAvatar(f, from = 8, device),
+                  nameAt = Records.parseStamp(f, at = 11, device),
                 )
             }
             "item" ->
@@ -406,6 +414,7 @@ object StateCodec {
       localDevice = device,
       displayName = displayName,
       avatar = avatar ?: Field(Avatars.NONE, Hlc(0, 0, device)),
+      displayNameAt = displayNameAt ?: Hlc(0, 0, device),
       deliveredTo = DeliveryLog(receipts),
       // renamed.counter already covers the file's highest, and is ahead of it when a migration
       // minted new list ids.

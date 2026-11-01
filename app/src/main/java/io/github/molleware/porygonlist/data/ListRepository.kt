@@ -280,6 +280,8 @@ internal fun AppState.withRecovered(kept: AppState): AppState {
   val networksHere = networks.map { it.fingerprint }.toSet()
   return copy(
     displayName = displayName.ifBlank { kept.displayName },
+    // The name comes back with its stamp, so it does not go out as never renamed.
+    displayNameAt = if (displayName.isBlank()) kept.displayNameAt else displayNameAt,
     idCounter = maxOf(idCounter, kept.idCounter),
     clockHead = maxOf(clockHead, kept.clockHead),
     lists = lists + back,

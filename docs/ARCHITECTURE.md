@@ -375,6 +375,13 @@ optional trailing fields and ignores the extra columns; what it sends back has
 none, which reads as no avatar stamped at the beginning of time, so it can never
 undo one chosen since. The id is stored and sent, never the emoji (`data/Avatars.kt`).
 
+Names travel the same way, by one more column after the avatar on each record: the
+stamp of the last rename. The newer stamp wins. With neither side stamped — a name
+from pairing, or from a 0.1.0 phone — the person's own phone, sending its own
+record, wins; anyone else's unstamped copy changes nothing. A phone's own record
+always carries its owner's name, unless a newer stamp arrives, which only a phone
+they used before can have written.
+
 ---
 
 ## 7. What is left

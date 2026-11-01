@@ -256,7 +256,7 @@ class PorygonViewModel(
   fun saveName() {
     val name = nameDraft.trim()
     if (name.isEmpty()) return
-    repo.update { s, _ -> s.withDisplayName(name) }
+    repo.update { s, node -> s.withDisplayName(name, node.clock.tick()) }
     nameDraft = ""
   }
 
@@ -725,7 +725,8 @@ class PorygonViewModel(
       lists =
         s.lists.map { list ->
           if (list.id != listId || list.personFor(device)?.present == true) list
-          else list.withPersonAdded(device, peer.name, node.clock.tick())
+          // By the newest name known for them, not the one they gave when pairing.
+          else list.withPersonAdded(device, s.nameOf(peer), node.clock.tick())
         }
     )
   }
@@ -753,7 +754,7 @@ class PorygonViewModel(
       // their first list `1`, so two unrelated lists could not be told apart once they met.
       val id = node.ids.nextList()
       val accent = ListAccent.entries[s.lists.size % ListAccent.entries.size]
-      val you = Person(s.localDevice, s.displayName, initialOf(s.displayName), avatar = s.avatar)
+      val you = Person(s.localDevice, s.displayName, initialOf(s.displayName), avatar = s.avatar, nameAt = s.displayNameAt)
       s.copy(lists = s.lists + GroceryList(id, name, accent, items = emptyList(), people = listOf(you)), activeListId = id)
     }
     listDraft = ""

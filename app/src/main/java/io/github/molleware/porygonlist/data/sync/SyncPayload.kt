@@ -66,7 +66,9 @@ object SyncCodec {
             ) +
               // The avatar goes last, so a build from before avatars, which stops at the column above,
               // still reads the rest.
-              Records.field(it.avatar) { id -> id }
+              Records.field(it.avatar) { id -> id } +
+              // When they last renamed themselves, after the avatar for the same reason.
+              it.nameAt.encode()
           )
         )
       }
@@ -121,6 +123,7 @@ object SyncCodec {
                       f.getOrNull(7)?.let { Hlc.decode(it) } ?: Hlc(0, 0, device),
                     ),
                   avatar = Records.parseAvatar(f, from = 8, device),
+                  nameAt = Records.parseStamp(f, at = 11, device),
                 )
             }
             "item" ->

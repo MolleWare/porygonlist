@@ -65,6 +65,15 @@ data class Person(
    * already passed on.
    */
   val avatar: Field<String> = Field(Avatars.NONE, Hlc(0, 0, device)),
+  /**
+   * When [name] was last set by its owner, so a rename reaches everyone else on the list.
+   *
+   * Kept beside the name, as a list's own name keeps its stamp, rather than wrapping it in a [Field]:
+   * only the owner ever renames themselves, so there is never a clash to detect, only an order. A
+   * phone from before this leaves it out, which reads as the beginning of time — its copy of an old
+   * name can never undo a rename. [initial] always comes with the name it was taken from.
+   */
+  val nameAt: Hlc = Hlc(0, 0, device),
 ) {
   fun wasEver(candidate: DeviceId): Boolean = candidate == device || candidate in formerDevices
 
@@ -315,6 +324,7 @@ data class GroceryList(
             person.copy(
               device = newDevice,
               name = name ?: person.name,
+              initial = if (name != null) initialOf(name) else person.initial,
               formerDevices = person.formerDevices + oldDevice - newDevice,
             )
         }
@@ -350,6 +360,10 @@ data class GroceryList(
     } else {
       copy(people = people + Person(device, name, initialOf(name), removed = Field(false, at)), wasSharedWith = emptyList())
     }
+
+  /** [localDevice]'s own name on this list, set to [name] as of [at]. */
+  fun withOwnName(localDevice: DeviceId, name: String, at: Hlc): GroceryList =
+    copy(people = people.map { if (it.device == localDevice) it.copy(name = name, initial = initialOf(name), nameAt = at) else it })
 
   /** [localDevice]'s own avatar on this list, brought up to [avatar] unless what it has is newer. */
   fun withOwnAvatar(localDevice: DeviceId, avatar: Field<String>): GroceryList =
@@ -425,7 +439,11 @@ data class GroceryList(
       name = name,
       accent = accent,
       items = liveItems.map { it.copy(id = newItemId(), editing = false) },
-      people = listOf(me?.let { Person(localDevice, it.name, it.initial, avatar = it.avatar) } ?: Person(localDevice, "", "")),
+      people =
+        listOf(
+          me?.let { Person(localDevice, it.name, it.initial, avatar = it.avatar, nameAt = it.nameAt) }
+            ?: Person(localDevice, "", "")
+        ),
       nameAt = nameAt,
       pinned = pinned,
       wasSharedWith = people.filter { it.present && it.device != localDevice }.map { it.name }.filter { it.isNotBlank() },
@@ -575,6 +593,8 @@ data class AppState(
    * not a problem this has to solve.
    */
   val displayName: String = "",
+  /** When the owner last set [displayName]: the stamp their name travels with. See [Person.nameAt]. */
+  val displayNameAt: Hlc = Hlc(0, 0, localDevice),
   /**
    * The owner's avatar, by its [Avatars] id: [Avatars.NONE] until they choose one.
    *
@@ -738,22 +758,13 @@ data class AppState(
    *
    * A blank name is ignored rather than stored: it would put the app back into first run and throw
    * away the name it already had.
+   *
+   * Stamped [at], so the rename travels: every other phone on those lists takes the newer name.
    */
-  fun withDisplayName(name: String): AppState {
+  fun withDisplayName(name: String, at: Hlc): AppState {
     val trimmed = name.trim()
     if (trimmed.isEmpty()) return this
-    return copy(
-      displayName = trimmed,
-      lists =
-        lists.map { list ->
-          list.copy(
-            people =
-              list.people.map {
-                if (it.device == localDevice) it.copy(name = trimmed, initial = initialOf(trimmed)) else it
-              }
-          )
-        },
-    )
+    return copy(displayName = trimmed, displayNameAt = at, lists = lists.map { it.withOwnName(localDevice, trimmed, at) })
   }
 
   /**
@@ -778,6 +789,17 @@ data class AppState(
   fun avatarOf(device: DeviceId): String =
     if (device == localDevice) avatar.value
     else lists.flatMap { it.people }.filter { it.wasEver(device) }.maxByOrNull { it.avatar.at }?.avatar?.value ?: Avatars.NONE
+
+  /**
+   * What to call a paired phone's owner: the newest name any list has for them, or failing that the
+   * one they gave when pairing, which a rename since leaves behind.
+   */
+  fun nameOf(peer: TrustedPeer): String =
+    lists
+      .flatMap { it.people }
+      .filter { it.wasEver(peer.deviceId) && it.name.isNotBlank() }
+      .maxByOrNull { it.nameAt }
+      ?.name ?: peer.name
 
   fun peerFor(device: DeviceId): TrustedPeer? = peers.firstOrNull { it.deviceId == device }
 

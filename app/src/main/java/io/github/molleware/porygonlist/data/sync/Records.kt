@@ -76,6 +76,12 @@ internal object Records {
   fun parseAvatar(f: List<String>, from: Int, device: DeviceId): Field<String> =
     (if (f.size >= from + 3) parseField(f, from) { it } else null) ?: Field(Avatars.NONE, Hlc(0, 0, device))
 
+  /**
+   * Reads a stamp at [at], such as when a name was last set. Absent from anything written before it
+   * was, which reads as the beginning of time by [device], so any real stamp outranks it.
+   */
+  fun parseStamp(f: List<String>, at: Int, device: DeviceId): Hlc = f.getOrNull(at)?.let { Hlc.decode(it) } ?: Hlc(0, 0, device)
+
   fun bool(value: Boolean): String = if (value) "1" else "0"
 
   private fun escape(s: String) = s.replace("\\", "\\\\").replace("|", "\\p").replace("\n", "\\n")

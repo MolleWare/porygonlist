@@ -5,7 +5,7 @@ import java.util.zip.CRC32
 /**
  * A save as 0.1.0 (`ef88918`) wrote it: version 11 and sealed, but its `list` records stop at
  * `arrivedFrom`, before a kept copy noted who it had been shared with, and its `meta` and `person`
- * records stop before the avatar.
+ * records stop before the avatar and the stamp of a rename.
  *
  * Re-sealed with a fresh checksum, so it reads as the undamaged file that build wrote rather than as
  * a damaged new one. The writer was unchanged from `ef88918` until those fields, so this is its output.
@@ -30,7 +30,8 @@ fun as010(encoded: String): String {
 
 /**
  * A sync payload as 0.1.0 (`ef88918`) sends it: `PLSYNC2`, with `person` records that stop at the
- * stamp of their leaving, before the avatar. Everything else that build sent is unchanged since.
+ * stamp of their leaving, before the avatar and the name's stamp. Everything else that build sent
+ * is unchanged since.
  */
 fun payloadAs010(encoded: String): String =
   encoded.lineSequence().joinToString("\n") { if (it.startsWith("person|")) firstColumns(it, PERSON_COLUMNS_010) else it }

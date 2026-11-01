@@ -248,6 +248,10 @@ private class Console(
         vm.saveRename()
       }
       "avatar" -> vm.chooseAvatar(if (rest == "none") Avatars.NONE else rest)
+      "name" -> {
+        vm.onNameDraftChange(rest)
+        vm.saveName()
+      }
       "leave", "deletelist" -> vm.deleteList(state.activeListId)
       "share" -> vm.addPersonToActiveList(peer(rest))
       "kick" -> vm.removePersonFromActiveList(peer(rest))
@@ -352,7 +356,7 @@ private class Console(
   companion object {
     const val HELP =
       "state | lists | code | pair <link> | found | open <list|index> | newlist <name> | renamelist <name> | leave | " +
-        "avatar <id>|none | " +
+        "name <name> | avatar <id>|none | " +
         "share <peer> | kick <peer> | unpair <peer> | add <item> | bulk <n> [prefix] | tick <item> | " +
         "rename <item> => <name> | qty <item> <n> | remove <item> | keep mine|theirs|both | offline | online | quit"
   }

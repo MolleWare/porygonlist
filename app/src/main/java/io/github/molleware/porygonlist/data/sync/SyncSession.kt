@@ -105,7 +105,7 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
     lists.map { mine ->
       val theirs = applicable.firstOrNull { it.id == mine.id } ?: return@map mine
       if (theirs.people.none { it.wasEver(payload.from) }) return@map mine
-      val result = merge(mine, theirs)
+      val result = merge(mine, theirs, from = payload.from)
       clashes += result.clashes
       // Each question remembers its list, so it is asked on that list and answered there.
       duplicates += result.duplicates.map { it.copy(listId = mine.id) }
@@ -123,7 +123,28 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
    */
   val ownAvatar =
     arrived.mapNotNull { it.personFor(localDevice)?.avatar }.fold(avatar) { newest, seen -> newest.latest(seen) }
-  val mergedLists = arrived.map { it.withOwnAvatar(localDevice, ownAvatar) }
+
+  /*
+   * The owner's own name, which this phone knows best: only the owner renames themselves, so what
+   * arrives for them is at most what this phone sent, or older. Their record on every list is set to
+   * it — a list they are invited onto names them as the sender had them, often the name given at
+   * pairing — and it goes back out right, from the one phone whose word on it wins a tie.
+   *
+   * The one exception is a newer stamp, which only a phone they used before this one can have
+   * written. It is taken, as their avatar is, so that every phone ends up agreeing.
+   */
+  val renamedElsewhere =
+    arrived
+      .mapNotNull { it.personFor(localDevice) }
+      .filter { it.name.isNotBlank() && it.nameAt.wall != 0L && it.nameAt > displayNameAt }
+      .maxByOrNull { it.nameAt }
+  val ownName = renamedElsewhere?.name ?: displayName
+  val ownNameAt = renamedElsewhere?.nameAt ?: displayNameAt
+
+  val mergedLists =
+    arrived.map { list ->
+      list.withOwnAvatar(localDevice, ownAvatar).let { if (ownName.isBlank()) it else it.withOwnName(localDevice, ownName, ownNameAt) }
+    }
 
   clock.observe(payload.at)
   mergedLists.mapNotNull { it.newestStamp() }.maxOrNull()?.let { clock.observe(it) }
@@ -159,7 +180,15 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
 
   return SyncResult.Merged(
     state =
-      copy(lists = mergedLists + kept.values, activeListId = active, clockHead = clock.head(), conflicts = cards, avatar = ownAvatar)
+      copy(
+          lists = mergedLists + kept.values,
+          activeListId = active,
+          clockHead = clock.head(),
+          conflicts = cards,
+          avatar = ownAvatar,
+          displayName = ownName,
+          displayNameAt = ownNameAt,
+        )
         .pruneDeliveredTombstones(),
     clashes = clashes,
     duplicates = duplicates,

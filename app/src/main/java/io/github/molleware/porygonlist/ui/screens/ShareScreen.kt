@@ -249,13 +249,15 @@ fun ShareScreen(
     )
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
       pairablePeers.forEach { peer ->
+        // As they call themselves now, which a rename since pairing has changed.
+        val name = state.nameOf(peer)
         Row(
           Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 12.dp),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
           Avatar(
-            initial = peer.name.take(1).uppercase(),
+            initial = name.take(1).uppercase(),
             background = Accent2,
             contentColor = Accent2100,
             size = 34.dp,
@@ -263,7 +265,7 @@ fun ShareScreen(
             avatar = state.avatarOf(peer.deviceId),
           )
           Column(Modifier.weight(1f)) {
-            Text(peer.name, style = PorygonType.RowName, color = TextInk)
+            Text(name, style = PorygonType.RowName, color = TextInk)
             Text("Paired with this phone, not on this list", style = PorygonType.Fine, color = Neutral700)
           }
           PrimaryButton(

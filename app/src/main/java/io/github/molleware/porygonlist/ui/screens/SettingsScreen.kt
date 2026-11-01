@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.Avatars
 import io.github.molleware.porygonlist.data.TrustedPeer
+import io.github.molleware.porygonlist.data.initialOf
 import io.github.molleware.porygonlist.data.net.BackgroundSync
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.theme.Accent
@@ -165,7 +166,8 @@ fun SettingsScreen(
       )
     } else {
       Column(verticalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-        state.peers.forEach { PeerRow(it, state.avatarOf(it.deviceId)) { onUnpair(it.deviceId) } }
+        // Named as they call themselves now, which a rename since pairing has changed.
+        state.peers.forEach { PeerRow(it, state.nameOf(it), state.avatarOf(it.deviceId)) { onUnpair(it.deviceId) } }
       }
     }
     SecondaryButton("Pair a phone", onPair, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
@@ -333,14 +335,14 @@ private fun AvatarOption(initial: String, avatar: String, label: String, selecte
 }
 
 @Composable
-private fun PeerRow(peer: TrustedPeer, avatar: String, onUnpair: () -> Unit) {
+private fun PeerRow(peer: TrustedPeer, name: String, avatar: String, onUnpair: () -> Unit) {
   Row(
     Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 12.dp),
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(12.dp),
   ) {
     Avatar(
-      initial = peer.name.take(1).uppercase(),
+      initial = initialOf(name),
       background = Accent2,
       contentColor = Accent2100,
       size = 34.dp,
@@ -348,7 +350,7 @@ private fun PeerRow(peer: TrustedPeer, avatar: String, onUnpair: () -> Unit) {
       avatar = avatar,
     )
     Column(Modifier.weight(1f)) {
-      Text(peer.name, style = PorygonType.RowName, color = TextInk)
+      Text(name, style = PorygonType.RowName, color = TextInk)
       Text(peer.deviceId.value, style = PorygonType.Fine, color = Neutral700)
     }
     SecondaryButton(
