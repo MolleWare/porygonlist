@@ -53,15 +53,20 @@ object SyncCodec {
       list.people.forEach {
         appendLine(
           Records.line(
-            "person",
-            list.id.value,
-            it.device.value,
-            it.name,
-            it.initial,
-            it.formerDevices.joinToString(",") { former -> former.value },
-            // Leaving is the one piece of membership a peer has to be told about, so it travels.
-            if (it.removed.value) "1" else "0",
-            it.removed.at.encode(),
+            listOf(
+              "person",
+              list.id.value,
+              it.device.value,
+              it.name,
+              it.initial,
+              it.formerDevices.joinToString(",") { former -> former.value },
+              // Leaving is the one piece of membership a peer has to be told about, so it travels.
+              if (it.removed.value) "1" else "0",
+              it.removed.at.encode(),
+            ) +
+              // The avatar goes last, so a build from before avatars, which stops at the column above,
+              // still reads the rest.
+              Records.field(it.avatar) { id -> id }
           )
         )
       }
@@ -115,6 +120,7 @@ object SyncCodec {
                       f.getOrNull(6) == "1",
                       f.getOrNull(7)?.let { Hlc.decode(it) } ?: Hlc(0, 0, device),
                     ),
+                  avatar = Records.parseAvatar(f, from = 8, device),
                 )
             }
             "item" ->

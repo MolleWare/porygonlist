@@ -101,7 +101,7 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
   val clashes = mutableListOf<ItemMerge>()
   val duplicates = mutableListOf<Conflict>()
   val edited = mutableListOf<Conflict>()
-  val mergedLists =
+  val arrived =
     lists.map { mine ->
       val theirs = applicable.firstOrNull { it.id == mine.id } ?: return@map mine
       if (theirs.people.none { it.wasEver(payload.from) }) return@map mine
@@ -112,6 +112,18 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
       edited += result.clashes.map { Conflict(it.mine, it.theirs, ConflictKind.EDITED, mine.id) }
       result.list
     } + invitations.map { it.copy(arrivedFrom = payload.from) } // so the card can say who it is from
+
+  /*
+   * The owner's own avatar, as the newest anyone has for them.
+   *
+   * A list they are invited onto arrives with their record as the sender knows it, which may be from
+   * before their last choice, or from no choice at all; brought up to date, it goes back out right.
+   * The other way round, a phone that replaced theirs starts with none chosen, and the lists it is
+   * handed carry the one they chose before, which it then wears too.
+   */
+  val ownAvatar =
+    arrived.mapNotNull { it.personFor(localDevice)?.avatar }.fold(avatar) { newest, seen -> newest.latest(seen) }
+  val mergedLists = arrived.map { it.withOwnAvatar(localDevice, ownAvatar) }
 
   clock.observe(payload.at)
   mergedLists.mapNotNull { it.newestStamp() }.maxOrNull()?.let { clock.observe(it) }
@@ -147,7 +159,7 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
 
   return SyncResult.Merged(
     state =
-      copy(lists = mergedLists + kept.values, activeListId = active, clockHead = clock.head(), conflicts = cards)
+      copy(lists = mergedLists + kept.values, activeListId = active, clockHead = clock.head(), conflicts = cards, avatar = ownAvatar)
         .pruneDeliveredTombstones(),
     clashes = clashes,
     duplicates = duplicates,

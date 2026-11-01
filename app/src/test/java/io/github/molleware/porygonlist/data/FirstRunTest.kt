@@ -23,7 +23,8 @@ private fun asVersion6(text: String): String =
   relabel(text, "PLSTATE6")
     .lineSequence()
     .filterNot { it.startsWith("staple|") }
-    .map { if (it.startsWith("meta|")) it.substringBeforeLast('|') else it }
+    // `meta` up to the retired `online` flag: the name, and the avatar after it, came later.
+    .map { if (it.startsWith("meta|")) it.split('|').take(6).joinToString("|") else it }
     .joinToString("\n")
 
 /**

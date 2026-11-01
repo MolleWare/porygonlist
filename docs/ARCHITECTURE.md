@@ -368,6 +368,13 @@ line rather than lose the file, so without it a save cut short read as a phone
 with no lists. The two saves before the current one are kept, and a refused save
 falls back to the newest that reads.
 
+Avatars (0.2.0) came without a new version of either format: three columns —
+the catalog id, its stamp and what it was written against — at the end of
+`person` in both, and of `meta` in the state file. 0.1.0 reads both records with
+optional trailing fields and ignores the extra columns; what it sends back has
+none, which reads as no avatar stamped at the beginning of time, so it can never
+undo one chosen since. The id is stored and sent, never the emoji (`data/Avatars.kt`).
+
 ---
 
 ## 7. What is left

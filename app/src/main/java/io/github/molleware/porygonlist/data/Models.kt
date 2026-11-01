@@ -57,6 +57,14 @@ data class Person(
    * everyone. The default stamp is the beginning of time, so any real decision outranks it.
    */
   val removed: Field<Boolean> = Field(false, Hlc(0, 0, device)),
+  /**
+   * The avatar they chose, by its [Avatars] id, or [Avatars.NONE] for their initial.
+   *
+   * Stamped, unlike the name, because not every phone sends it: one from before avatars leaves it
+   * out, and that reads as the beginning of time, so it can never undo a choice another phone has
+   * already passed on.
+   */
+  val avatar: Field<String> = Field(Avatars.NONE, Hlc(0, 0, device)),
 ) {
   fun wasEver(candidate: DeviceId): Boolean = candidate == device || candidate in formerDevices
 
@@ -343,6 +351,10 @@ data class GroceryList(
       copy(people = people + Person(device, name, initialOf(name), removed = Field(false, at)), wasSharedWith = emptyList())
     }
 
+  /** [localDevice]'s own avatar on this list, brought up to [avatar] unless what it has is newer. */
+  fun withOwnAvatar(localDevice: DeviceId, avatar: Field<String>): GroceryList =
+    copy(people = people.map { if (it.device == localDevice) it.copy(avatar = it.avatar.latest(avatar)) else it })
+
   /**
    * Drops tombstones every peer has confirmed receiving.
    *
@@ -413,7 +425,7 @@ data class GroceryList(
       name = name,
       accent = accent,
       items = liveItems.map { it.copy(id = newItemId(), editing = false) },
-      people = listOf(Person(localDevice, me?.name.orEmpty(), me?.initial.orEmpty())),
+      people = listOf(me?.let { Person(localDevice, it.name, it.initial, avatar = it.avatar) } ?: Person(localDevice, "", "")),
       nameAt = nameAt,
       pinned = pinned,
       wasSharedWith = people.filter { it.present && it.device != localDevice }.map { it.name }.filter { it.isNotBlank() },
@@ -563,6 +575,13 @@ data class AppState(
    * not a problem this has to solve.
    */
   val displayName: String = "",
+  /**
+   * The owner's avatar, by its [Avatars] id: [Avatars.NONE] until they choose one.
+   *
+   * Kept here as well as on each list, like [displayName], so a list made or joined later starts
+   * with it. The stamp is the moment it was chosen, and travels with it.
+   */
+  val avatar: Field<String> = Field(Avatars.NONE, Hlc(0, 0, localDevice)),
   /** Highest id counter handed out here. Persisted so an id is never reused after a restart. */
   val idCounter: Long,
   /** Newest stamp this device has issued or seen. Persisted so the clock never goes backwards. */
@@ -736,6 +755,29 @@ data class AppState(
         },
     )
   }
+
+  /**
+   * Records the owner's avatar — here, and on every list they are already on, as a name is.
+   *
+   * Stamped [at], so the choice outranks whatever another phone's copy of their record says. Only
+   * [Avatars.NONE] or a free avatar this build knows can be chosen; choosing the one already worn
+   * changes nothing, rather than sending the same choice round again under a new stamp.
+   */
+  fun withAvatar(id: String, at: Hlc): AppState {
+    if (id != Avatars.NONE && Avatars.byId(id)?.free != true) return this
+    if (id == avatar.value) return this
+    val chosen = avatar.set(id, at)
+    return copy(avatar = chosen, lists = lists.map { it.withOwnAvatar(localDevice, chosen) })
+  }
+
+  /**
+   * The avatar to show for [device]: the owner's own, or the newest any list has for that person.
+   *
+   * For screens about a paired phone rather than a list, which have no list's copy to read.
+   */
+  fun avatarOf(device: DeviceId): String =
+    if (device == localDevice) avatar.value
+    else lists.flatMap { it.people }.filter { it.wasEver(device) }.maxByOrNull { it.avatar.at }?.avatar?.value ?: Avatars.NONE
 
   fun peerFor(device: DeviceId): TrustedPeer? = peers.firstOrNull { it.deviceId == device }
 

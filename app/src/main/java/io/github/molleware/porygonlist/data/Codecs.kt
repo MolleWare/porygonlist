@@ -92,6 +92,9 @@ object ShareCodec {
  * file without a matching one is refused. The reader skips a malformed line rather than lose the
  * file, and a state with no lists is real, so without it a save cut short after its `meta` line read
  * as a phone with no lists, and the earlier saves that still held them were never tried.
+ *
+ * Avatars came within version 11, as three columns at the end of `meta` and of `person`: a save from
+ * 0.1.0 reads as nobody having chosen one, and 0.1.0 reads one of these by ignoring them.
  */
 object StateCodec {
   private const val VERSION = "PLSTATE11"
@@ -147,6 +150,8 @@ object StateCodec {
         // A retired `online` flag, kept as "1" so the name stays in its column for any older build.
         "1",
         state.displayName,
+        // Last, so a build from before avatars, which stops at the name, still reads this record.
+        *Records.field(state.avatar) { it }.toTypedArray(),
       )
     )
 
@@ -212,6 +217,8 @@ object StateCodec {
             // lets a later decision at either end win, and without it a leaving never sticks.
             it.removed.value.bool(),
             it.removed.at.encode(),
+            // Their avatar and its stamp, last for the same reason the name is last on `meta`.
+            *Records.field(it.avatar) { id -> id }.toTypedArray(),
           )
         )
       }
@@ -236,6 +243,7 @@ object StateCodec {
     // only matters once, in migrateListIds, so everything up to there treats it as opaque text.
     var activeListId = ""
     var displayName = ""
+    var avatar: Field<String>? = null
     // Each `conflict` line opens a card, and the `conflictitem` lines after it fill it in.
     val cards = mutableListOf<RawCard>()
     val networks = mutableListOf<ApprovedNetwork>()
@@ -266,6 +274,8 @@ object StateCodec {
               // f[5] is the retired `online` flag; ignored.
               // Absent in a version 6 file, which simply means this phone has yet to be told.
               displayName = f.getOrNull(6).orEmpty()
+              // Absent before avatars, including in every 0.1.0 save: the initial, as it was.
+              avatar = Records.parseAvatar(f, from = 7, DeviceId(f[1]))
             }
             // Versions up to 8 wrote two ready-made sentences here. They are ignored rather than
             // read: the card works them out from the items now, and a stored one was already stale.
@@ -328,6 +338,8 @@ object StateCodec {
                       f.getOrNull(6) == "1",
                       f.getOrNull(7)?.let { Hlc.decode(it) } ?: Hlc(0, 0, device),
                     ),
+                  // Absent before avatars, which reads as none chosen.
+                  avatar = Records.parseAvatar(f, from = 8, device),
                 )
             }
             "item" ->
@@ -393,6 +405,7 @@ object StateCodec {
     return AppState(
       localDevice = device,
       displayName = displayName,
+      avatar = avatar ?: Field(Avatars.NONE, Hlc(0, 0, device)),
       deliveredTo = DeliveryLog(receipts),
       // renamed.counter already covers the file's highest, and is ahead of it when a migration
       // minted new list ids.

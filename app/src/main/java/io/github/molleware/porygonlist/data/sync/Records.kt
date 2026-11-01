@@ -1,5 +1,6 @@
 package io.github.molleware.porygonlist.data.sync
 
+import io.github.molleware.porygonlist.data.Avatars
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.device
@@ -64,6 +65,16 @@ internal object Records {
     val basedOn = f[from + 2].takeIf { it.isNotEmpty() }?.let { Hlc.decode(it) ?: return null }
     return Field(value, at, basedOn)
   }
+
+  /**
+   * Reads an avatar written by [field] at [from], for a person or the owner.
+   *
+   * Absent from anything written before avatars — a 0.1.0 phone's payload, or its save — which reads
+   * as no avatar, stamped at the beginning of time by [device]: any avatar chosen anywhere outranks
+   * it. A damaged one reads the same way rather than costing the record.
+   */
+  fun parseAvatar(f: List<String>, from: Int, device: DeviceId): Field<String> =
+    (if (f.size >= from + 3) parseField(f, from) { it } else null) ?: Field(Avatars.NONE, Hlc(0, 0, device))
 
   fun bool(value: Boolean): String = if (value) "1" else "0"
 

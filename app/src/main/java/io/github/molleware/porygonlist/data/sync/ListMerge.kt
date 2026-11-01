@@ -197,6 +197,7 @@ internal fun duplicatesBetween(mine: GroceryList, theirs: GroceryList): List<Con
  * Membership itself is last-writer-wins on [Person.removed]. A plain union would mean leaving a
  * list never stuck: the other phone's copy still lists you, so the next exchange would put you
  * back. Comparing the stamps makes the later decision the one that holds, whichever end made it.
+ * [Person.avatar] is settled by its stamp in the same way.
  */
 private fun mergePeople(mine: List<Person>, theirs: List<Person>): List<Person> {
   val people = mine.toMutableList()
@@ -222,7 +223,10 @@ private fun mergePeople(mine: List<Person>, theirs: List<Person>): List<Person> 
 
     // Whichever end decided most recently owns whether they are still on the list. Taken after the
     // handset reconciliation above so that adopting a newer phone cannot quietly drop a leaving.
-    people[index] = reconciled.copy(removed = here.removed.latest(incoming.removed))
+    // Their avatar the same way: a phone from before avatars sends none, stamped at the beginning of
+    // time, and so never undoes one chosen since.
+    people[index] =
+      reconciled.copy(removed = here.removed.latest(incoming.removed), avatar = here.avatar.latest(incoming.avatar))
   }
 
   return people
