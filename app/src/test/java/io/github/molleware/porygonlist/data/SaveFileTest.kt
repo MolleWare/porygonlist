@@ -89,11 +89,38 @@ class SaveFileTest {
   }
 
   @Test
+  fun `ids handed out in a save that is passed over never come round again`() = runTest {
+    saveThree()
+    file.writeText(file.readText().take(40))
+
+    val state = reopened()
+
+    assertTrue("above anything the cut save can have minted", state.idCounter > 1_000_000_000L)
+    assertEquals("and kept so on disk", state.idCounter, StateCodec.decode(file.readText())?.idCounter)
+  }
+
+  @Test
+  fun `a save passed over does not take a backup's place`() = runTest {
+    saveThree()
+    file.writeText(file.readText().take(40))
+
+    reopened()
+
+    val onDisk = listOf(file, saved(1), saved(2)).filter { it.exists() }
+    assertTrue("every save left on disk reads", onDisk.all { runCatching { StateCodec.decode(it.readText()) }.getOrNull() != null })
+    assertTrue("with a backup behind the current one", saved(1).exists() || saved(2).exists())
+  }
+
+  @Test
   fun `a phone that died between the two renames opens the save before`() = runTest {
     saveThree()
+    val before = StateCodec.decode(saved(1).readText())!!.idCounter
     file.delete()
 
-    assertEquals("Two", reopened().displayName)
+    val state = reopened()
+
+    assertEquals("Two", state.displayName)
+    assertEquals("nothing newer was passed over, so ids carry on", before, state.idCounter)
   }
 
   @Test

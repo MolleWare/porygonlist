@@ -96,7 +96,7 @@ class FileListRepository(
   override suspend fun load() {
     if (_state.value != null) return
     val me = identity().deviceId
-    val (restored, anySave) = withContext(io) { newestReadable() }
+    val (restored, anySave, skipped) = withContext(io) { newestReadable() }
 
     // A file authored under a different identity is not this phone's state. That happens if the
     // keystore entry was cleared — the old items are unattributable, so start clean rather than
@@ -111,7 +111,19 @@ class FileListRepository(
 
     if (restored != null) {
       // Receipts may have arrived after the last save; settle anything they now make collectable.
-      val settled = restored.pruneDeliveredTombstones()
+      val pruned = restored.pruneDeliveredTombstones()
+      // A newer save was passed over. It is damage, not a fault in the reader, since this build
+      // reads an older one: it goes, rather than taking a backup's place at the next save. The ids
+      // it handed out are unknown, and a peer may already hold items under them, so jump past them
+      // as the blank start below does; the margin covers a clock set back since, for a save holds
+      // at most one burst of edits.
+      val settled =
+        if (skipped.isEmpty()) {
+          pruned
+        } else {
+          withContext(io) { writeLock.withLock { skipped.forEach { runCatching { it.delete() } } } }
+          pruned.copy(idCounter = maxOf(System.currentTimeMillis(), pruned.idCounter + LOST_SAVE_IDS))
+        }
       val recovered = withContext(io) { retryUnreadable(settled) }
       val loaded = recovered ?: settled
       node = loaded.toNode()
@@ -138,11 +150,16 @@ class FileListRepository(
     schedulePersist(blank)
   }
 
-  /** The newest save that decodes, and whether there was any save at all. */
-  private fun newestReadable(): Pair<AppState?, Boolean> {
+  /**
+   * The newest save that decodes, whether there was any save at all, and the newer saves passed
+   * over to reach it.
+   */
+  private fun newestReadable(): Triple<AppState?, Boolean, List<File>> {
     val saves = (listOf(file) + previous).filter { it.exists() }
-    val state = saves.firstNotNullOfOrNull { runCatching { StateCodec.decode(it.readText()) }.getOrNull() }
-    return state to saves.isNotEmpty()
+    val readable = saves.withIndex().firstNotNullOfOrNull { (i, save) ->
+      runCatching { StateCodec.decode(save.readText()) }.getOrNull()?.let { i to it }
+    }
+    return Triple(readable?.second, saves.isNotEmpty(), saves.take(readable?.first ?: 0))
   }
 
   /** Copies the newest save aside, unless an earlier failure already did: that one holds the lists. */
@@ -241,6 +258,9 @@ class FileListRepository(
   private companion object {
     /** Saves kept besides the current one. Each is the whole state: a few KB. */
     const val KEPT_SAVES = 2
+
+    /** More ids than one save's worth of edits can mint, even a long paste. */
+    const val LOST_SAVE_IDS = 1_000_000L
   }
 }
 
