@@ -101,7 +101,8 @@ object ShareCodec {
  *
  * Recipes came the same way: a `recipe` record, which 0.1.0 skips as a type it does not know, and
  * three columns at the end of `item` saying which recipes it is for, which it never reads. So did
- * the background sync switch, as a `background` record.
+ * the background sync switch, as a `background` record. And when this phone heard of a removal: one
+ * stamp at the very end of `item` and of `person`, never sent, which 0.1.0 does not read either.
  */
 object StateCodec {
   private const val VERSION = "PLSTATE11"
@@ -241,12 +242,17 @@ object StateCodec {
             // Their avatar and its stamp, last for the same reason the name is last on `meta`.
             *Records.field(it.avatar) { id -> id }.toTypedArray(),
             it.nameAt.encode(),
+            // When this phone heard of their leaving, after everything a payload carries too, and only
+            // when there is such a thing. Only here: the sync payload's person record stops above.
+            *listOfNotNull(it.removalHeardAt?.encode()).toTypedArray(),
           )
         )
       }
       list.items.forEach { item ->
-        // `editing` is presence, not state — it is never written.
-        appendLine(record(*(listOf("item", list.id.value) + itemFields(item)).toTypedArray()))
+        // `editing` is presence, not state — it is never written. When this phone heard of the
+        // item's removal goes after everything the payload's item record carries, here only, and
+        // only for a removal heard of from elsewhere.
+        appendLine(record(*(listOf("item", list.id.value) + itemFields(item) + listOfNotNull(item.removalHeardAt?.encode())).toTypedArray()))
       }
     }
   }
@@ -374,10 +380,14 @@ object StateCodec {
                   // Absent before avatars, which reads as none chosen.
                   avatar = Records.parseAvatar(f, from = 8, device),
                   nameAt = Records.parseStamp(f, at = 11, device),
+                  // Absent before it was kept: settled below, once the clock is known.
+                  removalHeardAt = f.getOrNull(PERSON_HEARD)?.let { Hlc.decode(it) },
                 )
             }
-            "item" ->
-              items.getOrPut(f[1]) { mutableListOf() } += (parseItem(f, from = 2) ?: return@runCatching)
+            "item" -> {
+              val item = parseItem(f, from = 2) ?: return@runCatching
+              items.getOrPut(f[1]) { mutableListOf() } += item.copy(removalHeardAt = f.getOrNull(ITEM_HEARD)?.let { Hlc.decode(it) })
+            }
           }
         }
         // One malformed line should not cost the whole file — skip it and keep the rest.
@@ -435,6 +445,24 @@ object StateCodec {
       everyItem.filter { it.id.device == device }.mapNotNull { it.id.value.substringAfter(':').toLongOrNull() }.maxOrNull()
         ?: 0L
     val newestStamp = everyItem.map { it.touchedAt }.maxOrNull()
+    val resumeAt = if (newestStamp != null && newestStamp > head) newestStamp else head
+
+    /*
+     * A removal heard of from another phone, in a save from before that was kept — 0.1.0's, version
+     * 10, or this build's own before it — has no mark, and when it arrived cannot be known. It is
+     * read as heard just now, at the clock this phone resumes from: it is then collected only once
+     * every peer confirms a payload put together after this load, which certainly carries it. The
+     * cost is that it waits for one more exchange with each of them than it might have; read by its
+     * own stamp instead, it could be collected before a peer behind an old receipt had ever heard.
+     * A removal made here needs no mark — its stamp is this phone's own clock — and gets none.
+     */
+    val settled =
+      lists.map { list ->
+        list.copy(
+          items = list.items.map { if (it.removed.value && it.removalHeardAt == null && it.removed.at.device != device) it.copy(removalHeardAt = resumeAt) else it },
+          people = list.people.map { if (it.removed.value && it.removalHeardAt == null && it.removed.at.device != device) it.copy(removalHeardAt = resumeAt) else it },
+        )
+      }
 
     return AppState(
       localDevice = device,
@@ -445,8 +473,8 @@ object StateCodec {
       // renamed.counter already covers the file's highest, and is ahead of it when a migration
       // minted new list ids.
       idCounter = maxOf(renamed.counter, highestLocal),
-      clockHead = if (newestStamp != null && newestStamp > head) newestStamp else head,
-      lists = lists,
+      clockHead = resumeAt,
+      lists = settled,
       // Through the rename, so a migrated file still opens on the list its owner left open. A file
       // can legitimately hold no lists at all, in which case nothing is active and an empty id —
       // never minted — says so.
@@ -495,6 +523,14 @@ object StateCodec {
     val ids = order.associateWith { factory.nextList() }
     return Renamed(ids = ids, counter = factory.peek())
   }
+
+  /**
+   * Where this phone's mark of a heard removal sits: after `item|list|` and the 21 columns the
+   * payload's item record also carries, and after `person`'s twelve. 0.1.0 reads an item's first
+   * nineteen columns and a person's first eight, and ignores the rest of the line.
+   */
+  private const val ITEM_HEARD = 23
+  private const val PERSON_HEARD = 12
 
   // The record shape lives in Records, shared with the sync payload, so an item on disk and an
   // item on the wire can never drift apart.

@@ -267,6 +267,8 @@ private fun mergePeople(mine: List<Person>, theirs: List<Person>, from: DeviceId
         name = named.name,
         initial = named.initial,
         nameAt = named.nameAt,
+        // This phone's own mark, which a peer's copy never carries; see GroceryList.withRemovalsHeard.
+        removalHeardAt = here.removalHeardAt,
       )
   }
 

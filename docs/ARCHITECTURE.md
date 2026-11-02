@@ -283,14 +283,14 @@ with nothing changed is left out. A 200-item list with one tick goes from 75 kB 
 - **The receipt still means what it did**: everything this phone knew when the
   payload was assembled, since what was left out the peer had already confirmed.
   Whether anything is owed at all is still decided on the whole lists.
+- **The limit is the memory.** Copies live only as long as the process, and a
+  phone woken for a background window is usually a new one, so each window still
+  starts with one whole exchange each way. Keeping copies on disk is the lever
+  left, decided against for 0.2.0: it would also have to know that the peer's own
+  save of what it confirmed had landed, which today only a new run says.
 
-One thing these do not settle, and whole lists did not either: with three people,
-a phone that hears of a removal from one of them collects the tombstone as soon
-as the other's receipt is newer than the removal's stamp, though that receipt was
-for a payload put together before it had heard. The third phone never hears.
-Whole lists hand the item back; partial lists leave it on the third phone until
-its next whole payload. Collection needs to know when a phone learned of a
-removal, which nothing records yet.
+With three people, partial lists exposed a fault in collection that whole lists
+had too; see section 5, "heard here".
 
 **The stamp is read at assembly, never at reply time.** It is the sender's proof of
 delivery; a later reading would claim delivery of changes that never left. This is
@@ -336,6 +336,21 @@ has passed it.
   assumed up to date. Forgetting is the dangerous direction.
 - **No time-based expiry.** Age is not evidence of delivery; a phone off for six
   weeks still needs telling.
+- **Heard here, not made there (0.2.0).** A receipt is this phone's clock when it
+  put a payload together, so it covers a removal only from the moment this phone
+  held it. One made here is stamped by this clock already. One heard of from
+  another phone carries that phone's stamp, which can be older than a receipt for
+  a payload put together before it arrived: compared with that, Hugo collected
+  Sam's removal on arrival, on a receipt from Ava that predated it, and Ava never
+  heard — whole lists then handed the item back to Hugo, partial lists left it on
+  Ava's phone alone. So a merge marks every removal it brings in, item or person,
+  with this phone's clock as it then stands (`removalHeardAt`), and collection
+  waits for receipts at or past the later of that and the removal's own stamp
+  (`removalKnownAt`). Receipts themselves are untouched, so "in step" and "last
+  handed over" read as before. The mark is kept in the save and never sent.
+  A whole list can hand back a tombstone already collected; it is marked as news
+  and waits one more receipt, which with partial lists settles at once and with a
+  0.1.0 phone too, since that phone drops it again on arrival.
 
 Removing a person from a list clears their tombstones as a side effect, and safely
 — once they are off the list there is no future handover, so nothing can come back.
@@ -456,6 +471,14 @@ record after a partial list's items — `held|list|PREFIX|1-40,42|…`, the ids 
 out as runs per phone that minted them — and its presence is what makes the list
 partial. A damaged one refuses the payload, since skipped it would make the list
 whole. 0.1.0 is never sent one.
+
+The mark of when this phone heard of a removal (0.2.0; section 5) is one stamp at
+the end of `item` and of `person` in the state file only, written only when there
+is one: after the item's 21 shared columns, and after the person's name stamp.
+0.1.0 reads an item's first nineteen columns and a person's first eight. A save
+without it — 0.1.0's, version 10's — reads every removal heard of from another
+phone as heard at the moment of loading, so it waits for one more receipt from
+each peer rather than risk going early; a removal made here needs no mark.
 
 ---
 

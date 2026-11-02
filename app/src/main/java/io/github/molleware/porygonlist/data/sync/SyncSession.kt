@@ -147,13 +147,17 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
   val ownName = renamedElsewhere?.name ?: displayName
   val ownNameAt = renamedElsewhere?.nameAt ?: displayNameAt
 
-  val mergedLists =
+  val named =
     arrived.map { list ->
       list.withOwnAvatar(localDevice, ownAvatar).let { if (ownName.isBlank()) it else it.withOwnName(localDevice, ownName, ownNameAt) }
     }
 
   clock.observe(payload.at)
-  mergedLists.mapNotNull { it.newestStamp() }.maxOrNull()?.let { clock.observe(it) }
+  named.mapNotNull { it.newestStamp() }.maxOrNull()?.let { clock.observe(it) }
+
+  // Every removal this exchange brought in, marked with this phone's clock as it now stands, so it
+  // is collected only once each peer has confirmed a payload that had it. See removalKnownAt.
+  val mergedLists = named.map { list -> list.withRemovalsHeard(lists.firstOrNull { it.id == list.id }, clock.head()) }
 
   /*
    * Lists this exchange has just taken this phone off, by somebody else's decision.

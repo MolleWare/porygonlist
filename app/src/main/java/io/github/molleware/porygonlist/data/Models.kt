@@ -74,7 +74,16 @@ data class Person(
    * name can never undo a rename. [initial] always comes with the name it was taken from.
    */
   val nameAt: Hlc = Hlc(0, 0, device),
+  /**
+   * When this phone first held [removed] as it is now, for a leaving or removal it heard of from
+   * another phone — as for an item; see [GroceryItem.removalHeardAt]. Kept in the save, never sent.
+   */
+  val removalHeardAt: Hlc? = null,
 ) {
+  /** From when this phone held their leaving, by its own clock; see [GroceryItem.removalKnownAt]. */
+  val removalKnownAt: Hlc
+    get() = removalHeardAt?.let { maxOf(it, removed.at) } ?: removed.at
+
   fun wasEver(candidate: DeviceId): Boolean = candidate == device || candidate in formerDevices
 
   /** On the list now, as opposed to remembered only so their leaving can be passed on. */
@@ -143,7 +152,26 @@ data class GroceryItem(
    * never changes once set. A phone from before it leaves it out, and reads the merger as the adder.
    */
   val addedBy: DeviceId? = null,
+  /**
+   * When this phone first held [removed] as it is now, by this phone's own clock, for a removal it
+   * heard of from another phone. Null for one made here, where the removal's own stamp already is
+   * this phone's clock. This phone's own business, like [editing]: kept in the save, never sent.
+   * See [removalKnownAt].
+   */
+  val removalHeardAt: Hlc? = null,
 ) {
+  /**
+   * The point in this phone's own clock from which it held this removal: what a peer's receipt has
+   * to reach before the removal can be counted as delivered to that peer.
+   *
+   * Not simply [removed]'s stamp. A receipt is this phone's clock when it put a payload together,
+   * and a removal heard of from a third phone carries that phone's stamp, which can be older than a
+   * receipt for a payload put together before this phone had heard. Counted by its own stamp, it
+   * was collected the moment it arrived, and the peer behind that receipt never heard of it.
+   */
+  val removalKnownAt: Hlc
+    get() = removalHeardAt?.let { maxOf(it, removed.at) } ?: removed.at
+
   /** The phone that first added this item: [addedBy] when a merge kept it, otherwise the id's own. */
   val createdBy: DeviceId
     get() = addedBy ?: id.device
@@ -412,7 +440,8 @@ data class GroceryList(
    *
    * Once the removal has reached all of them, no phone still holds the live item, so there is
    * nothing left for the tombstone to contradict and it can go. Until then it stays, however old
-   * it is — age is not evidence of delivery.
+   * it is — age is not evidence of delivery. "Confirmed" is a receipt at or past the point this
+   * phone itself came to hold the removal, [GroceryItem.removalKnownAt], not the removal's stamp.
    *
    * [asked] are the items "keep which?" cards are about, and their tombstones stay while the cards
    * do. Keeping the removal rewrites it as a fresh edit, and that edit is what closes the card on
@@ -429,12 +458,36 @@ data class GroceryList(
       // With nobody to deliver to there is nothing to wait for, and a solo list keeps no tombstones.
       items =
         if (peers.isEmpty()) liveItems
-        else items.filterNot { it.id !in asked && it.removed.value && log.deliveredToAll(it.removed.at, peers) },
+        else items.filterNot { it.id !in asked && it.removed.value && log.deliveredToAll(it.removalKnownAt, peers) },
       // Someone off the list is collected on the same terms as a removed item: once everyone who has
       // to hear it has confirmed, nobody is left holding a copy that says otherwise.
       people =
         people.filterNot { person ->
-          person.removed.value && log.deliveredToAll(person.removed.at, peers + listOfNotNull(mustHear(person, localDevice)))
+          person.removed.value && log.deliveredToAll(person.removalKnownAt, peers + listOfNotNull(mustHear(person, localDevice)))
+        },
+    )
+  }
+
+  /**
+   * This list after a merge, with every removal it did not hold before marked as heard of [at] —
+   * this phone's clock once the merge is done, which every payload put together from now on is at
+   * or past, and carries the removal. [before] is this phone's copy as it was, or null for a list
+   * just arrived.
+   *
+   * A removal it already held keeps the mark it had. One whose stamp changed — taken off again
+   * after someone put it back — is news again, and is marked afresh.
+   */
+  fun withRemovalsHeard(before: GroceryList?, at: Hlc): GroceryList {
+    val had = before?.items?.associateBy { it.id }.orEmpty()
+    return copy(
+      items =
+        items.map { item ->
+          if (item.removed.value && had[item.id]?.removed != item.removed) item.copy(removalHeardAt = at) else item
+        },
+      people =
+        people.map { person ->
+          val was = before?.people?.firstOrNull { it.wasEver(person.device) || person.wasEver(it.device) }
+          if (person.removed.value && was?.removed != person.removed) person.copy(removalHeardAt = at) else person
         },
     )
   }

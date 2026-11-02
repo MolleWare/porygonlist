@@ -229,6 +229,19 @@ class PartialSyncTest {
   private fun Phone.pushTo(other: Phone) =
     coordinator.pushIfOwed(ReachablePeer(TrustedPeer(other.id, other.key, names.getValue(other.id), 0), "10.0.0.1", 1), now)
 
+  /**
+   * A call placed whether or not anything is owed, as the start of a background window places it.
+   *
+   * What the comparison of partial with whole needs: whether something is owed depends on the
+   * tombstones a phone still holds, and those are collected at different moments either way — a
+   * whole list hands back one already collected, which then waits for the next receipt. Left to
+   * decide, the two runs would call at different steps and stop being the same sequence at all.
+   */
+  private fun Phone.callsNow(other: Phone) {
+    coordinator.callEveryoneOnce()
+    pushTo(other)
+  }
+
   private fun Phone.adds(name: String) = edit { s, node ->
     s.copy(lists = s.lists.map { it.withItemsAppended(listOf(item(node.ids.nextItem().value, name, node.clock.tick())), node.clock.head()) })
   }
@@ -380,6 +393,45 @@ class PartialSyncTest {
     )
   }
 
+  // ── A removal passed on by the phone in the middle ─────────────────────────
+
+  /**
+   * Sam takes Thing 3 off; only Hugo talks to both. Hugo hears of it after he last handed Ava a
+   * payload, but Sam made it before — and Hugo once collected it at once on that receipt, so Ava never
+   * heard. Whole lists then brought the item back to Hugo from Ava; partial ones left it on Ava's
+   * phone alone. Either way, every phone must end without it.
+   */
+  private fun removalPassedOn(partial: Boolean) {
+    phones.clear()
+    val (hugo, ava, sam) = phonesOf(listOf(hugoId, avaId, samId), partial = { partial })
+    repeat(2) {
+      hugo.callsNow(ava)
+      hugo.callsNow(sam)
+    }
+
+    sam.edit { s, node ->
+      s.copy(lists = s.lists.map { l -> l.copy(items = l.items.map { if (it.name.value == "Thing 3") it.copy(removed = it.removed.set(true, node.clock.tick())) else it }) })
+    }
+    hugo.adds("Cups")
+    hugo.callsNow(ava)
+    hugo.callsNow(sam)
+    repeat(3) {
+      hugo.callsNow(ava)
+      ava.callsNow(hugo)
+      hugo.callsNow(sam)
+      sam.callsNow(hugo)
+    }
+
+    for (phone in listOf(hugo, ava, sam)) assertFalse("${names[phone.id]} still has it, partial $partial", phone.has("Thing 3"))
+    assertTrue(ava.has("Cups"))
+  }
+
+  @Test
+  fun `a removal passed on by a middle phone reaches the third with whole lists, and does not come back`() = removalPassedOn(partial = false)
+
+  @Test
+  fun `a removal passed on by a middle phone reaches the third with partial lists`() = removalPassedOn(partial = true)
+
   // ── The same edits, sent partial and sent whole ────────────────────────────
 
   /**
@@ -423,10 +475,10 @@ class PartialSyncTest {
       val phone = all.random(rnd)
       when (rnd.nextInt(10)) {
         in 0..4 -> phone.randomEdit()
-        in 5..7 -> phone.pushTo(all.filterNot { it === phone }.random(rnd))
+        in 5..7 -> phone.callsNow(all.filterNot { it === phone }.random(rnd))
         8 -> {
           loseNextReply = true
-          phone.pushTo(all.filterNot { it === phone }.random(rnd))
+          phone.callsNow(all.filterNot { it === phone }.random(rnd))
         }
         else -> if (step % 3 == 0) phone.restart() else phone.coordinator.callEveryoneOnce()
       }
@@ -440,7 +492,8 @@ class PartialSyncTest {
         p.id to
           listOf(
             list.name,
-            list.people,
+            // Without this phone's own note of when it heard of a leaving, which is not what anyone sees.
+            list.people.map { it.copy(removalHeardAt = null) },
             list.liveItems.sortedBy { it.id.value },
             p.now.openConflicts.map { it.question }.toSet(),
           )
@@ -467,17 +520,6 @@ class PartialSyncTest {
   @Test
   fun `two phones end the same whether lists go partial or whole`() = sameEitherWay(listOf(hugoId, avaId), removals = true)
 
-  /**
-   * Without removals, because with three phones those do not settle either way, partial or whole.
-   *
-   * Hugo hears of Sam's removal and collects the tombstone at once if Ava's receipt is newer than
-   * the removal's stamp — but that receipt was for a payload put together before Hugo had heard of
-   * it, so Ava never does. Whole lists then hand the item back to Hugo from Ava; partial lists do
-   * not, and it stays on Ava's phone alone until her next whole one. Either way it is wrong, and it
-   * is older than partial lists: collection needs to know when this phone learned of a removal,
-   * which nothing records yet. Two phones cannot reach it — the only other phone is the one that
-   * removed it, or the one it was collected for.
-   */
   @Test
-  fun `three phones end the same whether lists go partial or whole`() = sameEitherWay(listOf(hugoId, avaId, samId), removals = false)
+  fun `three phones end the same whether lists go partial or whole`() = sameEitherWay(listOf(hugoId, avaId, samId), removals = true)
 }
