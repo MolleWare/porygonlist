@@ -13,9 +13,13 @@ import io.github.molleware.porygonlist.data.crypto.DeviceIdentity
 import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PinnedTls
 import io.github.molleware.porygonlist.data.net.ReachablePeer
+import io.github.molleware.porygonlist.data.sync.SyncCodec
 import io.github.molleware.porygonlist.data.sync.SyncExchange
 import io.github.molleware.porygonlist.data.sync.SyncPayload
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.InetSocketAddress
 import javax.net.ssl.SSLSocket
 import io.github.molleware.porygonlist.data.net.NetworkFingerprint
@@ -108,10 +112,16 @@ fun main(args: Array<String>) {
         callbackPort = { endpoint.syncPort },
         addresses = addresses,
       )
-  // Said aloud, because "the phone called by itself" is often the thing under test.
+  // Said aloud, because "the phone called by itself" is often the thing under test. What crossed is
+  // said too, and how big it was: partial or whole is the thing to watch since 0.2.0.
   endpoint.syncHandler = SyncAnswerer { key, socket ->
-    say("call from ${DeviceIdentity.deviceIdFor(key).value} at ${socket.inetAddress?.hostAddress}")
-    coordinator.answer(key, socket)
+    val who = DeviceIdentity.deviceIdFor(key).value
+    say("call from $who at ${socket.inetAddress?.hostAddress}")
+    socket.soTimeout = 8_000
+    val heard = Tape(socket.inputStream)
+    val told = TapeOut(socket.outputStream)
+    coordinator.answerOn(key, heard, told, from = socket.inetAddress?.hostAddress)
+    say("answered $who: got ${describe(heard.bytes())}; sent ${describe(told.bytes())}")
   }
 
   val store = ViewModelStore()
@@ -178,13 +188,72 @@ private fun dial(identity: LocalIdentity, peer: ReachablePeer, payload: SyncPayl
       socket.soTimeout = 8_000
       socket.connect(InetSocketAddress(peer.host, peer.port), 8_000)
       socket.startHandshake()
-      SyncExchange.call(payload, socket.outputStream, socket.inputStream)
+      val told = TapeOut(socket.outputStream)
+      val heard = Tape(socket.inputStream)
+      SyncExchange.call(payload, told, heard).also {
+        val crossed = "sent ${describe(told.bytes())}; got ${describe(heard.bytes())}"
+        say(if (it != null) "called $who: exchanged, $crossed" else "called $who: no exchange, $crossed")
+      }
     }
-      .also { say(if (it != null) "called $who: exchanged" else "called $who: no exchange") }
   } catch (e: IOException) {
     say("called $who: failed, ${e.message ?: e::class.simpleName}")
     null
   }
+}
+
+/** Everything read through it, kept, so an exchange can be described once it is over. */
+private class Tape(private val inner: InputStream) : InputStream() {
+  private val kept = ByteArrayOutputStream()
+
+  override fun read(): Int = inner.read().also { if (it >= 0) kept.write(it) }
+
+  override fun read(b: ByteArray, off: Int, len: Int): Int = inner.read(b, off, len).also { if (it > 0) kept.write(b, off, it) }
+
+  fun bytes(): ByteArray = kept.toByteArray()
+}
+
+/** Everything written through it, kept, as [Tape] keeps what is read. */
+private class TapeOut(private val inner: OutputStream) : OutputStream() {
+  private val kept = ByteArrayOutputStream()
+
+  override fun write(b: Int) {
+    inner.write(b)
+    kept.write(b)
+  }
+
+  override fun write(b: ByteArray, off: Int, len: Int) {
+    inner.write(b, off, len)
+    kept.write(b, off, len)
+  }
+
+  override fun flush() = inner.flush()
+
+  fun bytes(): ByteArray = kept.toByteArray()
+}
+
+/**
+ * One direction of an exchange, said as a person checking it wants it: how many bytes in all, and
+ * for the payload among them whether each list went whole or partial, and with how many items, and
+ * whether its sender says it takes partial lists. Bytes alone, with nothing after, are an ack alone.
+ */
+private fun describe(bytes: ByteArray): String {
+  val payloads = mutableListOf<SyncPayload>()
+  var i = 0
+  while (i < bytes.size) {
+    val end = (i until bytes.size).firstOrNull { bytes[it] == '\n'.code.toByte() } ?: break
+    val size = String(bytes, i, end - i).substringAfter(' ').toIntOrNull() ?: break
+    if (end + 1 + size > bytes.size) break
+    SyncCodec.decode(String(bytes, end + 1, size))?.let { payloads += it }
+    i = end + 1 + size
+  }
+  val said =
+    payloads.map { p ->
+      val lists =
+        if (p.lists.isEmpty()) "nothing new"
+        else p.lists.joinToString("; ") { "${it.name} ${if (p.isPartial(it.id)) "partial" else "whole"}, ${it.items.size} items" }
+      lists + if (p.run != null) ", takes partial" else ""
+    }
+  return "${bytes.size} B" + said.joinToString("") { " ($it)" }
 }
 
 private val clock = DateTimeFormatter.ofPattern("HH:mm:ss")
