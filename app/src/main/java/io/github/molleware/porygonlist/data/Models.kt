@@ -743,6 +743,14 @@ data class AppState(
    * own card.
    */
   val conflicts: List<Conflict> = emptyList(),
+  /**
+   * The "Background sync" switch in Settings, as the owner last set it: null until they touch it.
+   *
+   * Only what was chosen. What it reads as also depends on whether Android allows this app's alarms,
+   * which changes in system settings and is asked of Android, never stored — see
+   * [io.github.molleware.porygonlist.data.net.backgroundSwitch]. This phone's own; never sent anywhere.
+   */
+  val backgroundSync: Boolean? = null,
 ) {
   /**
    * With no lists at all — a fresh install, or the last one deleted — this is [GroceryList.none]: a

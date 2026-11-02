@@ -29,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -69,6 +70,7 @@ import io.github.molleware.porygonlist.ui.screens.ShareScreen
 import io.github.molleware.porygonlist.ui.screens.ShopScreen
 import io.github.molleware.porygonlist.ui.screens.StaplesScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -106,15 +108,36 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
   // Background sync. Once there is somebody to sync with, Android is asked to say whenever a wifi is
   // joined, and that is what turns the quarter-hour windows on and off — see WifiWatch. While open,
   // the app also starts them itself whenever it is on an approved network, which covers approving
-  // the network you are standing on. After the first frame by construction — the state has to have
-  // loaded for there to be peers — and off the main thread, because both are binder calls.
+  // the network you are standing on, and finds out here whether alarms were revoked since: the
+  // schedule follows the switch as it reads now. After the first frame by construction — the state
+  // has to have loaded for there to be peers — and off the main thread, because these are binder
+  // calls.
   val hasPeers = state?.peers?.isNotEmpty() == true
   val onApprovedWifi = discovery is DiscoveryDecision.Discover
   LaunchedEffect(hasPeers) {
-    if (hasPeers) withContext(Dispatchers.IO) { WifiWatch.register(context.applicationContext) }
+    if (!hasPeers) return@LaunchedEffect
+    val alarmsAllowed =
+      withContext(Dispatchers.IO) {
+        WifiWatch.register(context.applicationContext)
+        BackgroundSync.alarmsAllowed(context.applicationContext)
+      }
+    viewModel.settleBackgroundSync(alarmsAllowed)
   }
   LaunchedEffect(hasPeers, onApprovedWifi) {
-    if (hasPeers && onApprovedWifi) withContext(Dispatchers.IO) { BackgroundSync.ensureScheduled(context.applicationContext) }
+    if (hasPeers && onApprovedWifi) {
+      withContext(Dispatchers.IO) { BackgroundSync.ensureScheduled(context.applicationContext, state?.backgroundSync) }
+    }
+  }
+  // The switch, turned in Settings or from the Lists card: saved, and the schedule brought in line
+  // at once rather than at the next start. Off stops everything wherever the phone is; on arms the
+  // next quarter hour only on an approved wifi, as above, and joining one does it otherwise.
+  val scope = rememberCoroutineScope()
+  val onBackgroundSync: (Boolean) -> Unit = { on ->
+    viewModel.setBackgroundSync(on)
+    val app = context.applicationContext
+    scope.launch(Dispatchers.IO) {
+      if (!on) BackgroundSync.cancel(app) else if (hasPeers && onApprovedWifi) BackgroundSync.ensureScheduled(app, chosen = true)
+    }
   }
 
   // What to call the network in passing: the owner's own name for it, then the wifi's own name if
@@ -223,6 +246,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onMerge = { from, into -> if (viewModel.mergeList(from, into)) backStack.add(ListDetail) },
                   onMoveList = viewModel::moveList,
                   onSetPinned = viewModel::setPinned,
+                  onBackgroundSync = onBackgroundSync,
                   vpnOn = (discovery as? DiscoveryDecision.Hold)?.reason == HoldReason.VPN,
                   onExplainVpn = viewModel::openVpnHelp,
                   modifier = Modifier.fillMaxSize(),
@@ -311,6 +335,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                     backStack.add(PairPhone)
                   },
                   onUnpair = viewModel::unpair,
+                  onBackgroundSync = onBackgroundSync,
                   confirmingDelete = viewModel.confirmingIdentityDelete,
                   onAskDelete = viewModel::askDeleteIdentity,
                   onCancelDelete = viewModel::cancelDeleteIdentity,

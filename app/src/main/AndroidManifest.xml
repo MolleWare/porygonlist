@@ -44,19 +44,20 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!--
-      Lets the background sync window (SyncJob) stay scheduled across a reboot. Normal protection
-      level: granted at install, no runtime prompt. The app is not started at boot by this; the job
-      scheduler simply remembers the job, and it runs on its usual quarter-hour schedule.
+      Lets background sync carry on after a reboot. Normal protection level: granted at install, no
+      runtime prompt. At boot WifiWatch asks Android again to say when a wifi is joined, since that
+      request does not survive a restart, and the join that follows re-arms the quarter-hour alarm
+      if the switch is on. Nothing else runs.
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
-      Optional: wakes the background window on the exact quarter hour even in Doze, so every paired
-      phone listens at the same moment. See BackgroundSync.
+      Wakes the background window on the exact quarter hour even in Doze, so every paired phone
+      listens at the same moment. See BackgroundSync.
 
-      Android 14 and later leave it off until the owner turns on "Alarms & reminders" for the app;
-      Settings offers the way there. Without it the job scheduler aims at the same quarter hours, but
-      Doze can hold a window back past them.
+      Background sync needs it: without it the switch in Settings cannot be on, and the app syncs
+      only while it is open. Android 14 and later leave it off until the owner turns on "Alarms &
+      reminders" for the app; turning the switch on takes them there.
       Not USE_EXACT_ALARM: that one is granted silently, and is meant for alarm clocks.
     -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -121,8 +122,9 @@
         </activity>
 
         <!--
-          A short sync window every quarter-hour or so while the app is out of sight. Not exported:
-          only the system's job scheduler, which holds BIND_JOB_SERVICE, may start it. See SyncJob.
+          A single sync window straight away on joining an approved wifi, while the app is out of
+          sight. Not exported: only the system's job scheduler, which holds BIND_JOB_SERVICE, may
+          start it. See SyncJob.
         -->
         <service
             android:name=".data.net.SyncJob"
@@ -140,7 +142,7 @@
             tools:targetApi="34" />
 
         <!--
-          The quarter-hour alarm, and the owner granting exact alarms from Settings. Not exported:
+          The quarter-hour alarm, and the owner allowing exact alarms in system settings. Not exported:
           the alarm comes through the app's own PendingIntent, and the grant from the system.
         -->
         <receiver

@@ -7,6 +7,7 @@ import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.TrustedPeer
+import io.github.molleware.porygonlist.data.net.BackgroundSwitch
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.ListId
@@ -431,5 +432,21 @@ class FormatTest {
     assertEquals("Last handover at 12:30", handoverLabel(Hlc(hoursAgo(2), 0, hugo), now, utc))
     assertEquals("Last handover yesterday", handoverLabel(Hlc(hoursAgo(24), 0, hugo), now, utc))
     assertEquals("Last handover on 10 Sep", handoverLabel(Hlc(hoursAgo(24 * 7), 0, hugo), now, utc))
+  }
+
+  @Test
+  fun `background sync off without alarms says, before the tap, that on needs them`() {
+    assertTrue(backgroundSyncNote(BackgroundSwitch.OFF, alarmsAllowed = false).contains("needs alarms allowed"))
+    assertTrue(backgroundSyncAsk(BackgroundSwitch.OFF, alarmsAllowed = false).contains("needs alarms allowed"))
+    // With them allowed there is nothing to explain: the tap simply turns it on.
+    assertEquals("Lists sync only while the app is open.", backgroundSyncNote(BackgroundSwitch.OFF, alarmsAllowed = true))
+  }
+
+  @Test
+  fun `alarms revoked under background sync says they were turned off, and the way back`() {
+    for (text in listOf(backgroundSyncNote(BackgroundSwitch.ALARMS_TURNED_OFF, false), backgroundSyncAsk(BackgroundSwitch.ALARMS_TURNED_OFF, false))) {
+      assertTrue(text, text.startsWith("Alarms were turned off"))
+      assertTrue(text, text.endsWith("Turn it on to allow them again."))
+    }
   }
 }

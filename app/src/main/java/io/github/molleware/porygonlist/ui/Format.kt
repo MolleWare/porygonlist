@@ -8,6 +8,7 @@ import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.TrustedPeer
+import io.github.molleware.porygonlist.data.net.BackgroundSwitch
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
@@ -359,6 +360,35 @@ fun syncDetail(
   val last = state.deliveredTo.receipts.values.maxOrNull()
   return "$networkLabel · " + handoverLabel(last, now, zone).replaceFirstChar { it.lowercase() }
 }
+
+/**
+ * The line under Settings' background sync switch. Off without alarms, it says before the tap why
+ * the tap goes to the system page: on needs them.
+ */
+fun backgroundSyncNote(reading: BackgroundSwitch, alarmsAllowed: Boolean): String =
+  when (reading) {
+    BackgroundSwitch.ON ->
+      "Wakes at :00, :15, :30 and :45 for half a minute, when your paired phones do too. A quiet notification shows while it runs."
+    BackgroundSwitch.ALARMS_TURNED_OFF ->
+      "Alarms were turned off for this app, so lists sync only while it is open. Turn it on to allow them again."
+    BackgroundSwitch.OFF ->
+      if (alarmsAllowed) "Lists sync only while the app is open."
+      else "Lists sync only while the app is open. Turning it on needs alarms allowed, so it wakes on time."
+  }
+
+/**
+ * What the Lists screen's card says under "Background sync is off". See
+ * [io.github.molleware.porygonlist.data.net.asksForBackgroundSync] for when it shows.
+ */
+fun backgroundSyncAsk(reading: BackgroundSwitch, alarmsAllowed: Boolean): String =
+  when {
+    reading == BackgroundSwitch.ALARMS_TURNED_OFF ->
+      "Alarms were turned off for this app, so closed, it syncs nothing until it is opened again. Turn it on to allow them again."
+    alarmsAllowed -> "Closed, this phone syncs nothing until it is opened again. On, it wakes at :00, :15, :30 and :45, when your paired phones do."
+    else ->
+      "Closed, this phone syncs nothing until it is opened again. On, it wakes at :00, :15, :30 and :45, when your paired phones do. " +
+        "That needs alarms allowed."
+  }
 
 fun itemCountLabel(list: GroceryList): String =
   "${list.liveItems.size} ${if (list.liveItems.size == 1) "item" else "items"}"

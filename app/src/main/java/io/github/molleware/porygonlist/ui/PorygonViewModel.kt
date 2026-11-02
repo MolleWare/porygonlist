@@ -42,6 +42,7 @@ import io.github.molleware.porygonlist.data.net.SyncCoordinator
 import io.github.molleware.porygonlist.data.net.SyncEndpoint
 import io.github.molleware.porygonlist.data.net.discoveryDecision
 import io.github.molleware.porygonlist.data.net.reachablePeers
+import io.github.molleware.porygonlist.data.net.settledChoice
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.ListId
@@ -269,6 +270,16 @@ class PorygonViewModel(
 
   /** Wears avatar [id] from the catalog on every list, or the initial again for an empty one. */
   fun chooseAvatar(id: String) = repo.update { s, node -> s.withAvatar(id, node.clock.tick()) }
+
+  /**
+   * The "Background sync" switch, as the owner sets it. Only the choice: arming or cancelling the
+   * alarm is the screen's to do, since it needs Android's context and whether alarms are allowed.
+   */
+  fun setBackgroundSync(on: Boolean) = repo.update { s, _ -> s.copy(backgroundSync = on) }
+
+  /** Writes down the default the switch has been reading, once there is one. See [settledChoice]. */
+  fun settleBackgroundSync(alarmsAllowed: Boolean) =
+    repo.update { s, _ -> s.copy(backgroundSync = settledChoice(s.backgroundSync, alarmsAllowed)) }
 
   /** The id other phones know this one by. Shown so two people can check they paired with each other. */
   val deviceId: DeviceId

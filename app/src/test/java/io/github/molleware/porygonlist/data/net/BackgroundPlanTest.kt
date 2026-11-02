@@ -10,9 +10,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * When the quarter-hour sync windows run: only after joining a wifi the owner approved, and only
- * with somebody to sync with. Anything less certain leaves the schedule alone rather than stopping
- * it, because the event that would start it again has already happened.
+ * When the quarter-hour sync windows run: only with the switch on, after joining a wifi the owner
+ * approved, and with somebody to sync with. Anything less certain about the network leaves the
+ * schedule alone rather than stopping it, because the event that would start it again has already
+ * happened.
  */
 class BackgroundPlanTest {
 
@@ -21,7 +22,7 @@ class BackgroundPlanTest {
 
   private val me = DeviceId("HUGOOOOOOOOOOOOO")
 
-  private fun state(paired: Boolean = true) =
+  private fun state(paired: Boolean = true, backgroundSync: Boolean? = true) =
     AppState(
       localDevice = me,
       idCounter = 0,
@@ -30,6 +31,7 @@ class BackgroundPlanTest {
       activeListId = ListId(""),
       networks = listOf(ApprovedNetwork(home, "Home", "", approved = true)),
       peers = if (paired) listOf(TrustedPeer(DeviceId("AVAAAAAAAAAAAAAA"), byteArrayOf(1), "Ava", 0)) else emptyList(),
+      backgroundSync = backgroundSync,
     )
 
   private fun on(fingerprint: NetworkFingerprint?, usable: Boolean = true, vpn: Boolean = false) =
@@ -37,24 +39,43 @@ class BackgroundPlanTest {
 
   @Test
   fun `joining the approved wifi runs the windows`() {
-    assertEquals(BackgroundPlan.RUN, backgroundPlan(on(home), state()))
+    assertEquals(BackgroundPlan.RUN, backgroundPlan(on(home), state(), alarmsAllowed = true))
   }
 
   @Test
   fun `joining any other wifi stops them`() {
-    assertEquals(BackgroundPlan.STOP, backgroundPlan(on(cafe), state()))
+    assertEquals(BackgroundPlan.STOP, backgroundPlan(on(cafe), state(), alarmsAllowed = true))
   }
 
   @Test
   fun `with nobody paired there is nothing to wake for`() {
-    assertEquals(BackgroundPlan.STOP, backgroundPlan(on(home), state(paired = false)))
+    assertEquals(BackgroundPlan.STOP, backgroundPlan(on(home), state(paired = false), alarmsAllowed = true))
   }
 
   @Test
   fun `a link still settling or hidden behind a vpn leaves the schedule alone`() {
-    assertEquals(BackgroundPlan.LEAVE, backgroundPlan(on(home, usable = false), state()))
-    assertEquals(BackgroundPlan.LEAVE, backgroundPlan(on(null), state()))
-    assertEquals(BackgroundPlan.LEAVE, backgroundPlan(on(home, vpn = true), state()))
-    assertEquals(BackgroundPlan.LEAVE, backgroundPlan(NetworkSnapshot.Offline, state()))
+    assertEquals(BackgroundPlan.LEAVE, backgroundPlan(on(home, usable = false), state(), alarmsAllowed = true))
+    assertEquals(BackgroundPlan.LEAVE, backgroundPlan(on(null), state(), alarmsAllowed = true))
+    assertEquals(BackgroundPlan.LEAVE, backgroundPlan(on(home, vpn = true), state(), alarmsAllowed = true))
+    assertEquals(BackgroundPlan.LEAVE, backgroundPlan(NetworkSnapshot.Offline, state(), alarmsAllowed = true))
+  }
+
+  @Test
+  fun `with the switch off nothing wakes, even at home`() {
+    assertEquals(BackgroundPlan.STOP, backgroundPlan(on(home), state(backgroundSync = false), alarmsAllowed = true))
+  }
+
+  @Test
+  fun `with alarms revoked nothing wakes, rather than falling back to a slower schedule`() {
+    // Android cancelled the alarm and killed the app, and said nothing (Pixel, 2026-10-21).
+    assertEquals(BackgroundPlan.STOP, backgroundPlan(on(home), state(backgroundSync = true), alarmsAllowed = false))
+    // And whatever the network, since there is no schedule left to leave alone.
+    assertEquals(BackgroundPlan.STOP, backgroundPlan(NetworkSnapshot.Offline, state(backgroundSync = true), alarmsAllowed = false))
+  }
+
+  @Test
+  fun `never touched, it runs where alarms are allowed and not where they are not`() {
+    assertEquals(BackgroundPlan.RUN, backgroundPlan(on(home), state(backgroundSync = null), alarmsAllowed = true))
+    assertEquals(BackgroundPlan.STOP, backgroundPlan(on(home), state(backgroundSync = null), alarmsAllowed = false))
   }
 }

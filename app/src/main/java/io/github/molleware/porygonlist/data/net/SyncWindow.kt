@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.first
 /**
  * One background sync window: do what the open app does for [WINDOW_MS], then stop.
  *
- * Shared by the two things that open one — [SyncJob] on Android's own schedule, and
+ * Shared by the two things that open one — [SyncJob] straight away on joining an approved wifi, and
  * [SyncWindowService] on the quarter hour — so both check the same gate and undo the same things.
  *
  * **One at a time, per process.** The socket counts *reasons* to listen, not callers, so two windows
@@ -42,7 +42,7 @@ class SyncWindow(private val context: Context) {
 
     // The wifi listener, in case nothing in this process has registered it yet. The boot path does,
     // but on the Pixel after the reboots of 2026-10-13 and 2026-10-20 it was missing until the app
-    // was opened, while this job — persisted by the system — survived and ran. Once per process:
+    // was opened, while a job then persisted by the system survived and ran. Once per process:
     // see WifiWatch.register for the loop that repeating it made. Before the plan, so a window that
     // stops the schedule on a strange wifi still leaves the listener that restarts it at home.
     if (state.peers.isNotEmpty()) WifiWatch.register(context)
@@ -51,10 +51,11 @@ class SyncWindow(private val context: Context) {
     // made every window on hardware give up as "unidentifiable" before announcing anything.
     val monitor = AndroidNetworkMonitor(context)
     val snapshot = settledSnapshot { monitor.current() }
-    when (backgroundPlan(snapshot, state)) {
+    when (backgroundPlan(snapshot, state, BackgroundSync.alarmsAllowed(context))) {
       BackgroundPlan.RUN -> Unit
       // Woke somewhere it should not be — a reboot while away, a network since un-approved, nobody
-      // left to sync with. Stop the schedule; joining an approved wifi starts it again.
+      // left to sync with — or with the switch off, or reading off since alarms were revoked. Stop
+      // the schedule; joining an approved wifi with the switch on starts it again.
       BackgroundPlan.STOP -> {
         BackgroundSync.cancel(context)
         return

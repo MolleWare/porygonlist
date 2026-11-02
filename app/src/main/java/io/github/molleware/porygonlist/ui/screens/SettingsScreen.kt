@@ -29,6 +29,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +49,11 @@ import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.Avatars
 import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.initialOf
+import io.github.molleware.porygonlist.data.net.BackgroundSwitch
 import io.github.molleware.porygonlist.data.net.BackgroundSync
+import io.github.molleware.porygonlist.data.net.SwitchTap
+import io.github.molleware.porygonlist.data.net.backgroundSwitch
+import io.github.molleware.porygonlist.data.net.switchTap
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.theme.Accent
 import io.github.molleware.porygonlist.theme.Accent100
@@ -62,7 +68,9 @@ import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
 import io.github.molleware.porygonlist.ui.components.Avatar
 import io.github.molleware.porygonlist.ui.components.systemGlyphs
+import io.github.molleware.porygonlist.ui.backgroundSyncNote
 import io.github.molleware.porygonlist.ui.components.BackLink
+import io.github.molleware.porygonlist.ui.components.NetworkSwitch
 import io.github.molleware.porygonlist.ui.components.PorygonTextField
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
@@ -82,6 +90,8 @@ fun SettingsScreen(
   onChooseAvatar: (String) -> Unit,
   onPair: () -> Unit,
   onUnpair: (DeviceId) -> Unit,
+  /** The background sync switch, turned on or off. */
+  onBackgroundSync: (Boolean) -> Unit,
   confirmingDelete: Boolean,
   onAskDelete: () -> Unit,
   onCancelDelete: () -> Unit,
@@ -173,10 +183,10 @@ fun SettingsScreen(
     }
     SecondaryButton("Pair a phone", onPair, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
 
-    // Only asked for once there is somebody to sync with, and only where Android asks at all.
-    if (state.peers.isNotEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    // Only once there is somebody to sync with.
+    if (state.peers.isNotEmpty()) {
       SectionLabel("With the app closed", Modifier.padding(top = 26.dp, bottom = 10.dp))
-      QuarterHourCard()
+      BackgroundSyncCard(state.backgroundSync, onBackgroundSync)
     }
 
     SectionLabel("Starting over", Modifier.padding(top = 30.dp, bottom = 10.dp))
@@ -194,44 +204,67 @@ fun SettingsScreen(
 }
 
 /**
- * Whether closed phones wake together on the quarter hour, and the way to let them.
+ * The one switch for syncing with the app closed: on the quarter hour, or not at all.
  *
- * Read from Android on every return to the screen rather than held in the state: the switch lives
- * in system settings, and the owner flips it there, not here. The schedule itself moves across on
- * its own when they do — see SyncAlarm.
+ * Without alarms it cannot be on, so the line under it says so before it is tapped, and the tap goes
+ * to the system page for them. See [rememberBackgroundSyncSwitch].
  */
-@RequiresApi(Build.VERSION_CODES.S)
 @Composable
-private fun QuarterHourCard() {
-  val context = LocalContext.current
-  var aligned by remember { mutableStateOf(BackgroundSync.canAlign(context)) }
-  LifecycleResumeEffect(Unit) {
-    aligned = BackgroundSync.canAlign(context)
-    onPauseOrDispose {}
-  }
+private fun BackgroundSyncCard(chosen: Boolean?, onChange: (Boolean) -> Unit) {
+  val switch = rememberBackgroundSyncSwitch(chosen, onChange)
 
   Column(Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 14.dp)) {
-    Text(if (aligned) "Syncing on the quarter hour" else "Syncing around the quarter hour", style = PorygonType.RowName, color = TextInk)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text("Background sync", style = PorygonType.RowName, color = TextInk, modifier = Modifier.weight(1f))
+      NetworkSwitch(switch.reading == BackgroundSwitch.ON, switch.tap, contentDescription = "Background sync")
+    }
     Text(
-      if (aligned) {
-        "Wakes at :00, :15, :30 and :45 for half a minute, when your paired phones do too. " +
-          "A quiet notification shows while it runs."
-      } else {
-        "Aims for :00, :15, :30 and :45, but a phone left idle may wake late and miss the others. " +
-          "Allow alarms and it wakes on time."
-      },
+      backgroundSyncNote(switch.reading, switch.alarmsAllowed),
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
       color = Neutral700,
       modifier = Modifier.padding(top = 4.dp),
     )
-    if (!aligned) {
-      SecondaryButton(
-        "Allow alarms",
-        { askForAlarms(context) },
-        modifier = Modifier.padding(top = 12.dp),
-        style = PorygonType.Meta,
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
-      )
+  }
+}
+
+/** The background sync switch as it reads right now, and what tapping it does. */
+internal class BackgroundSyncSwitch(val reading: BackgroundSwitch, val alarmsAllowed: Boolean, val tap: () -> Unit)
+
+/**
+ * The switch behind Settings' card and the Lists screen's, read from [chosen] and from Android.
+ *
+ * Whether alarms are allowed is asked of Android on every return to the screen rather than held in
+ * the state: the owner allows or revokes them in system settings, not here. A tap that turns it on
+ * without them goes to that page instead, and a return with them allowed finishes what the tap
+ * started: they were trying to turn it on. A return without them leaves it as it was.
+ */
+@Composable
+internal fun rememberBackgroundSyncSwitch(chosen: Boolean?, onChange: (Boolean) -> Unit): BackgroundSyncSwitch {
+  val context = LocalContext.current
+  val change by rememberUpdatedState(onChange)
+  var allowed by remember { mutableStateOf(BackgroundSync.alarmsAllowed(context)) }
+  // Gone to the system page from a tap. Saved, in case Android stops the app while it is away.
+  var asked by rememberSaveable { mutableStateOf(false) }
+  LifecycleResumeEffect(Unit) {
+    allowed = BackgroundSync.alarmsAllowed(context)
+    if (asked) {
+      asked = false
+      if (allowed) change(true)
+    }
+    onPauseOrDispose {}
+  }
+
+  val reading = backgroundSwitch(chosen, allowed)
+  return BackgroundSyncSwitch(reading, allowed) {
+    when (switchTap(reading, allowed)) {
+      SwitchTap.TURN_OFF -> change(false)
+      SwitchTap.TURN_ON -> change(true)
+      // Only ever without alarms, and before Android 12 they are always allowed.
+      SwitchTap.ASK_FOR_ALARMS ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+          asked = true
+          askForAlarms(context)
+        }
     }
   }
 }

@@ -10,18 +10,18 @@ Pair two phones once by scanning a code. After that, a shared list hands its cha
 • Put items in order — the order is shared, so sorting by aisle works for everyone
 • Arrange and pin your lists, just for you
 • Staples for the things you buy every week, and a shopping view for the shop itself, where ticked items sink to the bottom
-• Syncs in the background for half a minute every quarter hour — on the dot with alarms allowed — only while you are on an approved wifi
+• Background sync, one switch: with the app closed, it syncs for half a minute on every quarter hour, only while you are on an approved wifi
 
 <b>Good to know</b>
 • Lists are meant to be thrown away. They live only on the phones that share them: uninstall the app and that phone's lists go with it.
-• Two phones only swap changes while both can be reached on the same wifi. If one has the app open, the other catches up within about a quarter of an hour. With alarms allowed, two closed phones meet at :00, :15, :30 and :45; without, a phone left idle may wake late and miss the other.
+• Two phones only swap changes while both can be reached on the same wifi. With background sync on, a closed phone wakes at :00, :15, :30 and :45, so it catches up within about a quarter of an hour, and two closed phones meet then. It needs alarms allowed; with it off, a phone syncs only while the app is open.
 • A VPN hides which wifi you are on, so nothing syncs while one is on — unless your VPN app leaves PorygonList out of it (split tunnelling, excluding PorygonList).
 
 <b>Permissions</b>
 • Network access, to talk to paired phones on your local wifi
 • Location (optional), only because Android hides the wifi's name without it — the app uses it to show that name and works fine if you say no
 • Run at startup, so background sync carries on after a restart
-• Alarms (optional), to wake on the exact quarter hour so closed phones sync at the same moment
+• Alarms (optional), for background sync, which wakes on the exact quarter hour so closed phones sync at the same moment; without them it stays off
 • Foreground service, to stay on the wifi for that half minute; a quiet notification shows while it runs
 
 Free software under the GPL, version 3 or later.

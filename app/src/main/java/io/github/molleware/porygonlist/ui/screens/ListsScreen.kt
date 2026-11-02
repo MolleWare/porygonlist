@@ -1,7 +1,5 @@
 package io.github.molleware.porygonlist.ui.screens
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,13 +37,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.lifecycleScope
 import io.github.molleware.porygonlist.data.AppState
-import io.github.molleware.porygonlist.data.net.BackgroundSync
+import io.github.molleware.porygonlist.data.net.asksForBackgroundSync
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.TrustedPeer
@@ -78,6 +74,7 @@ import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
 import io.github.molleware.porygonlist.ui.components.StrokeIcon
+import io.github.molleware.porygonlist.ui.backgroundSyncAsk
 import io.github.molleware.porygonlist.ui.clockLine
 import io.github.molleware.porygonlist.ui.itemCountLabel
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
@@ -125,6 +122,8 @@ fun ListsScreen(
   /** Arranges this phone's lists. Never sent anywhere. */
   onMoveList: (ListId, Int) -> Unit,
   onSetPinned: (ListId, Boolean) -> Unit,
+  /** The background sync switch, turned on from the card shown while it is off. */
+  onBackgroundSync: (Boolean) -> Unit,
   /** A VPN is holding sync back. The banner says so, and opens [onExplainVpn] when tapped. */
   vpnOn: Boolean = false,
   onExplainVpn: () -> Unit = {},
@@ -157,9 +156,9 @@ fun ListsScreen(
 
     SyncPill(state, networkLabel, vpnOn, onExplainVpn)
 
-    // Once there is somebody to sync with, and only where Android asks at all.
-    if (state.peers.isNotEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      AllowAlarmsCard(Modifier.padding(top = 12.dp))
+    // Once there is somebody to sync with.
+    if (state.peers.isNotEmpty()) {
+      BackgroundSyncOffCard(state.backgroundSync, onBackgroundSync, Modifier.padding(top = 12.dp))
     }
 
     SectionLabel("Lists", Modifier.padding(top = 24.dp, bottom = 10.dp))
@@ -437,39 +436,33 @@ private fun SyncPill(state: AppState, networkLabel: String, vpnOn: Boolean, onEx
 }
 
 /**
- * Asks for alarms, on the home screen, while they are not allowed.
+ * Asks, on the home screen, for background sync to be turned on, while it is off.
  *
- * Settings already offered them, and nobody went looking: without them a closed phone syncs on
- * Android's schedule, and on the Pixel that left a ready window unstarted for 35 minutes (22:30,
- * 2026-10-24). A closed app is meant to catch up within a quarter of an hour or so (Hugo,
- * 2026-10-25), which only alarms can promise. "Not now" puts it away until the app is next started
- * — a reminder, not a wall. Read from Android on every return, since the switch is flipped there.
+ * Settings already offered alarms, and nobody went looking there: without them a closed phone does
+ * not sync at all now, and a closed app is meant to catch up within a quarter of an hour or so (Hugo,
+ * 2026-10-25). Not shown once the owner has turned it off in Settings themselves — see
+ * [asksForBackgroundSync]. "Turn on" is the switch's own tap, alarms page and all. "Not now" puts it
+ * away until the app is next started — a reminder, not a wall.
  */
-@RequiresApi(Build.VERSION_CODES.S)
 @Composable
-private fun AllowAlarmsCard(modifier: Modifier = Modifier) {
-  val context = LocalContext.current
-  var allowed by remember { mutableStateOf(BackgroundSync.canAlign(context)) }
+private fun BackgroundSyncOffCard(chosen: Boolean?, onBackgroundSync: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+  // Before the early return, so a return from the alarms page is still heard once they are allowed.
+  val switch = rememberBackgroundSyncSwitch(chosen, onBackgroundSync)
   var notNow by remember { mutableStateOf(false) }
-  LifecycleResumeEffect(Unit) {
-    allowed = BackgroundSync.canAlign(context)
-    onPauseOrDispose {}
-  }
-  if (allowed || notNow) return
+  if (!asksForBackgroundSync(chosen, switch.alarmsAllowed) || notNow) return
 
   Column(modifier.fillMaxWidth().clip(Shapes.Panel).background(Surface).padding(horizontal = 16.dp, vertical = 14.dp)) {
-    Text("Allow alarms to sync while closed", style = PorygonType.RowName, color = TextInk)
+    Text("Background sync is off", style = PorygonType.RowName, color = TextInk)
     Text(
-      "Closed, this phone waits for Android to wake it, which can be half an hour late or more. " +
-        "With alarms it wakes at :00, :15, :30 and :45, when your paired phones do.",
+      backgroundSyncAsk(switch.reading, switch.alarmsAllowed),
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
       color = Neutral700,
       modifier = Modifier.padding(top = 4.dp),
     )
     Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
       PrimaryButton(
-        "Allow alarms",
-        { askForAlarms(context) },
+        "Turn on",
+        switch.tap,
         style = PorygonType.Meta,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
       )

@@ -100,7 +100,8 @@ object ShareCodec {
  * or renamed since, and 0.1.0 reads one of these by ignoring them.
  *
  * Recipes came the same way: a `recipe` record, which 0.1.0 skips as a type it does not know, and
- * three columns at the end of `item` saying which recipes it is for, which it never reads.
+ * three columns at the end of `item` saying which recipes it is for, which it never reads. So did
+ * the background sync switch, as a `background` record.
  */
 object StateCodec {
   private const val VERSION = "PLSTATE11"
@@ -194,6 +195,10 @@ object StateCodec {
 
     state.staples.forEach { appendLine(record("staple", it.name, it.uses.toString())) }
 
+    // The background sync switch, once the owner or the first start has set it. A record type 0.1.0
+    // never wrote, and skips; absent, it reads as never touched.
+    state.backgroundSync?.let { appendLine(record("background", it.bool())) }
+
     // One line per recipe, its ingredients in pairs after the name, so a damaged line costs one
     // recipe and can never hand its ingredients to the one before. A record type 0.1.0 never wrote,
     // and skips.
@@ -268,6 +273,7 @@ object StateCodec {
     val peers = mutableListOf<TrustedPeer>()
     val staples = mutableListOf<Staple>()
     val recipes = mutableListOf<Recipe>()
+    var backgroundSync: Boolean? = null
     val receipts = mutableMapOf<DeviceId, Hlc>()
 
     // Lists are rebuilt in file order; their people and items arrive on following lines.
@@ -328,6 +334,7 @@ object StateCodec {
               networks +=
                 ApprovedNetwork(NetworkFingerprint(f[1]), f[2], f[3].takeUnless { it == "Approved just now" } ?: "Approved", f[4] == "1")
             "staple" -> staples += Staple(f[1], f[2].toIntOrNull() ?: 0)
+            "background" -> backgroundSync = f[1] == "1"
             "recipe" -> {
               val ingredients =
                 f.drop(2).chunked(2).map { (name, qty) -> Ingredient(name, qty.toIntOrNull() ?: return@runCatching) }
@@ -453,6 +460,7 @@ object StateCodec {
       staples = staples,
       recipes = recipes,
       conflicts = conflicts,
+      backgroundSync = backgroundSync,
     )
   }
 

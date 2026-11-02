@@ -253,7 +253,7 @@ fun CheckCircle(
   }
 }
 
-/** The approve-this-network toggle: a 52x30 track with a 24dp knob. */
+/** The approve-this-network toggle, and Settings' background sync one: a 52x30 track with a 24dp knob. */
 @Composable
 fun NetworkSwitch(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, contentDescription: String) {
   val label = contentDescription

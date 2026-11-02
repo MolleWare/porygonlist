@@ -19,12 +19,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** What the background sync should do, given where the phone is and who it knows. */
+/** What the background sync should do, given where the phone is, who it knows, and the switch. */
 enum class BackgroundPlan {
-  /** On an approved wifi with somebody to sync with: keep the quarter-hour windows coming. */
+  /** On an approved wifi with somebody to sync with, and the switch on: keep the windows coming. */
   RUN,
 
-  /** On a wifi nobody approved, or with nobody to sync with: stop waking at all. */
+  /** On a wifi nobody approved, with nobody to sync with, or with the switch off: stop waking at all. */
   STOP,
 
   /**
@@ -39,10 +39,12 @@ enum class BackgroundPlan {
  * Decides [BackgroundPlan] from a network and the state. Pure, so it is tested off the device.
  *
  * Built on the same [discoveryDecision] the open app uses, so the background never runs anywhere
- * the foreground would stay quiet.
+ * the foreground would stay quiet. The switch is read with [alarmsAllowed] as Android says now, so a
+ * revoke nobody was told about stops the schedule rather than leaving it to a job.
  */
-fun backgroundPlan(snapshot: NetworkSnapshot, state: AppState): BackgroundPlan {
+fun backgroundPlan(snapshot: NetworkSnapshot, state: AppState, alarmsAllowed: Boolean): BackgroundPlan {
   if (state.peers.isEmpty()) return BackgroundPlan.STOP
+  if (backgroundSwitch(state.backgroundSync, alarmsAllowed) != BackgroundSwitch.ON) return BackgroundPlan.STOP
   return when (val decision = discoveryDecision(snapshot, state.approvedFingerprints)) {
     is DiscoveryDecision.Discover -> BackgroundPlan.RUN
     is DiscoveryDecision.Hold ->
@@ -53,17 +55,16 @@ fun backgroundPlan(snapshot: NetworkSnapshot, state: AppState): BackgroundPlan {
 /**
  * Hears about wifi being joined, with the app closed, and turns the background windows on or off.
  *
- * This is what keeps the quarter-hour windows to known wifi only. The job scheduler can wait for
- * "unmetered", but it cannot tell home from a café, so left to itself the job wakes every quarter
- * hour on any wifi just to find out it should not be there. Here the question is asked once, on
- * arrival: an approved network starts the windows — with one straight away, because getting home is
- * exactly when there is something to hand over — and any other network stops them.
+ * This is what keeps the quarter-hour windows to known wifi only. An alarm cannot tell home from a
+ * café, so left to itself it wakes the phone every quarter hour on any wifi just to find out it
+ * should not be there. Here the question is asked once, on arrival: an approved network starts the
+ * windows — with one straight away, because getting home is exactly when there is something to hand
+ * over — and any other network stops them. With the switch off, every network stops them.
  *
  * Android delivers the join through a [PendingIntent] it holds on the app's behalf, so nothing has
  * to be running. Those registrations do not survive a reboot, which is why this also listens for
- * the boot and re-registers. The fallback job is persisted across the reboot anyway, and stops itself
- * if it wakes somewhere it should not be. The quarter-hour alarm is not — alarms never survive a
- * reboot — and is re-armed by the join that follows, since a phone boots before its wifi is up.
+ * the boot and re-registers. Alarms do not survive one either, so the alarm is re-armed by the join
+ * that follows, since a phone boots before its wifi is up.
  */
 class WifiWatch : BroadcastReceiver() {
 
@@ -74,37 +75,47 @@ class WifiWatch : BroadcastReceiver() {
       return
     }
 
-    // A network was joined. Reading the state is a file read, so it is done off the main thread,
-    // inside the time a receiver is given.
+    // A network was joined.
     val network: Network? =
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) intent.getParcelableExtra(ConnectivityManager.EXTRA_NETWORK, Network::class.java)
       else @Suppress("DEPRECATION") intent.getParcelableExtra(ConnectivityManager.EXTRA_NETWORK)
-    val pending = goAsync()
-    scope.launch {
-      try {
-        val repo = Graph.listRepository(app)
-        repo.load()
-        val state = repo.state.filterNotNull().first()
-        when (backgroundPlan(AndroidNetworkMonitor(app).current(network), state)) {
-          BackgroundPlan.RUN -> {
-            BackgroundSync.ensureScheduled(app)
-            // Not while a window is under way: it is doing what one soon would, and this is very
-            // likely its own registration firing for the wifi already joined. Booked anyway, Doze
-            // held it and ran it as a second window at the next maintenance slot (Pixel, 22:16,
-            // 2026-10-24) — after every window that started a fresh process.
-            if (!SyncWindow.isRunning) BackgroundSync.runSoon(app)
-          }
-          BackgroundPlan.STOP -> BackgroundSync.cancel(app)
-          BackgroundPlan.LEAVE -> Unit
-        }
-      } finally {
-        pending.finish()
-      }
-    }
+    follow(this, app, { AndroidNetworkMonitor(app).current(network) }, soon = true)
   }
 
   companion object {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Does what [backgroundPlan] says for the network [snapshot] reads, from [receiver]'s
+     * [BroadcastReceiver.onReceive]: the schedule on or off and, with [soon], one window straight away.
+     *
+     * Reading the state is a file read, so it is done off the main thread, inside the time a
+     * receiver is given.
+     */
+    fun follow(receiver: BroadcastReceiver, app: Context, snapshot: () -> NetworkSnapshot, soon: Boolean) {
+      val pending = receiver.goAsync()
+      scope.launch {
+        try {
+          val repo = Graph.listRepository(app)
+          repo.load()
+          val state = repo.state.filterNotNull().first()
+          when (backgroundPlan(snapshot(), state, BackgroundSync.alarmsAllowed(app))) {
+            BackgroundPlan.RUN -> {
+              BackgroundSync.ensureScheduled(app, state.backgroundSync)
+              // Not while a window is under way: it is doing what one soon would, and this is very
+              // likely its own registration firing for the wifi already joined. Booked anyway, Doze
+              // held it and ran it as a second window at the next maintenance slot (Pixel, 22:16,
+              // 2026-10-24) — after every window that started a fresh process.
+              if (soon && !SyncWindow.isRunning) BackgroundSync.runSoon(app)
+            }
+            BackgroundPlan.STOP -> BackgroundSync.cancel(app)
+            BackgroundPlan.LEAVE -> Unit
+          }
+        } finally {
+          pending.finish()
+        }
+      }
+    }
 
     /** Whether this process has registered already. */
     private val registered = AtomicBoolean(false)
