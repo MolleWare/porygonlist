@@ -75,6 +75,10 @@ fun merge(mine: GroceryItem, theirs: GroceryItem): ItemMerge {
         // Where it sits. Two people moving the same item at once is not worth a question: the later
         // move wins, the way a tick does, and nothing is reported.
         position = mine.position.latest(theirs.position),
+        // Which recipes it is for. Taken from the copy that has them, never left as this phone's, or
+        // the names would reach nobody: a phone from before recipes sends none, which is the oldest
+        // stamp and loses to any. Not worth a question either; see recipesBetween.
+        recipes = recipesBetween(mine.recipes, theirs.recipes),
         // `origin` is a fact about creation and is the same on both sides. `editing` is who has the
         // item open on this phone, so it is never taken from a peer.
         editing = mine.editing,
@@ -83,6 +87,23 @@ fun merge(mine: GroceryItem, theirs: GroceryItem): ItemMerge {
     mine = mine,
     theirs = theirs,
   )
+}
+
+/**
+ * The recipes an item is for, after merging two copies of it.
+ *
+ * The newer stamp wins, as for a position. Except when neither side had seen the other — two people
+ * each adding a different recipe's eggs while apart — where both lists of names are kept, the
+ * newer's first: names are only ever added, so keeping both is what each of them did. The newer's
+ * stamp and the same order on both phones, so the two agree on what the item says.
+ */
+internal fun recipesBetween(mine: Field<List<String>>, theirs: Field<List<String>>): Field<List<String>> {
+  val merged = merge(mine, theirs)
+  if (!merged.wasConcurrent) return merged.field
+  val newer = merged.field
+  val older = if (newer.at == mine.at) theirs else mine
+  val extra = older.value.filterNot { name -> newer.value.any { it.equals(name, ignoreCase = true) } }
+  return newer.copy(value = newer.value + extra)
 }
 
 /**

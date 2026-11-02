@@ -12,6 +12,7 @@ import io.github.molleware.porygonlist.data.ListRepository
 import io.github.molleware.porygonlist.data.LocalNode
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
+import io.github.molleware.porygonlist.data.Recipe
 import io.github.molleware.porygonlist.data.Staple
 import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.WordTrie
@@ -461,6 +462,167 @@ class PorygonViewModelTest {
 
     vm.removeStaple("Tofu")
     assertFalse(state().staples.any { it.name == "Tofu" })
+  }
+
+  // ── Recipes ───────────────────────────────────────────────────────────────
+
+  /** Makes a recipe the way the form does. */
+  private fun makeRecipe(name: String, ingredients: String) {
+    vm.startNewRecipe()
+    vm.onRecipeNameChange(name)
+    vm.onRecipeIngredientsChange(ingredients)
+    vm.saveRecipe()
+  }
+
+  private fun onList(name: String) = state().activeList.liveItems.filter { WordTrie.fold(it.name.value) == WordTrie.fold(name) }
+
+  @Test
+  fun `using a recipe puts everything in it on the open list, each for it`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour, milk")
+
+    vm.useRecipe("Pancakes")
+
+    assertEquals(2, onList("Eggs").single().qty.value)
+    assertEquals(1, onList("Flour").single().qty.value)
+    assertEquals(1, onList("Milk").single().qty.value)
+    assertTrue(listOf("Eggs", "Flour", "Milk").all { onList(it).single().recipes.value == listOf("Pancakes") })
+    assertEquals("in the order the recipe has them", listOf("Eggs", "Flour", "Milk"), state().activeList.orderedItems.takeLast(3).map { it.name.value })
+  }
+
+  @Test
+  fun `something already on the list goes up by the recipe's quantity, and is for it too`() = runTest(dispatcher) {
+    repo.load()
+    // The seed has Oat milk ×2 on the list, unticked.
+    makeRecipe("Porridge", "oat milk, 3 oats")
+    makeRecipe("Latte", "2 Oat milk")
+
+    vm.useRecipe("Porridge")
+    vm.useRecipe("Latte")
+
+    val oatMilk = onList("Oat milk").single()
+    assertEquals(5, oatMilk.qty.value)
+    assertEquals(listOf("Porridge", "Latte"), oatMilk.recipes.value)
+    assertEquals(listOf("Porridge"), onList("Oats").single().recipes.value)
+  }
+
+  @Test
+  fun `something already in the trolley is added again as a new line`() = runTest(dispatcher) {
+    repo.load()
+    // The seed has Tomatoes ticked off.
+    makeRecipe("Salad", "2 tomatoes")
+
+    vm.useRecipe("Salad")
+
+    val (ticked, fresh) = onList("Tomatoes").partition { it.checked }
+    assertEquals("the done one is left as it was", emptyList<String>(), ticked.single().recipes.value)
+    assertEquals(2, fresh.single().qty.value)
+    assertEquals(listOf("Salad"), fresh.single().recipes.value)
+  }
+
+  @Test
+  fun `the same recipe twice is twice as much, and for it once`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour")
+
+    vm.useRecipe("Pancakes")
+    vm.useRecipe("pancakes")
+
+    assertEquals(4, onList("Eggs").single().qty.value)
+    assertEquals(listOf("Pancakes"), onList("Eggs").single().recipes.value)
+  }
+
+  @Test
+  fun `a recipe is not kept without a name, without anything in it, or under a name already used`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour")
+
+    vm.startNewRecipe()
+    vm.onRecipeIngredientsChange("eggs")
+    vm.saveRecipe()
+    assertEquals("Give it a name first.", vm.recipeNote)
+
+    vm.onRecipeNameChange("Omelette")
+    vm.onRecipeIngredientsChange(" , ")
+    vm.saveRecipe()
+    assertEquals("Add what goes in it first.", vm.recipeNote)
+
+    vm.onRecipeNameChange("pancakes")
+    vm.onRecipeIngredientsChange("milk")
+    vm.saveRecipe()
+    assertEquals("You already have a recipe called Pancakes.", vm.recipeNote)
+
+    assertTrue("the form stays open on what was typed", vm.recipeDraft?.ingredients == "milk")
+    assertEquals(listOf("Pancakes"), state().recipes.map { it.name })
+
+    vm.onRecipeNameChange("Pancakes for two")
+    assertEquals("typing clears the note", "", vm.recipeNote)
+    vm.saveRecipe()
+    assertNull("saved, the form closes", vm.recipeDraft)
+    assertEquals(listOf("Pancakes", "Pancakes for two"), state().recipes.map { it.name })
+  }
+
+  @Test
+  fun `editing a recipe starts from what it has, and saving puts it in its place`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour")
+    makeRecipe("Lasagne", "pasta sheets")
+
+    vm.startEditRecipe("Pancakes")
+    assertEquals(RecipeDraft(editing = "Pancakes", name = "Pancakes", ingredients = "2 Eggs, Flour"), vm.recipeDraft)
+    vm.onRecipeIngredientsChange("2 Eggs, Flour, Milk")
+    vm.saveRecipe()
+
+    assertEquals(listOf("Pancakes", "Lasagne"), state().recipes.map { it.name })
+    assertEquals("2 Eggs, Flour, Milk", state().recipeNamed("Pancakes")!!.ingredientsText)
+  }
+
+  @Test
+  fun `cancelling a recipe's form changes nothing`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour")
+    val before = state().recipes
+
+    vm.startEditRecipe("Pancakes")
+    vm.onRecipeNameChange("Crêpes")
+    vm.closeRecipeForm()
+
+    assertEquals(before, state().recipes)
+    assertNull(vm.recipeDraft)
+  }
+
+  @Test
+  fun `deleting a recipe asks first, and leaves what it already added`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour")
+    vm.useRecipe("Pancakes")
+
+    vm.startEditRecipe("Pancakes")
+    vm.askDeleteRecipe()
+    assertTrue(vm.confirmingRecipeDelete)
+    vm.cancelDeleteRecipe()
+    assertEquals(1, state().recipes.size)
+
+    vm.askDeleteRecipe()
+    vm.deleteRecipe()
+
+    assertEquals(emptyList<Recipe>(), state().recipes)
+    assertNull(vm.recipeDraft)
+    assertEquals(listOf("Pancakes"), onList("Eggs").single().recipes.value)
+  }
+
+  @Test
+  fun `merging a duplicate keeps every recipe either side was for`() = runTest(dispatcher) {
+    repo.load()
+    val (mine, theirs) = putBothOnList()
+    val forLasagne = mine.forRecipe("Lasagne", Hlc(1_700_000_002_000, 0, state().localDevice))
+    val forPaella = theirs.forRecipe("Paella", Hlc(1_700_000_002_000, 1, state().localDevice))
+    // The card holds the two sides as they were when the clash was found, so that is where they go.
+    repo.update { s, _ -> s.copy(conflicts = listOf(Conflict(forLasagne, forPaella))) }
+
+    vm.mergeConflict(Conflict(forLasagne, forPaella))
+
+    assertEquals(listOf("Lasagne", "Paella"), state().activeList.liveItems.single { it.name.value == "Rice" }.recipes.value)
   }
 
   // ── Where a tick puts an item ─────────────────────────────────────────────

@@ -7,9 +7,12 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -24,9 +27,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.molleware.porygonlist.data.Recipe
 import io.github.molleware.porygonlist.data.Staple
 import io.github.molleware.porygonlist.theme.Accent2300
+import io.github.molleware.porygonlist.theme.Accent2800
 import io.github.molleware.porygonlist.theme.Accent300
+import io.github.molleware.porygonlist.theme.Accent700
 import io.github.molleware.porygonlist.theme.Accent900
 import io.github.molleware.porygonlist.theme.Elevation
 import io.github.molleware.porygonlist.theme.Neutral300
@@ -36,9 +42,13 @@ import io.github.molleware.porygonlist.theme.ShadowInk
 import io.github.molleware.porygonlist.theme.Shapes
 import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
+import io.github.molleware.porygonlist.ui.RecipeDraft
 import io.github.molleware.porygonlist.ui.components.IconActionButton
 import io.github.molleware.porygonlist.ui.components.IconPaths
 import io.github.molleware.porygonlist.ui.components.PorygonTextField
+import io.github.molleware.porygonlist.ui.components.PrimaryButton
+import io.github.molleware.porygonlist.ui.components.SecondaryButton
+import io.github.molleware.porygonlist.ui.components.SectionLabel
 import io.github.molleware.porygonlist.ui.components.tabBarClearance
 
 /**
@@ -47,6 +57,9 @@ import io.github.molleware.porygonlist.ui.components.tabBarClearance
  * The grid is the owner's, not the design's: tiles are added below and removed by a long press. A
  * tile's sub-label counts how often it has actually been used, which is the one thing about a
  * staple the app can know without being told.
+ *
+ * Recipes sit below the grid on the same bargain, a whole dish to a tap. A long press turns a recipe
+ * into its own form, as a list card does, so the answer is where the question was.
  */
 @Composable
 fun StaplesScreen(
@@ -60,6 +73,21 @@ fun StaplesScreen(
   onAskRemove: (String) -> Unit,
   onCancelRemove: () -> Unit,
   onRemove: (String) -> Unit,
+  recipes: List<Recipe>,
+  onUseRecipe: (String) -> Unit,
+  /** The recipe form, when it is open: on a new recipe, or on the one it names. */
+  recipeDraft: RecipeDraft?,
+  recipeNote: String,
+  onNewRecipe: () -> Unit,
+  onEditRecipe: (String) -> Unit,
+  onRecipeNameChange: (String) -> Unit,
+  onRecipeIngredientsChange: (String) -> Unit,
+  onSaveRecipe: () -> Unit,
+  onCloseRecipe: () -> Unit,
+  confirmingRecipeDelete: Boolean,
+  onAskDeleteRecipe: () -> Unit,
+  onCancelDeleteRecipe: () -> Unit,
+  onDeleteRecipe: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Column(
@@ -113,10 +141,134 @@ fun StaplesScreen(
       )
       IconActionButton(IconPaths.PLUS, contentDescription = "Add staple", onClick = onAddStaple)
     }
+
+    SectionLabel("Recipes", Modifier.padding(top = 32.dp, bottom = 5.dp))
+    Text(
+      if (recipes.isEmpty()) "Everything a dish needs, in one tap."
+      else if (activeListName.isBlank()) "Make a list to add these to. Hold to edit."
+      else "Tap to add to $activeListName. Hold to edit.",
+      style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(bottom = 14.dp),
+    )
+
+    val form: @Composable () -> Unit = {
+      if (recipeDraft != null) {
+        RecipeForm(
+          draft = recipeDraft,
+          note = recipeNote,
+          onNameChange = onRecipeNameChange,
+          onIngredientsChange = onRecipeIngredientsChange,
+          onSave = onSaveRecipe,
+          onCancel = onCloseRecipe,
+          confirmingDelete = confirmingRecipeDelete,
+          onAskDelete = onAskDeleteRecipe,
+          onCancelDelete = onCancelDeleteRecipe,
+          onDelete = onDeleteRecipe,
+        )
+      }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+      recipes.forEach { recipe ->
+        if (recipeDraft?.editing == recipe.name) form()
+        else RecipeCard(recipe, onClick = { onUseRecipe(recipe.name) }, onLongClick = { onEditRecipe(recipe.name) })
+      }
+      // A new recipe's form comes where it will be once it is saved: last.
+      if (recipeDraft != null && recipeDraft.editing == null) form()
+    }
+    if (recipeDraft == null) {
+      SecondaryButton(
+        "New recipe",
+        onNewRecipe,
+        modifier = Modifier.padding(top = if (recipes.isEmpty()) 0.dp else 14.dp),
+        style = PorygonType.Meta,
+      )
+    }
   }
 }
 
 private const val COLUMNS = 3
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RecipeCard(recipe: Recipe, onClick: () -> Unit, onLongClick: () -> Unit) {
+  Column(
+    Modifier.fillMaxWidth()
+      .shadow(Elevation.Sm, Shapes.Row, ambientColor = ShadowInk, spotColor = ShadowInk)
+      .clip(Shapes.Row)
+      .background(Surface)
+      .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+      .padding(horizontal = 16.dp, vertical = 13.dp)
+  ) {
+    Text(recipe.name, style = PorygonType.RowName, color = TextInk)
+    Text(recipe.ingredientsText, style = PorygonType.Fine, color = Neutral700, modifier = Modifier.padding(top = 1.dp))
+  }
+}
+
+/**
+ * A recipe's name and what goes in it, typed the way a pasted list is. Delete is offered only on a
+ * recipe that exists, and asks once.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun RecipeForm(
+  draft: RecipeDraft,
+  note: String,
+  onNameChange: (String) -> Unit,
+  onIngredientsChange: (String) -> Unit,
+  onSave: () -> Unit,
+  onCancel: () -> Unit,
+  confirmingDelete: Boolean,
+  onAskDelete: () -> Unit,
+  onCancelDelete: () -> Unit,
+  onDelete: () -> Unit,
+) {
+  val buttonPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp)
+  Column(
+    Modifier.fillMaxWidth()
+      .shadow(Elevation.Sm, Shapes.Card, ambientColor = ShadowInk, spotColor = ShadowInk)
+      .clip(Shapes.Card)
+      .background(Surface)
+      .padding(horizontal = 18.dp, vertical = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(11.dp),
+  ) {
+    PorygonTextField(
+      value = draft.name,
+      onValueChange = onNameChange,
+      placeholder = "Recipe name",
+      modifier = Modifier.fillMaxWidth(),
+      imeAction = ImeAction.Next,
+    )
+    PorygonTextField(
+      value = draft.ingredients,
+      onValueChange = onIngredientsChange,
+      placeholder = "2 eggs, flour, milk…",
+      // Capped like the paste field, so a long recipe scrolls inside it rather than pushing Save away.
+      modifier = Modifier.fillMaxWidth().heightIn(max = 190.dp),
+      minHeight = 90.dp,
+      shape = Shapes.Panel,
+      singleLine = false,
+      imeAction = ImeAction.Default,
+    )
+    if (note.isNotEmpty()) Text(note, style = PorygonType.Fine, color = Accent700)
+
+    if (confirmingDelete) {
+      Text("Delete this recipe?", style = PorygonType.Meta, color = TextInk)
+      Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        PrimaryButton("Delete", onDelete, style = PorygonType.Meta, contentPadding = buttonPadding)
+        SecondaryButton("Keep it", onCancelDelete, style = PorygonType.Meta, contentPadding = buttonPadding)
+      }
+    } else {
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        PrimaryButton("Save", onSave, style = PorygonType.Meta, contentPadding = buttonPadding)
+        SecondaryButton("Cancel", onCancel, style = PorygonType.Meta, contentPadding = buttonPadding)
+        if (draft.editing != null) {
+          SecondaryButton("Delete", onAskDelete, style = PorygonType.Meta, contentColor = Accent2800, contentPadding = buttonPadding)
+        }
+      }
+    }
+  }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

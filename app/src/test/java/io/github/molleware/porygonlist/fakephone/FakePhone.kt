@@ -31,6 +31,7 @@ import io.github.molleware.porygonlist.data.net.SyncEndpoint
 import io.github.molleware.porygonlist.data.net.TXT_DEVICE_ID
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.ui.PorygonViewModel
+import io.github.molleware.porygonlist.ui.recipeNote
 import java.io.File
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -257,6 +258,18 @@ private class Console(
       "kick" -> vm.removePersonFromActiveList(peer(rest))
       "unpair" -> vm.unpair(peer(rest))
       "add" -> vm.addItem(rest)
+      // "recipe Pancakes: 2 eggs, flour, milk" — made through the form, or edited if it exists.
+      "recipe" -> {
+        val (recipeName, ingredients) =
+          rest.split(':', limit = 2).map { it.trim() }.also { require(it.size == 2) { "recipe <name>: <ingredients>" } }
+        if (state.recipeNamed(recipeName) != null) vm.startEditRecipe(recipeName) else vm.startNewRecipe()
+        vm.onRecipeNameChange(recipeName)
+        vm.onRecipeIngredientsChange(ingredients)
+        vm.saveRecipe()
+        check(vm.recipeDraft == null) { vm.recipeNote }
+      }
+      "recipes" -> state.recipes.forEach { say("${it.name}: ${it.ingredientsText}") }
+      "cook" -> vm.useRecipe(checkNotNull(state.recipeNamed(rest)) { "no recipe '$rest'" }.name)
       "bulk" -> {
         val count = rest.substringBefore(' ').toInt()
         val prefix = rest.substringAfter(' ', "Item").ifBlank { "Item" }
@@ -294,7 +307,7 @@ private class Console(
       "quit" -> say("bye")
       else -> error("unknown command '$verb' — try help")
     }
-    if (verb != "state" && verb != "help" && verb != "lists" && verb != "found" && verb != "code") say("ok")
+    if (verb !in setOf("state", "help", "lists", "found", "code", "recipes")) say("ok")
   }
 
   /** Puts a pairing code up and prints it, address and token included, for the Pixel to paste. */
@@ -332,8 +345,10 @@ private class Console(
   /** " (apple)" for someone wearing an avatar, nothing for the initial. By id, as it travels. */
   private fun String.worn() = if (this == Avatars.NONE) "" else " ($this)"
 
+  /** "Eggs ×4 (for Lasagne & Pancakes)": the recipes as the item's line on a screen says them. */
   private fun GroceryItem.label() =
-    name.value + (if (qty.value > 1) " ×${qty.value}" else "") + (if (removed.value) " (removed)" else "")
+    name.value + (if (qty.value > 1) " ×${qty.value}" else "") + (if (removed.value) " (removed)" else "") +
+      recipeNote(this).let { if (it.isEmpty()) "" else " ($it)" }
 
   private fun AppState.visibleLists() = lists.filter { it.personFor(localDevice)?.present == true }
 
@@ -358,6 +373,7 @@ private class Console(
       "state | lists | code | pair <link> | found | open <list|index> | newlist <name> | renamelist <name> | leave | " +
         "name <name> | avatar <id>|none | " +
         "share <peer> | kick <peer> | unpair <peer> | add <item> | bulk <n> [prefix] | tick <item> | " +
+        "recipe <name>: <ingredients> | recipes | cook <recipe> | " +
         "rename <item> => <name> | qty <item> <n> | remove <item> | keep mine|theirs|both | offline | online | quit"
   }
 }

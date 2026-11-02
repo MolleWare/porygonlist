@@ -155,6 +155,28 @@ class FormatTest {
   }
 
   @Test
+  fun `an item says which recipes it is for, joined as names are`() {
+    val eggs = item("Eggs")
+
+    assertEquals("", recipeNote(eggs))
+    assertEquals("for Lasagne", recipeNote(eggs.forRecipe("Lasagne", Hlc(now, 1, me))))
+    assertEquals(
+      "for Lasagne, Pancakes & Quiche",
+      recipeNote(eggs.forRecipe("Lasagne", Hlc(now, 1, me)).forRecipe("Pancakes", Hlc(now, 2, me)).forRecipe("Quiche", Hlc(now, 3, me))),
+    )
+  }
+
+  @Test
+  fun `what an item is for comes after what its line already said`() {
+    val eggs = item("Eggs", at = now - 30_000).forRecipe("Lasagne", Hlc(now - 30_000, 1, me)).forRecipe("Pancakes", Hlc(now - 30_000, 2, me))
+
+    assertEquals("you, just now · for Lasagne & Pancakes", itemSubLabel(eggs, list, me, now))
+    assertEquals("you added this · for Lasagne & Pancakes", shopSubLabel(eggs, list, me))
+    assertEquals("in the trolley · for Lasagne & Pancakes", shopSubLabel(eggs.copy(checked = true), list, me))
+    assertEquals("and nothing at all for none", "you, just now", itemSubLabel(item("Eggs", at = now - 30_000), list, me, now))
+  }
+
+  @Test
   fun `a list nobody else is on says just you`() {
     val solo = list.copy(people = listOf(Person(me, "Ava", "A")))
 

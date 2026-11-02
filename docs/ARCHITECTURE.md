@@ -382,6 +382,15 @@ record, wins; anyone else's unstamped copy changes nothing. A phone's own record
 always carries its owner's name, unless a newer stamp arrives, which only a phone
 they used before can have written.
 
+Recipes (0.2.0) stay on the phone that has them, like staples: one `recipe` record
+each in the state file, a type 0.1.0 skips. What travels is the names of the recipes
+an item was added for ("for Lasagne"), as one stamped field — three columns — at the
+end of `item` in both formats. 0.1.0 reads an item's first seventeen columns and
+stops; what it sends back has none, which reads as no recipe stamped at the beginning
+of time, so it can never wipe the names off. The newer stamp wins, except that two
+recipes added to the same item while apart are both kept, the newer's first, so both
+phones show the same line.
+
 ---
 
 ## 7. What is left

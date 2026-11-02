@@ -184,12 +184,14 @@ fun itemSubLabel(
   now: Long = System.currentTimeMillis(),
 ): String {
   val writer = list.nameFor(item.lastWriter, localDevice)
-  return when {
-    item.editing && item.lastWriter != localDevice -> "$writer, editing now"
-    item.origin == Origin.MERGED -> "you and ${list.partnerName(localDevice)}, ${relativeTime(item.at, now)}"
-    item.origin == Origin.IMPORTED -> "from a text, ${relativeTime(item.at, now)}"
-    else -> "$writer, ${relativeTime(item.at, now)}"
-  }
+  val who =
+    when {
+      item.editing && item.lastWriter != localDevice -> "$writer, editing now"
+      item.origin == Origin.MERGED -> "you and ${list.partnerName(localDevice)}, ${relativeTime(item.at, now)}"
+      item.origin == Origin.IMPORTED -> "from a text, ${relativeTime(item.at, now)}"
+      else -> "$writer, ${relativeTime(item.at, now)}"
+    }
+  return withRecipes(who, item)
 }
 
 /**
@@ -199,11 +201,21 @@ fun itemSubLabel(
  * is, and ticking something off must not quietly make it yours.
  */
 fun shopSubLabel(item: GroceryItem, list: GroceryList, localDevice: DeviceId): String =
-  when {
-    item.checked -> "in the trolley"
-    item.createdBy == localDevice -> "you added this"
-    else -> "${list.nameFor(item.createdBy, localDevice)} added this"
-  }
+  withRecipes(
+    when {
+      item.checked -> "in the trolley"
+      item.createdBy == localDevice -> "you added this"
+      else -> "${list.nameFor(item.createdBy, localDevice)} added this"
+    },
+    item,
+  )
+
+/** Which recipes an item is for: "for Lasagne", "for Lasagne & Pancakes". Empty for none. */
+fun recipeNote(item: GroceryItem): String = if (item.recipes.value.isEmpty()) "" else "for ${joinNames(item.recipes.value)}"
+
+/** [label], then which recipes the item is for after a dot, when it is for any. */
+private fun withRecipes(label: String, item: GroceryItem): String =
+  recipeNote(item).let { if (it.isEmpty()) label else "$label · $it" }
 
 /**
  * The meta line on a list card: "in step with Ava", or what is still to reach whom.

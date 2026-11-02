@@ -23,6 +23,7 @@ import io.github.molleware.porygonlist.data.crypto.PeerAddress
 import io.github.molleware.porygonlist.data.LocalNode
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
+import io.github.molleware.porygonlist.data.Recipe
 import io.github.molleware.porygonlist.data.ShareCodec
 import io.github.molleware.porygonlist.data.Staple
 import io.github.molleware.porygonlist.data.WordTrie
@@ -75,6 +76,12 @@ enum class Sheet {
 
 /** The item being edited, held apart from the list so Cancel is free. */
 data class EditDraft(val itemId: ItemId, val name: String, val qty: Int, val addedBy: String)
+
+/**
+ * The recipe form as typed so far, held apart from the recipes so Cancel is free. [editing] is the
+ * name of the recipe it was opened on, or null for a new one.
+ */
+data class RecipeDraft(val editing: String?, val name: String, val ingredients: String)
 
 class PorygonViewModel(
   private val repo: ListRepository,
@@ -1129,6 +1136,97 @@ class PorygonViewModel(
     confirmingStaple = null
   }
 
+  // ── Recipes ───────────────────────────────────────────────────────────────
+
+  /**
+   * Puts everything a recipe needs on the list being worked on, each item saying it is for it.
+   *
+   * One ingredient at a time through the same path a staple takes, so something already there and
+   * unticked goes up by the recipe's quantity instead of being listed twice — and gains the recipe's
+   * name, so it says it is for this as well as whatever it was for already.
+   */
+  fun useRecipe(name: String) = repo.update { s, node ->
+    val recipe = s.recipeNamed(name) ?: return@update s
+    recipe.ingredients.fold(s) { state, it -> state.withItemAdded(node, it.name, qty = it.qty, forRecipe = recipe.name) }
+  }
+
+  /** The recipe form, open on a new recipe or on one being edited. Null while it is closed. */
+  var recipeDraft by mutableStateOf<RecipeDraft?>(null)
+    private set
+
+  /** Why the form did not save, said under it. Empty while there is nothing to say. */
+  var recipeNote by mutableStateOf("")
+    private set
+
+  /** The form is asking whether the recipe really should go. */
+  var confirmingRecipeDelete by mutableStateOf(false)
+    private set
+
+  fun startNewRecipe() = openRecipeForm(RecipeDraft(editing = null, name = "", ingredients = ""))
+
+  /** Opens [name]'s form, filled in with what it has now. */
+  fun startEditRecipe(name: String) {
+    val recipe = state.value?.recipeNamed(name) ?: return
+    openRecipeForm(RecipeDraft(editing = recipe.name, name = recipe.name, ingredients = recipe.ingredientsText))
+  }
+
+  private fun openRecipeForm(draft: RecipeDraft) {
+    recipeDraft = draft
+    recipeNote = ""
+    confirmingRecipeDelete = false
+  }
+
+  fun onRecipeNameChange(value: String) {
+    recipeDraft = recipeDraft?.copy(name = value)
+    recipeNote = ""
+  }
+
+  fun onRecipeIngredientsChange(value: String) {
+    recipeDraft = recipeDraft?.copy(ingredients = value)
+    recipeNote = ""
+  }
+
+  /**
+   * Keeps what the form says, read the way a pasted list is. The form stays open with a line saying
+   * why when there is nothing to keep, or when another recipe already has the name.
+   */
+  fun saveRecipe() {
+    val d = recipeDraft ?: return
+    val recipe = Recipe.of(d.name, d.ingredients)
+    val taken = recipe?.let { state.value?.recipeNamed(it.name) }?.takeIf { it.name != d.editing }
+    recipeNote =
+      when {
+        d.name.isBlank() -> "Give it a name first."
+        recipe == null -> "Add what goes in it first."
+        taken != null -> "You already have a recipe called ${taken.name}."
+        else -> ""
+      }
+    if (recipe == null || taken != null) return
+    repo.update { s, _ -> s.withRecipeSaved(recipe, replacing = d.editing) }
+    closeRecipeForm()
+  }
+
+  fun closeRecipeForm() {
+    recipeDraft = null
+    recipeNote = ""
+    confirmingRecipeDelete = false
+  }
+
+  fun askDeleteRecipe() {
+    confirmingRecipeDelete = true
+  }
+
+  fun cancelDeleteRecipe() {
+    confirmingRecipeDelete = false
+  }
+
+  /** Deletes the recipe the form is open on. What it already put on a list stays, names and all. */
+  fun deleteRecipe() {
+    val name = recipeDraft?.editing ?: return
+    repo.update { s, _ -> s.withoutRecipe(name) }
+    closeRecipeForm()
+  }
+
   // ── Conflict ──────────────────────────────────────────────────────────────
 
   /**
@@ -1141,7 +1239,10 @@ class PorygonViewModel(
   fun mergeConflict(card: Conflict) = repo.update { s, node ->
     val c = s.openConflict(card)?.takeIf { it.kind == ConflictKind.DUPLICATE } ?: return@update s
     val stamp = node.clock.tick()
-    val merged = node.newItem(c.itemName, qty = c.yours.qty.value + c.theirs.qty.value, origin = Origin.MERGED)
+    // For every recipe either was for: two people each adding eggs for their own dish still need both.
+    val recipes = (c.yours.recipes.value + c.theirs.recipes.value).distinctBy { it.lowercase() }
+    val fresh = node.newItem(c.itemName, qty = c.yours.qty.value + c.theirs.qty.value, origin = Origin.MERGED)
+    val merged = if (recipes.isEmpty()) fresh else fresh.copy(recipes = fresh.recipes.set(recipes, fresh.name.at))
     val replaced = setOf(c.yours.id, c.theirs.id)
 
     s.withoutConflict(c).withConflictList(c) { list ->
@@ -1388,7 +1489,8 @@ class PorygonViewModel(
    * Puts [name] on the open list, or asks for more of what is already there.
    *
    * Wanting two of something is a quantity, not two lines. Every way of adding goes through here —
-   * the field, a suggestion, a staple tile — because they are the same act to the person doing it.
+   * the field, a suggestion, a staple tile, a recipe — because they are the same act to the person
+   * doing it.
    *
    * Matching is on the folded name, the same comparison `alreadyOn` and the suggestion filter use,
    * so "eggs" finds "Eggs". A **ticked** item is not matched: it is already in the trolley, and
@@ -1396,19 +1498,23 @@ class PorygonViewModel(
    *
    * The bump is stamped like any other field write, so it merges against a peer's edit rather than
    * overwriting it blind.
+   *
+   * [forRecipe] is the recipe it is being added for, which the item then names, new or bumped.
    */
   private fun AppState.withItemAdded(
     node: LocalNode,
     name: String,
     qty: Int = 1,
     origin: Origin = Origin.LOCAL,
+    forRecipe: String? = null,
   ): AppState {
     val trimmed = name.trim()
     val folded = WordTrie.fold(trimmed)
     val existing = activeList.liveItems.firstOrNull { !it.checked && WordTrie.fold(it.name.value) == folded }
 
     if (existing == null) {
-      val item = node.newItem(trimmed, qty = qty, origin = origin)
+      val fresh = node.newItem(trimmed, qty = qty, origin = origin)
+      val item = if (forRecipe == null) fresh else fresh.forRecipe(forRecipe, fresh.name.at)
       return withActiveList { it.withItemsAppended(listOf(item), item.name.at) }
     }
 
@@ -1418,7 +1524,10 @@ class PorygonViewModel(
         items =
           list.items.map { item ->
             if (item.id != existing.id) item
-            else item.copy(qty = item.qty.set(item.qty.value + qty, stamp))
+            else {
+              val bumped = item.copy(qty = item.qty.set(item.qty.value + qty, stamp))
+              if (forRecipe == null) bumped else bumped.forRecipe(forRecipe, stamp)
+            }
           }
       )
     }

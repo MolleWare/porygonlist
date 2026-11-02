@@ -30,7 +30,10 @@ internal object Records {
       // The "0" is a retired `pending` column, still written so readers that count columns stay aligned.
       listOf(bool(item.checked), item.checkedAt.encode(), item.origin.name, "0") +
       // Last, so a reader from before reordering, which stops at the column above, still reads the rest.
-      field(item.position) { it }
+      field(item.position) { it } +
+      // After the position for the same reason: 0.1.0 stops there. Several names in one column, written
+      // as a record of their own so a name holding a bar comes back whole.
+      field(item.recipes) { if (it.isEmpty()) "" else line(it) }
 
   /** A field is three columns: the value, the stamp it was written at, and what it was written against. */
   fun <T> field(field: Field<T>, encodeValue: (T) -> String): List<String> =
@@ -56,6 +59,12 @@ internal object Records {
       // Absent from anything written before reordering, which reads as never placed.
       position =
         (if (f.size >= from + 17) parseField(f, from + 14) { it } else null) ?: Field("", Hlc(0, 0, ItemId(id).device)),
+      // Absent from anything written before recipes — a 0.1.0 phone's payload, or its save — which reads
+      // as for no recipe, stamped at the beginning of time: any recipe's name outranks it. A damaged
+      // one reads the same way rather than costing the item.
+      recipes =
+        (if (f.size >= from + 20) parseField(f, from + 17) { if (it.isEmpty()) emptyList() else split(it) } else null)
+          ?: Field(emptyList(), Hlc(0, 0, ItemId(id).device)),
     )
   }
 

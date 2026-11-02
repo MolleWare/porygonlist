@@ -124,6 +124,16 @@ data class GroceryItem(
    * and those keep the order they were stored in.
    */
   val position: Field<String> = Field("", Hlc(0, 0, id.device)),
+  /**
+   * The recipes it was added for, by name: "for Lasagne & Pancakes". Empty for anything put on the
+   * list by hand.
+   *
+   * Names rather than recipes, because a recipe stays on the phone that has it and the others on the
+   * list only ever see what it was called. Stamped, because not every phone sends it: one from before
+   * recipes leaves it out, and that reads as the beginning of time, so its copy of the item can never
+   * wipe the names off.
+   */
+  val recipes: Field<List<String>> = Field(emptyList(), Hlc(0, 0, id.device)),
 ) {
   /** The phone that first added this item. */
   val createdBy: DeviceId
@@ -131,7 +141,15 @@ data class GroceryItem(
 
   /** The newest stamp across everything mutable on this item. */
   val touchedAt: Hlc
-    get() = maxOf(name.at, qty.at, checkedAt, removed.at, position.at)
+    get() = maxOf(name.at, qty.at, checkedAt, removed.at, position.at, recipes.at)
+
+  /**
+   * The same item, also for [recipe] as of [at]. Already for it — under any capitalisation — it is
+   * left exactly as it was, so the same recipe used twice adds to the count but not to the names.
+   */
+  fun forRecipe(recipe: String, at: Hlc): GroceryItem =
+    if (recipes.value.any { it.equals(recipe, ignoreCase = true) }) this
+    else copy(recipes = recipes.set(recipes.value + recipe, at))
 
   /**
    * The newest change to the item itself. Position is left out: a tick can place every item in the
@@ -522,6 +540,45 @@ data class Staple(val name: String, val uses: Int = 0) {
       }
 }
 
+/** One thing a recipe needs, and how many. */
+data class Ingredient(val name: String, val qty: Int = 1)
+
+/**
+ * A dish and what goes into it, put on a list in one tap.
+ *
+ * This phone's own, like a [Staple]: nothing about a recipe goes to a peer. What does travel is its
+ * name, on each item it adds — see [GroceryItem.recipes].
+ */
+data class Recipe(val name: String, val ingredients: List<Ingredient>) {
+
+  /**
+   * "2 Eggs, Flour, Milk": the line under its name, and what its form starts from when it is edited.
+   * Written the way a pasted list is read, so editing a recipe and saving it untouched changes nothing.
+   */
+  val ingredientsText: String
+    get() = ingredients.joinToString(", ") { if (it.qty > 1) "${it.qty} ${it.name}" else it.name }
+
+  companion object {
+    /**
+     * A recipe from what was typed into its form: a name, and its ingredients as a pasted list is
+     * read — "2 eggs, flour, milk", by commas or by lines.
+     *
+     * Null without a name or without anything in it. The same thing typed twice is one ingredient
+     * with both quantities, matched the way an item already on a list is. "0 eggs" still means eggs.
+     */
+    fun of(name: String, ingredients: String): Recipe? {
+      val trimmed = name.trim()
+      if (trimmed.isEmpty()) return null
+      val parsed =
+        ShareCodec.decode(ingredients)
+          .groupBy { WordTrie.fold(it.name) }
+          .values
+          .map { same -> Ingredient(same.first().name, same.sumOf { it.qty.coerceAtLeast(1) }) }
+      return if (parsed.isEmpty()) null else Recipe(trimmed, parsed)
+    }
+  }
+}
+
 /**
  * Two people changed the same thing without either having seen the other's version.
  *
@@ -615,6 +672,8 @@ data class AppState(
   val peers: List<TrustedPeer> = emptyList(),
   /** This phone's one-tap shortlist. Starts empty; local to the install; never sent anywhere. */
   val staples: List<Staple> = emptyList(),
+  /** This phone's recipes, in the order they were made. Local, like [staples]; never sent anywhere. */
+  val recipes: List<Recipe> = emptyList(),
   /**
    * Every question waiting for a person, oldest first, each on its own list.
    *
@@ -738,6 +797,26 @@ data class AppState(
         },
     )
   }
+
+  /** The recipe called [name], under any capitalisation. */
+  fun recipeNamed(name: String): Recipe? = recipes.firstOrNull { it.name.equals(name.trim(), ignoreCase = true) }
+
+  /**
+   * Keeps [recipe]: in place of the one called [replacing] when it is an edit, last when it is new.
+   *
+   * Refused — this state comes back as it was — when a different recipe already has its name. The
+   * name is all an item says about which recipe it is for, and two recipes sharing one would make
+   * "for Lasagne" mean either.
+   */
+  fun withRecipeSaved(recipe: Recipe, replacing: String? = null): AppState {
+    val taken = recipeNamed(recipe.name)
+    if (taken != null && taken.name != replacing) return this
+    val at = recipes.indexOfFirst { it.name == replacing }
+    return copy(recipes = if (at < 0) recipes + recipe else recipes.toMutableList().apply { set(at, recipe) })
+  }
+
+  /** Takes a recipe off this phone. Nothing it already put on a list is touched, its names included. */
+  fun withoutRecipe(name: String): AppState = copy(recipes = recipes.filterNot { it.name == name })
 
   /** The fingerprints discovery is allowed to run on. */
   val approvedFingerprints: Set<NetworkFingerprint>

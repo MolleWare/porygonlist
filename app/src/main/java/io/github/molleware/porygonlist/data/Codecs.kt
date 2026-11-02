@@ -57,8 +57,10 @@ object ShareCodec {
       .filter { it.isNotEmpty() }
       .map { token ->
         val match = LEADING_QTY.find(token)
-        if (match != null) {
-          ParsedItem(match.groupValues[2].capitalizeFirst(), match.groupValues[1].toInt())
+        // A number too long to be a quantity is read as part of the name rather than thrown on.
+        val qty = match?.groupValues?.get(1)?.toIntOrNull()
+        if (match != null && qty != null) {
+          ParsedItem(match.groupValues[2].capitalizeFirst(), qty)
         } else {
           ParsedItem(token.capitalizeFirst(), 1)
         }
@@ -96,6 +98,9 @@ object ShareCodec {
  * Avatars came within version 11, as three columns at the end of `meta` and of `person`, and the
  * stamp of a name as one more after them: a save from 0.1.0 reads as nobody having chosen an avatar
  * or renamed since, and 0.1.0 reads one of these by ignoring them.
+ *
+ * Recipes came the same way: a `recipe` record, which 0.1.0 skips as a type it does not know, and
+ * three columns at the end of `item` saying which recipes it is for, which it never reads.
  */
 object StateCodec {
   private const val VERSION = "PLSTATE11"
@@ -189,6 +194,14 @@ object StateCodec {
 
     state.staples.forEach { appendLine(record("staple", it.name, it.uses.toString())) }
 
+    // One line per recipe, its ingredients in pairs after the name, so a damaged line costs one
+    // recipe and can never hand its ingredients to the one before. A record type 0.1.0 never wrote,
+    // and skips.
+    state.recipes.forEach { recipe ->
+      val ingredients = recipe.ingredients.flatMap { listOf(it.name, it.qty.toString()) }
+      appendLine(record(*(listOf("recipe", recipe.name) + ingredients).toTypedArray()))
+    }
+
     state.lists.forEach { list ->
       // Pinned is this phone's own and lives only here; the sync payload's list record has no such
       // field, so it never reaches anyone else.
@@ -254,6 +267,7 @@ object StateCodec {
     val networks = mutableListOf<ApprovedNetwork>()
     val peers = mutableListOf<TrustedPeer>()
     val staples = mutableListOf<Staple>()
+    val recipes = mutableListOf<Recipe>()
     val receipts = mutableMapOf<DeviceId, Hlc>()
 
     // Lists are rebuilt in file order; their people and items arrive on following lines.
@@ -314,6 +328,11 @@ object StateCodec {
               networks +=
                 ApprovedNetwork(NetworkFingerprint(f[1]), f[2], f[3].takeUnless { it == "Approved just now" } ?: "Approved", f[4] == "1")
             "staple" -> staples += Staple(f[1], f[2].toIntOrNull() ?: 0)
+            "recipe" -> {
+              val ingredients =
+                f.drop(2).chunked(2).map { (name, qty) -> Ingredient(name, qty.toIntOrNull() ?: return@runCatching) }
+              if (f[1].isNotBlank() && ingredients.isNotEmpty()) recipes += Recipe(f[1], ingredients)
+            }
             "list" -> {
               val id = f[1]
               listOrder += id
@@ -432,6 +451,7 @@ object StateCodec {
       // A peer whose key does not hash to its id is not that peer; drop it rather than trust it.
       peers = peers.filter { DeviceIdentity.matches(it.deviceId, it.publicKey) },
       staples = staples,
+      recipes = recipes,
       conflicts = conflicts,
     )
   }
