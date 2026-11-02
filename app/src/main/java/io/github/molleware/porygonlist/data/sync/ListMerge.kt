@@ -79,6 +79,9 @@ fun merge(mine: GroceryItem, theirs: GroceryItem): ItemMerge {
         // the names would reach nobody: a phone from before recipes sends none, which is the oldest
         // stamp and loses to any. Not worth a question either; see recipesBetween.
         recipes = recipesBetween(mine.recipes, theirs.recipes),
+        // Who added it, when a merge of two lists kept that. Set once and never changed, so whichever
+        // copy has it is right; one from a phone from before it simply has none, and must not wipe it.
+        addedBy = mine.addedBy ?: theirs.addedBy,
         // `origin` is a fact about creation and is the same on both sides. `editing` is who has the
         // item open on this phone, so it is never taken from a peer.
         editing = mine.editing,

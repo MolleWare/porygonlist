@@ -8,10 +8,12 @@ import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.TrustedPeer
+import io.github.molleware.porygonlist.data.initialOf
 import io.github.molleware.porygonlist.data.net.BackgroundSwitch
 import io.github.molleware.porygonlist.data.net.NetworkSnapshot
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
+import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -114,6 +116,9 @@ fun handoverLabel(confirmed: Hlc?, now: Long = System.currentTimeMillis(), zone:
  *
  * It names the *creator*, not the last writer: a clash is about who independently added the same
  * thing, and nothing has been written since or there would be no clash to show.
+ *
+ * [paired], here and in the item lines below, names an adder this list does not: someone whose item
+ * came across when another list was merged into this one.
  */
 fun conflictSide(
   item: GroceryItem,
@@ -121,7 +126,8 @@ fun conflictSide(
   localDevice: DeviceId,
   now: Long = System.currentTimeMillis(),
   zone: ZoneId = ZoneId.systemDefault(),
-): String = "${list.nameFor(item.createdBy, localDevice)} added it ${whenPhrase(item.at, now, zone)}"
+  paired: List<TrustedPeer> = emptyList(),
+): String = "${list.nameFor(item.createdBy, localDevice, paired)} added it ${whenPhrase(item.at, now, zone)}"
 
 /**
  * How someone is referred to in running text: "you" on this device, their name anywhere else.
@@ -202,8 +208,9 @@ fun itemSubLabel(
   list: GroceryList,
   localDevice: DeviceId,
   now: Long = System.currentTimeMillis(),
+  paired: List<TrustedPeer> = emptyList(),
 ): String {
-  val writer = list.nameFor(item.lastWriter, localDevice)
+  val writer = list.nameFor(item.lastWriter, localDevice, paired)
   val who =
     when {
       item.editing && item.lastWriter != localDevice -> "$writer, editing now"
@@ -220,15 +227,32 @@ fun itemSubLabel(
  * Unlike the list detail this names the *creator*: in the shop what matters is whose errand this
  * is, and ticking something off must not quietly make it yours.
  */
-fun shopSubLabel(item: GroceryItem, list: GroceryList, localDevice: DeviceId): String =
+fun shopSubLabel(item: GroceryItem, list: GroceryList, localDevice: DeviceId, paired: List<TrustedPeer> = emptyList()): String =
   withRecipes(
     when {
       item.checked -> "in the trolley"
       item.createdBy == localDevice -> "you added this"
-      else -> "${list.nameFor(item.createdBy, localDevice)} added this"
+      else -> "${list.nameFor(item.createdBy, localDevice, paired)} added this"
     },
     item,
   )
+
+/**
+ * Who to mark an item with in the Shop: whoever added it, as the list knows them.
+ *
+ * An item merged in from another list can have been added by someone this list does not have; they
+ * are marked as this phone knows them from pairing instead. Null for anyone it cannot name, and for
+ * a person with no initial to draw — those get no mark at all.
+ */
+fun AppState.adderOf(item: GroceryItem, list: GroceryList): Person? {
+  val adder =
+    list.personFor(item.createdBy)
+      ?: peerFor(item.createdBy)?.let { peer ->
+        val name = nameOf(peer)
+        Person(peer.deviceId, name, initialOf(name), avatar = Field(avatarOf(peer.deviceId), Hlc(0, 0, peer.deviceId)))
+      }
+  return adder?.takeIf { it.initial.isNotEmpty() }
+}
 
 /** Which recipes an item is for: "for Lasagne", "for Lasagne & Pancakes". Empty for none. */
 fun recipeNote(item: GroceryItem): String = if (item.recipes.value.isEmpty()) "" else "for ${joinNames(item.recipes.value)}"

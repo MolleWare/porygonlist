@@ -41,6 +41,7 @@ import io.github.molleware.porygonlist.ui.components.CheckCircle
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.tabBarClearance
+import io.github.molleware.porygonlist.ui.adderOf
 import io.github.molleware.porygonlist.ui.others
 import io.github.molleware.porygonlist.ui.names
 import io.github.molleware.porygonlist.ui.shopSubLabel
@@ -111,10 +112,10 @@ fun ShopScreen(
       list.orderedItems.forEach { item ->
         ShopItemRow(
           item = item,
-          subLabel = shopSubLabel(item, list, state.localDevice),
+          subLabel = shopSubLabel(item, list, state.localDevice, state.peers),
           // Whoever added it — not the first other person on the list, which put Sam's initial on
           // an item an unpaired phone had added (Pixel, 2026-10-21). Unknown, no mark at all.
-          adder = list.personFor(item.createdBy)?.takeIf { it.initial.isNotEmpty() },
+          adder = state.adderOf(item, list),
           createdByOther = item.createdBy != state.localDevice,
           onToggle = { onToggleChecked(item.id) },
         )

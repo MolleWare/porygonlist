@@ -204,7 +204,7 @@ class RecipeTest {
     val forPancakes = plain.forRecipe("Pancakes", at(2_000))
 
     val before = ITEM_COLUMNS_010 - 2
-    assertEquals("three more, at the end", before + 3, Records.itemFields(forPancakes).size)
+    assertEquals("three more, then the adder, at the end", before + 4, Records.itemFields(forPancakes).size)
     assertEquals(Records.itemFields(plain).take(before), Records.itemFields(forPancakes).take(before))
   }
 

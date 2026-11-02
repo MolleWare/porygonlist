@@ -31,6 +31,7 @@ import io.github.molleware.porygonlist.data.net.SyncEndpoint
 import io.github.molleware.porygonlist.data.net.TXT_DEVICE_ID
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.ui.PorygonViewModel
+import io.github.molleware.porygonlist.ui.nameFor
 import io.github.molleware.porygonlist.ui.recipeNote
 import java.io.File
 import java.net.Inet4Address
@@ -336,7 +337,10 @@ private class Console(
       val people = list.people.filter { it.present }.joinToString { it.name.ifEmpty { it.device.value.take(6) } + it.avatar.value.worn() }
       say("[$i] ${list.name}  — $people${if (list.id == s.activeListId) "  (open)" else ""}")
       // In the order a screen draws them, which is the shared order — not the order stored here.
-      list.orderedItems.forEach { say("      ${if (it.checked) "[x]" else "[ ]"} ${it.label()}") }
+      // Who added each, as the Shop says it — for an item merged in from another list, its kept adder.
+      list.orderedItems.forEach {
+        say("      ${if (it.checked) "[x]" else "[ ]"} ${it.label()}  · ${list.nameFor(it.createdBy, s.localDevice, s.peers)}")
+      }
     }
     // What a screen would show: a clash answered on the other phone is stored but no longer asked.
     s.openConflicts.forEach { say("conflict (${it.kind}) on ${it.itemName}: mine ${it.yours.label()} / theirs ${it.theirs.label()}") }

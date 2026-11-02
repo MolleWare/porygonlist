@@ -1,5 +1,6 @@
 package io.github.molleware.porygonlist.data
 
+import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Field
 import io.github.molleware.porygonlist.data.sync.Hlc
@@ -11,6 +12,8 @@ import io.github.molleware.porygonlist.data.sync.SyncCodec
 import io.github.molleware.porygonlist.data.sync.SyncResult
 import io.github.molleware.porygonlist.data.sync.payloadFor
 import io.github.molleware.porygonlist.data.sync.receive
+import io.github.molleware.porygonlist.ui.behind
+import io.github.molleware.porygonlist.ui.lastChange
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
@@ -144,17 +147,52 @@ class MergingListsTest {
   }
 
   @Test
-  fun `who added a copied item is this phone, which is all its id can say`() {
+  fun `a copied item is still whoever added it, and reads as it did`() {
     val into = list("${hugo.value}:1", "Weekly shop", emptyList(), people = listOf(me, Person(sam, "Sam", "S")))
     val from = list("${hugo.value}:2", "Weekend", listOf(item("${ava.value}:3", "Rice")), people = listOf(me, Person(ava, "Ava", "A")))
 
     val rice = merged(into, from).liveItems.single()
 
-    // Ava is not on the list merged into, and the copy is not the item she added: it is a new one,
-    // put there by this phone just now.
+    // A new id, which says this phone, but still Ava's errand — even on a list she is not on.
+    assertEquals(hugo, rice.id.device)
+    assertEquals(ava, rice.addedBy)
+    assertEquals(ava, rice.createdBy)
+    // "Ava, 9:12" under its name, as on the list it came from: its stamps are kept, only its place is new.
+    assertEquals(ava, rice.lastWriter)
+    assertEquals(then.wall, rice.at)
+    assertEquals(now, rice.position.at)
+  }
+
+  @Test
+  fun `something this phone added needs no adder kept`() {
+    val into = list("${hugo.value}:1", "Weekly shop", emptyList())
+    val from = list("${hugo.value}:2", "Weekend", listOf(item("${hugo.value}:3", "Rice", by = Hlc(1_000, 0, hugo))))
+
+    val rice = merged(into, from).liveItems.single()
+
+    assertEquals(null, rice.addedBy)
     assertEquals(hugo, rice.createdBy)
-    assertEquals(hugo, rice.lastWriter)
-    assertEquals(now.wall, rice.at)
+  }
+
+  @Test
+  fun `an adder a merge already kept is kept again`() {
+    val into = list("${hugo.value}:1", "Weekly shop", emptyList())
+    // Merged in once already, from Sam's list: a Hugo id, Sam's errand.
+    val from = list("${hugo.value}:2", "Weekend", listOf(item("${hugo.value}:3", "Rice").copy(addedBy = sam)))
+
+    assertEquals(sam, merged(into, from).liveItems.single().createdBy)
+  }
+
+  @Test
+  fun `the merge is still the list's newest change, so in step waits for it`() {
+    val into = list("${hugo.value}:1", "Weekly shop", emptyList(), people = listOf(me, Person(ava, "Ava", "A")))
+    val from = list("${hugo.value}:2", "Weekend", listOf(item("${ava.value}:3", "Rice")))
+
+    val after = merged(into, from)
+
+    assertEquals(now, after.lastChange())
+    // Ava had confirmed everything up to just before the merge: she is behind until she hears of it.
+    assertEquals(listOf(ava), after.behind(hugo, DeliveryLog().record(ava, Hlc(4_999, 0, hugo))).map { it.device })
   }
 
   @Test

@@ -391,16 +391,24 @@ of time, so it can never wipe the names off. The newer stamp wins, except that t
 recipes added to the same item while apart are both kept, the newer's first, so both
 phones show the same line.
 
-Merging two lists (0.2.0) needs nothing new in either format, because it is a local
-act made of things that already travel. What it brings onto the list merged into are
-ordinary new items, minted by this phone's `IdFactory` and stamped now; something
-still to get on both is the target's own item with its quantity bumped. The list
-merged away goes exactly as Delete takes it (`AppState.withoutList`): dropped if
-nobody else is on it, otherwise left, with this phone's "left" tombstone travelling
-to the others, who keep their copy. The old items' ids are never reused, since they
-still name items on those copies. One consequence worth knowing: who added an item
-is the device in its id, so everything copied reads as added by the phone that
-merged, at the moment it merged.
+Merging two lists (0.2.0) is a local act made of things that already travel, plus
+one column. What it brings onto the list merged into are new items, with ids minted
+by this phone's `IdFactory`; something still to get on both is the target's own
+item with its quantity bumped. The list merged away goes exactly as Delete takes it
+(`AppState.withoutList`): dropped if nobody else is on it, otherwise left, with this
+phone's "left" tombstone travelling to the others, who keep their copy. The old
+items' ids are never reused, since they still name items on those copies.
+
+A new id names the merging phone, but a copied item is still the errand of whoever
+added it (Hugo, 2026-11-02). So it keeps its adder in `addedBy`, one column at the
+end of `item` and `conflictitem` in both formats, after the recipes; empty, as for
+nearly every item, means the id's own phone. It is never changed once set, so a
+merge of two copies takes whichever has it. 0.1.0 reads an item's first seventeen
+columns and stops, so it reads the merger as the adder, and what it sends back,
+with no column, cannot wipe the adder off. A copied item also keeps its stamps —
+only its place is new — so its line reads as it did ("Ava, 9:12"): a stamp is only
+ever compared with the same field of the same item, and a new id has no older copy
+anywhere, while the fresh place still makes the merge the list's newest change.
 
 ---
 

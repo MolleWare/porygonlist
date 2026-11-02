@@ -203,8 +203,8 @@ fun ListDetailScreen(
             ConflictCard(
               title = "You both added ${conflict.itemName}",
               body =
-                "${conflictSide(conflict.yours, list, state.localDevice)}, " +
-                  "${conflictSide(conflict.theirs, list, state.localDevice)} — neither of you could see the other's copy at the time.",
+                "${conflictSide(conflict.yours, list, state.localDevice, paired = state.peers)}, " +
+                  "${conflictSide(conflict.theirs, list, state.localDevice, paired = state.peers)} — neither of you could see the other's copy at the time.",
               primary = "Merge",
               onPrimary = { onMerge(conflict) },
               secondary = "Keep both",
@@ -237,7 +237,7 @@ fun ListDetailScreen(
     ) { item, handle, dragging ->
       ItemRow(
         item = item,
-        subLabel = itemSubLabel(item, list, state.localDevice),
+        subLabel = itemSubLabel(item, list, state.localDevice, paired = state.peers),
         partner = list.others(state.localDevice).firstOrNull(),
         onToggle = { onToggleChecked(item.id) },
         onEdit = { onEditItem(item) },

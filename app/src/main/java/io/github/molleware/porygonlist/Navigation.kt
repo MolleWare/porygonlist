@@ -264,7 +264,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onEditItem = { item ->
                     // The creator, not the last writer: the sheet says "Added by", and a tick or an
                     // edit from the other phone must not change who that was.
-                    viewModel.openEditSheet(item, appState.activeList.nameFor(item.createdBy, appState.localDevice))
+                    viewModel.openEditSheet(item, appState.activeList.nameFor(item.createdBy, appState.localDevice, appState.peers))
                   },
                   onMoveItem = viewModel::moveItem,
                   onMerge = viewModel::mergeConflict,

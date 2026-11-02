@@ -33,7 +33,10 @@ internal object Records {
       field(item.position) { it } +
       // After the position for the same reason: 0.1.0 stops there. Several names in one column, written
       // as a record of their own so a name holding a bar comes back whole.
-      field(item.recipes) { if (it.isEmpty()) "" else line(it) }
+      field(item.recipes) { if (it.isEmpty()) "" else line(it) } +
+      // After the recipes, so a reader from before it, which stops there, still reads the rest. Empty
+      // for the usual case: whoever added it is the phone in the id.
+      listOf(item.addedBy?.value.orEmpty())
 
   /** A field is three columns: the value, the stamp it was written at, and what it was written against. */
   fun <T> field(field: Field<T>, encodeValue: (T) -> String): List<String> =
@@ -65,6 +68,8 @@ internal object Records {
       recipes =
         (if (f.size >= from + 20) parseField(f, from + 17) { if (it.isEmpty()) emptyList() else split(it) } else null)
           ?: Field(emptyList(), Hlc(0, 0, ItemId(id).device)),
+      // Absent from anything written before it, and empty for nearly everything since: the id's own.
+      addedBy = f.getOrNull(from + 20)?.takeIf { it.isNotEmpty() }?.let { DeviceId(it) },
     )
   }
 

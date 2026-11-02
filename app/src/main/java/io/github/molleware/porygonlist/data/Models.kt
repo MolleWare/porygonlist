@@ -134,10 +134,19 @@ data class GroceryItem(
    * wipe the names off.
    */
   val recipes: Field<List<String>> = Field(emptyList(), Hlc(0, 0, id.device)),
+  /**
+   * Who added it, where that is not the phone that minted [id]. Null for nearly everything.
+   *
+   * Set only on an item a merge of two lists brought across: it has a new id from the phone that
+   * merged, because the old one still names the original on the other list, but it is still the
+   * errand of whoever put it there first. A fact about creation, not an edit, so not stamped — it
+   * never changes once set. A phone from before it leaves it out, and reads the merger as the adder.
+   */
+  val addedBy: DeviceId? = null,
 ) {
-  /** The phone that first added this item. */
+  /** The phone that first added this item: [addedBy] when a merge kept it, otherwise the id's own. */
   val createdBy: DeviceId
-    get() = id.device
+    get() = addedBy ?: id.device
 
   /** The newest stamp across everything mutable on this item. */
   val touchedAt: Hlc
@@ -488,11 +497,16 @@ data class GroceryList(
    * in the order [other] had it: what is still to get where a new item goes, and what is already in
    * the trolley under this list's own trolley, where a tick sends it. Removed items stay behind.
    *
-   * Each one is a new item, with an id from [newItemId] and every field stamped [at]. [other]'s ids
-   * cannot be reused, because [other] still exists on the phones it was shared with and carries them
-   * there. So a copied item reads as added here and now, by this phone: who added it is the id's
-   * own device, and an id can only ever be minted by the phone that mints it. Its old stamps are not
-   * kept either — they would name a writer the new item never had, perhaps someone not on this list.
+   * Each one is a new item, with an id from [newItemId]: [other]'s ids cannot be reused, because
+   * [other] still exists on the phones it was shared with and carries them there. Everything else
+   * about it is kept, so it reads as it did on [other] — still the errand of whoever added it, kept
+   * as [GroceryItem.addedBy] since the id now says this phone, and "Ava, 9:12" under its name, from
+   * the stamps it was written with. Only its place is new, stamped [at], and a place is deliberately
+   * not what says who last wrote an item. That place is also what makes the list's newest change
+   * this merge, so "in step" still waits for the others to hear of it.
+   *
+   * Old stamps on a new id are safe: a stamp is only ever compared with the same field of the same
+   * item, and nothing anywhere holds an older copy of these ones to compare with.
    *
    * The people on this list are left exactly as they are.
    */
@@ -511,15 +525,13 @@ data class GroceryList(
       } else {
         val id = newItemId()
         copied +=
-          GroceryItem(
+          theirs.copy(
             id = id,
-            name = Field(theirs.name.value, at),
-            qty = Field(theirs.qty.value, at),
-            checked = theirs.checked,
-            checkedAt = at,
-            origin = theirs.origin,
-            removed = Field(false, at),
-            recipes = if (theirs.recipes.value.isEmpty()) Field(emptyList(), Hlc(0, 0, id.device)) else Field(theirs.recipes.value, at),
+            // Placed afresh below, as a new item is.
+            position = Field("", Hlc(0, 0, id.device)),
+            editing = false,
+            // Kept only where the id no longer says it: something this phone added needs nothing.
+            addedBy = theirs.createdBy.takeIf { it != id.device },
           )
       }
     }
