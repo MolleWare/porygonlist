@@ -165,6 +165,27 @@ class SyncExchangeTest {
   }
 
   @Test
+  fun `a payload the listener has acknowledged is applied even if the line then breaks`() {
+    // The caller has its ack, and may bank it: from then on it holds that everything it sent is
+    // here. Dropping the payload because leg three never came would make that a lie, and a phone
+    // that sends only what changed would never send it again.
+    val body = SyncCodec.encode(payload(hugo, 2_000, "Ice")).toByteArray()
+    val frame = ByteArrayInputStream("PLX1 ${body.size}\n".toByteArray() + body)
+    val broken =
+      object : InputStream() {
+        override fun read(): Int = frame.read().takeIf { it >= 0 } ?: throw java.io.IOException("connection reset")
+      }
+    val out = ByteArrayOutputStream()
+
+    val answered = SyncExchange.answer(broken, out) { payload(ava, 3_000, "Lemons") }
+
+    assertTrue("the ack went out", out.toString().contains("PLXACK1|${Hlc(2_000, 0, hugo).encode()}"))
+    assertNotNull("so the payload it confirmed is kept", answered)
+    assertEquals(listOf("Ice"), answered!!.theirs.lists.single().items.map { it.name.value })
+    assertNull("but nothing of ours is proved delivered", answered.ackOfMine)
+  }
+
+  @Test
   fun `a payload in the old wire format is not read`() {
     val legacy = SyncCodec.encode(payload(hugo, 2_000, "Ice")).replaceFirst("PLSYNC2", "PLSYNC1").toByteArray()
     val inp = ByteArrayInputStream("PLX1 ${legacy.size}\n".toByteArray() + legacy)
