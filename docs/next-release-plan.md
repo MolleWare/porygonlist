@@ -101,6 +101,16 @@ checked by running the fake phone from a worktree at `ef88918`.
   must never read as "removed".
 - Last, because it is the riskiest: checked against the fake phone at `next` and at `ef88918`, and
   with Ava's phone when it is back.
+- **Built.** A phone keeps, per peer, the exact line of everything that peer acknowledged, and sends
+  each list partial: its line, its people, the items that changed, the ids of the rest (`held`).
+  Chosen by content, not stamps. The flag is a run token on `from`, new each process; 0.1.0 never
+  sends one and gets whole lists. Whole again after a peer's restart, and every tenth payload.
+- **Measured.** 200 items, one tick: 75 kB whole, 1.7 kB partial (971 B between fake phones).
+- **The limit.** What each peer confirmed is in memory only (Hugo, 2026-11-02: not saved for
+  0.2.0), so a background window that wakes a new process starts with one whole exchange each way.
+- **Found on the way, fixed.** With three people, a removal heard of through another phone was
+  collected on a receipt from before it arrived, so the third phone never heard. Collection now
+  waits for a receipt from after this phone heard, kept in the save, never sent.
 
 ## Needs Ava's phone, when it is back
 
