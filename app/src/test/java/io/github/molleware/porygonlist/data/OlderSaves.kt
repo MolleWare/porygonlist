@@ -33,11 +33,14 @@ fun as010(encoded: String): String {
 /**
  * A sync payload as 0.1.0 (`ef88918`) sends it: `PLSYNC2`, with `person` records that stop at the
  * stamp of their leaving, before the avatar and the name's stamp, and `item` records that stop at
- * the position, before the recipes and a merged item's adder. Everything else that build sent is unchanged since.
+ * the position, before the recipes and a merged item's adder. Its `from` says nothing of a run, and
+ * has no empty column where there is no callback port. It never sends a partial list, so there is
+ * no `held` record. Everything else that build sent is unchanged since.
  */
 fun payloadAs010(encoded: String): String =
-  encoded.lineSequence().joinToString("\n") {
+  encoded.lineSequence().filterNot { it.startsWith("held|") }.joinToString("\n") {
     when {
+      it.startsWith("from|") -> firstColumns(it, FROM_COLUMNS_010).removeSuffix("|")
       it.startsWith("person|") -> firstColumns(it, PERSON_COLUMNS_010)
       it.startsWith("item|") -> firstColumns(it, ITEM_COLUMNS_010)
       else -> it
@@ -45,9 +48,10 @@ fun payloadAs010(encoded: String): String =
   }
 
 /**
- * `meta` up to the owner's name, `person` up to the stamp of their leaving, and an item up to its
+ * `from` up to the callback port, `meta` up to the owner's name, `person` up to the stamp of their leaving, and an item up to its
  * position — two columns saying what it is and where, then seventeen of its own — as 0.1.0 wrote them.
  */
+private const val FROM_COLUMNS_010 = 4
 private const val META_COLUMNS_010 = 7
 private const val PERSON_COLUMNS_010 = 8
 const val ITEM_COLUMNS_010 = 19

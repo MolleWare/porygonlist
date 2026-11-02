@@ -7,6 +7,7 @@ import io.github.molleware.porygonlist.data.crypto.PinnedTls
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.HybridClock
+import io.github.molleware.porygonlist.data.sync.PeerCopy
 import io.github.molleware.porygonlist.data.sync.SyncCodec
 import io.github.molleware.porygonlist.data.sync.SyncExchange
 import io.github.molleware.porygonlist.data.sync.SyncPayload
@@ -19,6 +20,7 @@ import java.net.InetSocketAddress
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.SSLSocket
+import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -44,6 +46,11 @@ import kotlinx.coroutines.launch
  * Content rather than stamps, because two of the things that need to travel carry no stamp at all:
  * adding someone to a list, and renaming one. After an exchange the side that learned something
  * pushes once more, the other finds nothing new, and it settles.
+ *
+ * **What goes is only what the peer has not confirmed**, once it has said it takes that and this
+ * process has had one whole exchange with it: see [PeerCopy]. Whether anything is owed at all is
+ * still decided on the whole lists, as above, so a partial payload changes how much goes and never
+ * whether anything does.
  *
  * Nothing here starts on its own. [start] is called after the state has loaded, and even then the
  * caller side does nothing until discovery — which sits behind the approved-network gate — reports
@@ -73,10 +80,27 @@ class SyncCoordinator(
   private val callbackPort: () -> Int? = { null },
   /** Where each peer was last reached, kept across process death. In memory unless given a file. */
   private val addresses: PeerAddressBook = PeerAddressBook(),
+  /**
+   * Whether to send a peer only what it has not confirmed, and say this phone takes the same. Off,
+   * it behaves as 0.1.0 did, whole lists both ways: for tests that compare the two.
+   */
+  private val partial: Boolean = true,
 ) : SyncAnswerer {
 
   /** What each peer last acknowledged, by content. In memory only: a restart simply pushes again. */
   private val acknowledged = ConcurrentHashMap<DeviceId, String>()
+
+  /**
+   * This process, as peers are told it: see [SyncPayload.run]. Random rather than counted, because
+   * nothing about the last process survives to count from, and all it has to be is different.
+   */
+  private val run: String? = if (partial) "%016x".format(Random.nextLong()) else null
+
+  /** The run each peer last said it was in, from its own authenticated payload. Absent: it never has. */
+  private val runs = ConcurrentHashMap<DeviceId, String>()
+
+  /** What each peer has confirmed of this phone's lists. In memory only, so a new process starts whole. */
+  private val copies = ConcurrentHashMap<DeviceId, PeerCopy>()
 
   /** Where each phone last told us to call it back, from its own authenticated call, and when. */
   private val heard = ConcurrentHashMap<DeviceId, Known>()
@@ -221,15 +245,62 @@ class SyncCoordinator(
    */
   internal fun pushIfOwed(peer: ReachablePeer, state: AppState): Boolean {
     val id = peer.peer.deviceId
-    val payload = state.payloadFor(id, readOnlyClock(state))?.copy(callback = callbackPort()) ?: return true
-    val content = contentOf(payload)
+    // Whether anything is owed is a question about the whole lists, as it always was: an ack of a
+    // partial payload means the peer has all of them too.
+    val whole = state.payloadFor(id, readOnlyClock(state))?.copy(callback = callbackPort(), run = run) ?: return true
+    val content = contentOf(whole)
     if (acknowledged[id] == content) return true
 
+    val basis = copyFor(id)
+    val payload = basis?.partOf(whole) ?: whole
     val exchange = (dial ?: ::callOverTls)(peer, payload) ?: return false.also { forget(peer) }
     addresses.remember(ServiceRecord(id, peer.host, peer.port), now())
-    repo.update { s, node -> s.afterExchange(id, exchange.theirs, exchange.ackOfMine, payload, node.clock, node.ids) }
-    if (exchange.ackOfMine == payload.at) acknowledged[id] = content
+    heard(id, exchange.theirs)
+
+    /*
+     * A partial payload was cut for the run this peer last said it was in. Its ack proves the payload
+     * arrived, and the rest is proved only if the peer still holds what it confirmed in that run. A
+     * peer in another run now — restarted since, perhaps from an older save — may not, so nothing is
+     * banked: no receipt, so no tombstone is collected on the strength of it, and no copy, so the
+     * next payload goes whole. Its answer is still applied; that is always safe.
+     */
+    val proved = exchange.ackOfMine?.takeIf { basis == null || exchange.theirs.run == basis.run }
+    repo.update { s, node -> s.afterExchange(id, exchange.theirs, proved, payload, node.clock, node.ids) }
+    if (proved == payload.at) {
+      acknowledged[id] = content
+      confirmed(id, payload, basis, exchange.theirs.run)
+    }
     return true
+  }
+
+  /** What [peer] has confirmed, if it can still be cut from: see [PeerCopy.usableFor]. */
+  private fun copyFor(peer: DeviceId): PeerCopy? =
+    if (!partial) null else copies[peer]?.takeIf { it.usableFor(runs[peer]) }
+
+  /** Notes the run [theirs] says its sender is in. A new one, and what it confirmed before is void. */
+  private fun heard(peer: DeviceId, theirs: SyncPayload) {
+    // The listener's "nothing for you" names us, not them, and says no run, so it is taken as saying
+    // none: it holds no list we share, and a partial one could never reach it. The next goes whole,
+    // which is an invitation if it should have the list, and an ack that settles it if not.
+    val said = theirs.run.takeIf { theirs.from == peer }
+    if (said == null) runs.remove(peer) else runs[peer] = said
+    copies.computeIfPresent(peer) { _, copy -> copy.takeIf { it.run == said } }
+  }
+
+  /**
+   * Records that [peer], in [theirRun], acknowledged [sent], cut from [basis] — or whole, without one.
+   *
+   * Written onto whatever is there now rather than onto [basis], because another exchange with the
+   * same peer may have finished in between; see [PeerCopy] for why the order cannot do harm.
+   */
+  private fun confirmed(peer: DeviceId, sent: SyncPayload, basis: PeerCopy?, theirRun: String?) {
+    if (!partial || theirRun == null) {
+      copies.remove(peer)
+      return
+    }
+    copies.compute(peer) { _, now ->
+      if (basis == null) PeerCopy.of(sent, theirRun) else (now ?: basis).takeIf { it.run == theirRun }?.confirming(sent)
+    }
   }
 
   private fun forget(peer: ReachablePeer) {
@@ -260,15 +331,27 @@ class SyncCoordinator(
     val peer = state.peers.firstOrNull { it.publicKey.contentEquals(peerKey) } ?: return
 
     var sent: SyncPayload? = null
+    var basis: PeerCopy? = null
+    var content: String? = null
     val exchange =
-      SyncExchange.answer(inp, out) { claimed ->
+      SyncExchange.answer(inp, out) { theirs ->
         // Nothing for a caller claiming to be someone it did not authenticate as.
-        if (claimed != peer.deviceId) null
-        else state.payloadFor(claimed, readOnlyClock(state))?.copy(callback = callbackPort()).also { sent = it }
+        if (theirs.from != peer.deviceId) return@answer null
+        // Their run is what they say now, so what is cut from it here cannot be out of date.
+        heard(peer.deviceId, theirs)
+        val whole = state.payloadFor(peer.deviceId, readOnlyClock(state))?.copy(callback = callbackPort(), run = run)
+        content = whole?.let(::contentOf)
+        basis = copyFor(peer.deviceId)
+        (whole?.let { basis?.partOf(it) ?: it }).also { sent = it }
       } ?: return
 
     repo.update { s, node -> s.afterExchange(peer.deviceId, exchange.theirs, exchange.ackOfMine, sent, node.clock, node.ids) }
-    sent?.let { if (exchange.ackOfMine == it.at) acknowledged[peer.deviceId] = contentOf(it) }
+    sent?.let {
+      if (exchange.ackOfMine == it.at) {
+        acknowledged[peer.deviceId] = content!!
+        confirmed(peer.deviceId, it, basis, exchange.theirs.run)
+      }
+    }
 
     val port = exchange.theirs.callback
     if (from != null && port != null) {
@@ -305,9 +388,9 @@ class SyncCoordinator(
    */
   private fun readOnlyClock(state: AppState) = HybridClock(state.localDevice, start = state.clockHead)
 
-  /** What a payload says, without the stamp and callback port, which say nothing about the lists. */
+  /** What a payload says, without the stamp, callback port and run, which say nothing about the lists. */
   private fun contentOf(payload: SyncPayload): String {
-    val normalised = payload.copy(at = Hlc(0, 0, payload.from), callback = null)
+    val normalised = payload.copy(at = Hlc(0, 0, payload.from), callback = null, run = null)
     val digest = MessageDigest.getInstance("SHA-256").digest(SyncCodec.encode(normalised).toByteArray())
     return digest.joinToString("") { "%02x".format(it) }
   }

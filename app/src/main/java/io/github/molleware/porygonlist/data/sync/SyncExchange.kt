@@ -28,11 +28,12 @@ import java.io.OutputStream
  * the last leg would leave the listener unable to ever prune, because nothing would ever confirm
  * what it sent.
  *
- * **Whole payloads, so a lost exchange costs nothing.** There is no resumption and no "since when":
- * if any leg fails, nothing unproved is banked and the next exchange carries the same thing. That
- * is why every failure here is simply a null rather than an error worth showing anybody. The one
- * thing a broken exchange still yields is a payload the listener has already acknowledged; see
- * [answer].
+ * **A lost exchange costs nothing.** There is no resumption: if any leg fails, nothing unproved is
+ * banked, and the next exchange carries the same thing again — the whole of it, or for a phone that
+ * takes partial lists, everything that peer has not confirmed, which still includes all of what was
+ * lost. That is why every failure here is simply a null rather than an error worth showing anybody.
+ * The one thing a broken exchange still yields is a payload the listener has already acknowledged;
+ * see [answer].
  */
 object SyncExchange {
 
@@ -86,12 +87,13 @@ object SyncExchange {
    * The listener's half: read their payload, answer with an ack and [mine], then read their ack.
    *
    * [mine] is a function rather than a value because what this phone owes a peer depends on who the
-   * peer turns out to be, and that is only known once their payload has been read.
+   * peer turns out to be, and on the run it says it is in, and both are only known once their
+   * payload has been read. It is handed that payload.
    *
    * Null only when their payload never arrived whole. Once it has, a break later on still returns
    * it, with no ack of ours.
    */
-  fun answer(inp: InputStream, out: OutputStream, mine: (DeviceId) -> SyncPayload?): Exchange? {
+  fun answer(inp: InputStream, out: OutputStream, mine: (SyncPayload) -> SyncPayload?): Exchange? {
     val theirs =
       try {
         readFrame(inp)?.let { SyncCodec.decode(it) } ?: return null
@@ -111,7 +113,7 @@ object SyncExchange {
       // confirmation even if what we owe them is nothing.
       writeFrame(out, ackLine(theirs.at))
 
-      val ours = mine(theirs.from)
+      val ours = mine(theirs)
       writeFrame(out, ours?.let { SyncCodec.encode(it) } ?: SyncCodec.encode(empty(theirs.from)))
       out.flush()
 

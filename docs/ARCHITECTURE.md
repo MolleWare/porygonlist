@@ -250,9 +250,47 @@ sequenceDiagram
   A->>A: collect delivered tombstones
 ```
 
-**Whole lists, not deltas.** A grocery list is a few dozen items, so sending all of
-it removes a category of bug: there is no "since when" to get wrong, and a lost
-exchange costs nothing because the next one carries the same thing.
+**Whole lists, until the peer has confirmed them (0.2.0).** Sending all of a list
+removes a category of bug: there is no "since when" to get wrong, and a lost
+exchange costs nothing because the next one carries the same thing. But "a few
+dozen items" was 204 on the battery night, sent whole several times a quarter hour:
+13 MB each way. So a phone now remembers, per peer and in memory only
+(`PeerCopy`), the exact line of every list, person and item that peer acknowledged,
+and sends a list **partial**: its own line and all its people as before, only the
+items whose line has changed, and a `held` record with the ids of the rest. A list
+with nothing changed is left out. A 200-item list with one tick goes from 75 kB to
+1.7 kB.
+
+- **Content, not stamps.** Selecting by "stamped after the peer's receipt" is
+  wrong with three phones — an item Hugo got from Sam keeps Sam's stamps, which can
+  be older than Ava's receipt although Hugo learned of it after — and a person's
+  former phones carry no stamp at all. Comparing lines needs no clocks to agree.
+- **Absence still means nothing.** It never meant removal (that is a tombstone,
+  which goes until confirmed like any other line). It meant two other things,
+  both handled: a list the receiver does not hold is an invitation, which a
+  partial one never is; and an item missing from the sender's list reads as unseen
+  by the sender when looking for the same thing added twice, which is what the
+  `held` ids are for.
+- **Only to a phone that has said so**, by a run token in the fifth column of
+  `from`. 0.1.0 reads the port in the fourth and stops, sends no token, and keeps
+  getting whole lists. No `PLSYNC2` bump.
+- **Whole again whenever the peer may have lost what it confirmed.** The token is
+  new with every process, so a phone restored from an older save, or killed
+  before its last save landed, says a new one; its copy is dropped, and an ack of
+  a partial payload cut for its old token is not banked. A new process here has
+  no copies either. And every tenth partial payload to a peer goes whole anyway,
+  as a net for anything this reasoning missed.
+- **The receipt still means what it did**: everything this phone knew when the
+  payload was assembled, since what was left out the peer had already confirmed.
+  Whether anything is owed at all is still decided on the whole lists.
+
+One thing these do not settle, and whole lists did not either: with three people,
+a phone that hears of a removal from one of them collects the tombstone as soon
+as the other's receipt is newer than the removal's stamp, though that receipt was
+for a payload put together before it had heard. The third phone never hears.
+Whole lists hand the item back; partial lists leave it on the third phone until
+its next whole payload. Collection needs to know when a phone learned of a
+removal, which nothing records yet.
 
 **The stamp is read at assembly, never at reply time.** It is the sender's proof of
 delivery; a later reading would claim delivery of changes that never left. This is
@@ -341,7 +379,7 @@ scrolls to reach the field its own intro paragraph was describing.
 | Format | Marker | Carries |
 | --- | --- | --- |
 | State file | `PLSTATE11` | Everything: the owner's name, staples, peers, networks, receipts |
-| Sync payload | `PLSYNC1` | Lists and people only |
+| Sync payload | `PLSYNC2` | Lists and people only |
 | Share message | `PL1` | Human-readable item run, no identity |
 
 All three are line-based `type\|field\|field` records sharing one escaping
@@ -409,6 +447,15 @@ with no column, cannot wipe the adder off. A copied item also keeps its stamps �
 only its place is new — so its line reads as it did ("Ava, 9:12"): a stamp is only
 ever compared with the same field of the same item, and a new id has no older copy
 anywhere, while the fresh place still makes the merge the list's newest change.
+
+Partial lists (0.2.0; see section 4) add two things to `PLSYNC2` and none to the
+state file, since what each peer confirmed is kept in memory only. The run token is
+a fifth column on `from`, after the callback port, which is then written empty when
+there is none; 0.1.0 reads an empty port as none and stops there. `held` is a new
+record after a partial list's items — `held|list|PREFIX|1-40,42|…`, the ids left
+out as runs per phone that minted them — and its presence is what makes the list
+partial. A damaged one refuses the payload, since skipped it would make the list
+whole. 0.1.0 is never sent one.
 
 ---
 

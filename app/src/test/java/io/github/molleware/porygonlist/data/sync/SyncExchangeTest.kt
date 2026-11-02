@@ -109,8 +109,8 @@ class SyncExchangeTest {
     val caller = run { SyncExchange.call(payload(hugo, 2_000, "Ice"), wire.callerOut, wire.callerIn) }
     val listener =
       run {
-        SyncExchange.answer(wire.listenerIn, wire.listenerOut) { who ->
-          askedFor = who
+        SyncExchange.answer(wire.listenerIn, wire.listenerOut) { theirs ->
+          askedFor = theirs.from
           payload(ava, 3_000)
         }
       }

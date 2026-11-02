@@ -84,35 +84,42 @@ object SyncCodec {
     )
 
     payload.lists.forEach { list ->
-      // The rename stamp travels, or the receiver cannot tell whose name is newer and keeps its own.
-      appendLine(Records.line("list", list.id.value, list.name, list.accent.name, list.nameAt.encode()))
-      list.people.forEach {
-        appendLine(
-          Records.line(
-            listOf(
-              "person",
-              list.id.value,
-              it.device.value,
-              it.name,
-              it.initial,
-              it.formerDevices.joinToString(",") { former -> former.value },
-              // Leaving is the one piece of membership a peer has to be told about, so it travels.
-              if (it.removed.value) "1" else "0",
-              it.removed.at.encode(),
-            ) +
-              // The avatar goes last, so a build from before avatars, which stops at the column above,
-              // still reads the rest.
-              Records.field(it.avatar) { id -> id } +
-              // When they last renamed themselves, after the avatar for the same reason.
-              it.nameAt.encode()
-          )
-        )
-      }
-      list.items.forEach { appendLine(Records.line(listOf("item", list.id.value) + Records.itemFields(it))) }
+      appendLine(listLine(list))
+      list.people.forEach { appendLine(personLine(list.id, it)) }
+      list.items.forEach { appendLine(itemLine(list.id, it)) }
       // Its presence is what makes the list partial, so it is written even when nothing was left out.
       payload.held[list.id]?.let { appendLine(Records.line(listOf("held", list.id.value) + HeldIds.columns(it))) }
     }
   }
+
+  // One line each for a list, a person on it and an item on it, exactly as they go out. [PeerCopy]
+  // remembers what a peer confirmed by these, so a change to what travels is a change it sees.
+
+  // The rename stamp travels, or the receiver cannot tell whose name is newer and keeps its own.
+  internal fun listLine(list: GroceryList): String =
+    Records.line("list", list.id.value, list.name, list.accent.name, list.nameAt.encode())
+
+  internal fun personLine(list: ListId, person: Person): String =
+    Records.line(
+      listOf(
+        "person",
+        list.value,
+        person.device.value,
+        person.name,
+        person.initial,
+        person.formerDevices.joinToString(",") { former -> former.value },
+        // Leaving is the one piece of membership a peer has to be told about, so it travels.
+        if (person.removed.value) "1" else "0",
+        person.removed.at.encode(),
+      ) +
+        // The avatar goes last, so a build from before avatars, which stops at the column above,
+        // still reads the rest.
+        Records.field(person.avatar) { id -> id } +
+        // When they last renamed themselves, after the avatar for the same reason.
+        person.nameAt.encode()
+    )
+
+  internal fun itemLine(list: ListId, item: GroceryItem): String = Records.line(listOf("item", list.value) + Records.itemFields(item))
 
   /** Null for anything this build cannot read. A malformed payload is discarded, never half-applied. */
   fun decode(text: String): SyncPayload? {
