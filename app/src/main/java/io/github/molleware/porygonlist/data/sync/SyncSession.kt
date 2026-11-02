@@ -93,8 +93,14 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
    * ceremony about a decision already made.
    */
   // Named as on it now: a list that only remembers this phone having left is not an invitation.
+  // Nor is a partial one, whatever it names: it is a few changes to a list, not the list, and taken
+  // whole it would arrive with most of its items missing. A sender only sends one to a phone it
+  // believes already holds the list, so this phone has lost it, and there is nothing it could merge
+  // into; the sender finds out by the next whole exchange.
   val invitations =
-    payload.lists.filter { it.id !in known && it.people.any { who -> who.wasEver(localDevice) && who.present } }
+    payload.lists.filter {
+      it.id !in known && !payload.isPartial(it.id) && it.people.any { who -> who.wasEver(localDevice) && who.present }
+    }
 
   if (applicable.isEmpty() && invitations.isEmpty()) return SyncResult.Rejected(RejectReason.NOTHING_SHARED)
 
@@ -105,7 +111,7 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
     lists.map { mine ->
       val theirs = applicable.firstOrNull { it.id == mine.id } ?: return@map mine
       if (theirs.people.none { it.wasEver(payload.from) }) return@map mine
-      val result = merge(mine, theirs, from = payload.from)
+      val result = merge(mine, theirs, from = payload.from, held = payload.held[theirs.id].orEmpty())
       clashes += result.clashes
       // Each question remembers its list, so it is asked on that list and answered there.
       duplicates += result.duplicates.map { it.copy(listId = mine.id) }

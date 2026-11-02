@@ -8,19 +8,47 @@ import io.github.molleware.porygonlist.data.Person
 /**
  * Everything one phone hands another in a single exchange.
  *
- * Whole lists, not deltas. A grocery list is a few dozen items, so sending all of it costs nothing
- * and removes a category of bug outright: there is no "since when" to get wrong, a lost exchange
- * costs nothing because the next one carries the same thing, and the delivery watermark already
- * means "everything I knew at that moment" rather than a range.
- *
  * [at] is the sender's clock when the payload was assembled. The receiver echoes it back untouched,
  * and that echo is the sender's proof of delivery — which is why it must be read at assembly and
  * not at reply time. A later reading would claim delivery of changes that were never in the bundle.
  *
  * [callback] is the port the sender listens on, so the phone it called can call it back without
  * discovery: on hardware, one phone never saw the other's mDNS service at all.
+ *
+ * **Whole lists, unless the peer has said it takes less.** Whole lists were the rule until 0.2.0,
+ * and for good reasons: there is no "since when" to get wrong, and a lost exchange costs nothing
+ * because the next one carries the same thing. But "a few dozen items" turned out to be 204 on the
+ * battery night, sent whole several times a quarter hour, 13 MB each way.
+ *
+ * So a list can now go **partial**: its own record and all its people, as before, but only the
+ * items the peer has not confirmed in their current form, and in [held] the ids of every other item
+ * the sender holds. See [PeerCopy] for what decides it, and why it is content and not stamps. A
+ * partial list is only ever sent to a phone that says, by [run], that it understands one; every
+ * 0.1.0 phone stays silent and keeps getting whole lists.
+ *
+ * What a partial list leaves out must mean nothing to the receiver, and today nothing does mean
+ * anything by absence except two things, both handled in `receive`: a list the receiver does not
+ * hold is taken as an invitation, which a partial one never is; and an item missing from the
+ * sender's list reads as one the sender has not seen, for spotting the same thing added twice —
+ * which is why [held] lists the ids left out. A removal was never an absence: it is a tombstone,
+ * and it travels like any other change.
+ *
+ * [run] is set by a phone that understands partial lists, to a value fixed for the life of its
+ * process. It is what tells the other side that what it confirmed before may be gone: a phone
+ * restored from an older save, or killed before its last save landed, comes back as a new process
+ * with a new run, and is sent whole lists again.
  */
-data class SyncPayload(val from: DeviceId, val at: Hlc, val lists: List<GroceryList>, val callback: Int? = null)
+data class SyncPayload(
+  val from: DeviceId,
+  val at: Hlc,
+  val lists: List<GroceryList>,
+  val callback: Int? = null,
+  val run: String? = null,
+  /** For each partial list, the ids of the items the sender holds but left out. Whole lists are absent. */
+  val held: Map<ListId, Set<ItemId>> = emptyMap(),
+) {
+  fun isPartial(list: ListId): Boolean = list in held
+}
 
 /**
  * The wire format.
@@ -45,7 +73,15 @@ object SyncCodec {
   fun encode(payload: SyncPayload): String = buildString {
     appendLine(VERSION)
     // The callback port goes last, so a build that reads only the first two fields still reads this.
-    appendLine(Records.line(listOfNotNull("from", payload.from.value, payload.at.encode(), payload.callback?.toString())))
+    // The run after it, for the same reason: 0.1.0 reads the port, and an empty one as none, and
+    // stops there.
+    val callback = payload.callback?.toString()
+    appendLine(
+      Records.line(
+        listOf("from", payload.from.value, payload.at.encode()) +
+          if (payload.run == null) listOfNotNull(callback) else listOf(callback.orEmpty(), payload.run)
+      )
+    )
 
     payload.lists.forEach { list ->
       // The rename stamp travels, or the receiver cannot tell whose name is newer and keeps its own.
@@ -73,6 +109,8 @@ object SyncCodec {
         )
       }
       list.items.forEach { appendLine(Records.line(listOf("item", list.id.value) + Records.itemFields(it))) }
+      // Its presence is what makes the list partial, so it is written even when nothing was left out.
+      payload.held[list.id]?.let { appendLine(Records.line(listOf("held", list.id.value) + HeldIds.columns(it))) }
     }
   }
 
@@ -84,6 +122,7 @@ object SyncCodec {
     var from: DeviceId? = null
     var at: Hlc? = null
     var callback: Int? = null
+    var run: String? = null
 
     val order = mutableListOf<ListId>()
     val names = mutableMapOf<ListId, String>()
@@ -91,15 +130,23 @@ object SyncCodec {
     val nameStamps = mutableMapOf<ListId, Hlc>()
     val people = mutableMapOf<ListId, MutableList<Person>>()
     val items = mutableMapOf<ListId, MutableList<GroceryItem>>()
+    val held = mutableMapOf<ListId, Set<ItemId>>()
 
     for (line in lines.drop(1)) {
       val f = Records.split(line)
+      // Any other damaged line is skipped, as it always was. This one cannot be: skipped, it would
+      // turn a partial list into a whole one, and what that one leaves out would read as never seen.
+      if (f.getOrNull(0) == "held") {
+        held[ListId(f.getOrNull(1) ?: return null)] = HeldIds.parse(f, from = 2) ?: return null
+        continue
+      }
       runCatching {
           when (f.getOrNull(0)) {
             "from" -> {
               from = DeviceId(f[1])
               at = Hlc.decode(f[2])
               callback = f.getOrNull(3)?.toIntOrNull()?.takeIf { it in 1..65_535 }
+              run = f.getOrNull(4)?.takeIf { it.isNotBlank() }
             }
             "list" -> {
               val id = ListId(f[1])
@@ -153,6 +200,77 @@ object SyncCodec {
           )
         },
       callback = callback,
+      run = run,
+      held = held.filterKeys { it in order },
     )
+  }
+}
+
+/**
+ * The ids a partial list leaves out, written small.
+ *
+ * Every id is `deviceId:counter`, and a phone's counters run in order, so one list's items from one
+ * phone are mostly runs: `DEVICE|1-40,42,45-60`. Two columns per phone that minted any, the prefix
+ * then its runs. An id that is not of that shape — none are, but the reader must not depend on it —
+ * goes as a prefix of its own with nothing after it.
+ */
+internal object HeldIds {
+
+  /** More than any list holds by orders of magnitude, so a damaged or hostile run cannot fill memory. */
+  private const val MOST = 100_000
+
+  fun columns(ids: Set<ItemId>): List<String> {
+    val counted = mutableMapOf<String, MutableList<Long>>()
+    val odd = mutableListOf<String>()
+    ids.forEach { id ->
+      val prefix = id.value.substringBeforeLast(':', missingDelimiterValue = "")
+      val tail = id.value.substringAfterLast(':')
+      // Only a number that writes back exactly as it was read; "007" would come back as "7".
+      val n = tail.toLongOrNull()?.takeIf { it >= 0 && it.toString() == tail }
+      if (prefix.isEmpty() || n == null) odd += id.value else counted.getOrPut(prefix) { mutableListOf() } += n
+    }
+    return counted.toSortedMap().flatMap { (prefix, numbers) -> listOf(prefix, runs(numbers.sorted())) } +
+      odd.sorted().flatMap { listOf(it, "") }
+  }
+
+  /** Reads [columns] back from [from]. Null if anything is malformed: see `decode`. */
+  fun parse(f: List<String>, from: Int): Set<ItemId>? {
+    val ids = mutableSetOf<ItemId>()
+    var i = from
+    while (i < f.size) {
+      val prefix = f[i]
+      val spec = f.getOrNull(i + 1) ?: return null
+      if (prefix.isEmpty()) return null
+      if (spec.isEmpty()) {
+        ids += ItemId(prefix)
+      } else {
+        for (run in spec.split(',')) {
+          val first = run.substringBefore('-').toLongOrNull() ?: return null
+          val last = if ('-' in run) run.substringAfter('-').toLongOrNull() ?: return null else first
+          if (first < 0 || last < first || last - first >= MOST || ids.size + (last - first) >= MOST) return null
+          for (n in first..last) ids += ItemId("$prefix:$n")
+        }
+      }
+      i += 2
+    }
+    return ids
+  }
+
+  private fun runs(sorted: List<Long>): String = buildString {
+    var start = sorted.first()
+    var end = start
+    fun close() {
+      if (isNotEmpty()) append(',')
+      append(if (start == end) "$start" else "$start-$end")
+    }
+    sorted.drop(1).forEach { n ->
+      if (n == end + 1) end = n
+      else {
+        close()
+        start = n
+        end = n
+      }
+    }
+    close()
   }
 }

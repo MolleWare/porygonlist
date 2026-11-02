@@ -137,11 +137,14 @@ private fun removedWhileEdited(remover: GroceryItem, editor: GroceryItem): Boole
  *
  * An item present on only one side is taken as it stands. That is what makes a removal a tombstone
  * rather than an absence: if it simply vanished from the sender, the receiver would read its own
- * live copy as the only truth and hand it back.
+ * live copy as the only truth and hand it back. It is also why a partial list, which leaves out
+ * everything this phone already has, merges exactly as the whole one would.
  *
  * [from] is the phone [theirs] came from, when it is known: see `mergePeople` for what it settles.
+ * [held] is, for a partial [theirs], the ids of the items its sender holds but left out — the one
+ * thing an absence did say, for [duplicatesBetween].
  */
-fun merge(mine: GroceryList, theirs: GroceryList, from: DeviceId? = null): ListMerge {
+fun merge(mine: GroceryList, theirs: GroceryList, from: DeviceId? = null, held: Set<ItemId> = emptySet()): ListMerge {
   val merged = LinkedHashMap<String, GroceryItem>(mine.items.size + theirs.items.size)
   val clashes = mutableListOf<ItemMerge>()
 
@@ -173,7 +176,7 @@ fun merge(mine: GroceryList, theirs: GroceryList, from: DeviceId? = null): ListM
         people = mergePeople(mine.people, theirs.people, from),
       ),
     clashes = clashes,
-    duplicates = duplicatesBetween(mine, theirs),
+    duplicates = duplicatesBetween(mine, theirs, held),
   )
 }
 
@@ -191,10 +194,14 @@ fun merge(mine: GroceryList, theirs: GroceryList, from: DeviceId? = null): ListM
  *
  * Tombstones are skipped. A removal is not an addition, and pairing one with a live item would
  * offer to merge something that is deliberately gone.
+ *
+ * "Seen by them" is every id their list holds, which for a partial list is what it sent and what it
+ * [held] back. Without the second, everything of mine they had long since seen would look unseen,
+ * and their second bag of rice would be asked about as though it were a clash.
  */
-internal fun duplicatesBetween(mine: GroceryList, theirs: GroceryList): List<Conflict> {
+internal fun duplicatesBetween(mine: GroceryList, theirs: GroceryList, held: Set<ItemId> = emptySet()): List<Conflict> {
   val myIds = mine.items.mapTo(HashSet(mine.items.size)) { it.id.value }
-  val theirIds = theirs.items.mapTo(HashSet(theirs.items.size)) { it.id.value }
+  val theirIds = theirs.items.mapTo(HashSet(theirs.items.size + held.size)) { it.id.value }.apply { held.forEach { add(it.value) } }
 
   val unseenByThem = mine.liveItems.filterNot { it.id.value in theirIds }
   if (unseenByThem.isEmpty()) return emptyList()
