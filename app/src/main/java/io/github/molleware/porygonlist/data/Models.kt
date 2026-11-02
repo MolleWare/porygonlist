@@ -476,7 +476,13 @@ data class GroceryList(
       id = id,
       name = name,
       accent = accent,
-      items = liveItems.map { it.copy(id = newItemId(), editing = false) },
+      items =
+        liveItems.map {
+          val newId = newItemId()
+          // The new id would make this phone the adder of everything; who added it is kept instead,
+          // as a merge keeps it.
+          it.copy(id = newId, editing = false, addedBy = it.createdBy.takeIf { adder -> adder != newId.device })
+        },
       people =
         listOf(
           me?.let { Person(localDevice, it.name, it.initial, avatar = it.avatar, nameAt = it.nameAt) }

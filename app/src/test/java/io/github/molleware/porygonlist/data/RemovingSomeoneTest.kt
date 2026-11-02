@@ -126,6 +126,14 @@ class RemovingSomeoneTest {
   }
 
   @Test
+  fun `the kept copy still says who added what`() {
+    // Its new ids are Ava's, which on their own would make her the adder of everything.
+    val after = removalReaching(phone(ava, shared(hugo, ava), hugo))
+
+    assertEquals(listOf(hugo, hugo), after.visibleLists.single().liveItems.map { it.createdBy })
+  }
+
+  @Test
   fun `the kept copy notes who it was shared with`() {
     // Session 5: the copy read exactly like her own list of the same name.
     val after = removalReaching(phone(ava, shared(hugo, ava, sam), hugo, sam))
