@@ -168,7 +168,7 @@ fun mergeConsequence(from: GroceryList, into: GroceryList, localDevice: DeviceId
   val seeing = into.others(localDevice)
   val deleted =
     if (keeping.isEmpty()) "${from.name} is then deleted."
-    else "${from.name} is then deleted from this phone only — ${names(keeping)} ${agree(keeping, "keeps", "keep")} their copy."
+    else "${from.name} is then deleted from this phone only — ${names(keeping)} ${agree(keeping, "keeps", "keep")} a copy."
   return if (seeing.isEmpty()) deleted else "$deleted ${names(seeing)} will see everything on it."
 }
 

@@ -226,9 +226,9 @@ class FormatTest {
     val shared = weekend.copy(people = weekend.people + Person(hugo, "Hugo", "H"))
     val sharedWithTwo = shared.copy(people = shared.people + Person(sam, "Sam", "S"))
 
-    assertEquals("Weekend is then deleted from this phone only — Hugo keeps their copy.", mergeConsequence(shared, solo, me))
+    assertEquals("Weekend is then deleted from this phone only — Hugo keeps a copy.", mergeConsequence(shared, solo, me))
     assertEquals(
-      "Weekend is then deleted from this phone only — Hugo & Sam keep their copy.",
+      "Weekend is then deleted from this phone only — Hugo & Sam keep a copy.",
       mergeConsequence(sharedWithTwo, solo, me),
     )
   }
