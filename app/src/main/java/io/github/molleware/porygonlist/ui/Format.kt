@@ -153,6 +153,25 @@ fun joinNames(names: List<String>): String =
 /** "is" for one person, "are" for more — or whichever pair of words is given. */
 fun agree(people: List<Person>, one: String, many: String): String = if (people.size == 1) one else many
 
+/** The one question before a merge: "Merge Weekend into Weekly shop?" */
+fun mergeQuestion(from: GroceryList, into: GroceryList): String = "Merge ${from.name} into ${into.name}?"
+
+/**
+ * What a merge then does, said under [mergeQuestion] so it is read before the button is.
+ *
+ * The merged list goes the way Delete takes it, and in Delete's words: from this phone only, with
+ * whoever it was shared with keeping their copy. Merged into a shared list, everything on it reaches
+ * the people on that one, which is worth knowing about a list they could not see before.
+ */
+fun mergeConsequence(from: GroceryList, into: GroceryList, localDevice: DeviceId): String {
+  val keeping = from.others(localDevice)
+  val seeing = into.others(localDevice)
+  val deleted =
+    if (keeping.isEmpty()) "${from.name} is then deleted."
+    else "${from.name} is then deleted from this phone only — ${names(keeping)} ${agree(keeping, "keeps", "keep")} their copy."
+  return if (seeing.isEmpty()) deleted else "$deleted ${names(seeing)} will see everything on it."
+}
+
 /**
  * The newest change to anything on this list that travels: an item, its name, who is on it.
  *

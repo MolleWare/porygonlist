@@ -375,6 +375,55 @@ class PorygonViewModelTest {
     assertNull("the form closes after saving", vm.renamingList)
   }
 
+  @Test
+  fun `merging from a list's card brings its items across, takes it away, and opens the other`() = runTest(dispatcher) {
+    repo.load()
+    val (into, from) = state().orderedVisibleLists.let { it[0] to it[1] }
+    vm.openList(from.id)
+    assertTrue("the seed gives the merged list something to bring", from.liveItems.isNotEmpty())
+
+    vm.startRename(from)
+    vm.startMerge(from.id)
+    vm.chooseMergeTarget(into.id)
+    assertEquals(into.id, vm.mergeTarget)
+    assertTrue("so the screen goes on to open it", vm.mergeList(from.id, into.id))
+
+    assertTrue("the merged list is out of sight", state().visibleLists.none { it.id == from.id })
+    assertEquals("the list merged into is the one open", into.id, state().activeListId)
+    val there = state().activeList.liveItems.map { WordTrie.fold(it.name.value) }.toSet()
+    assertTrue("everything came across, combined or copied", from.liveItems.all { WordTrie.fold(it.name.value) in there })
+    assertNull("the card closes", vm.renamingList)
+    assertNull(vm.mergingList)
+    assertNull(vm.mergeTarget)
+  }
+
+  @Test
+  fun `a merge that cannot happen leaves everything where it was`() = runTest(dispatcher) {
+    repo.load()
+    val open = state().activeListId
+    val list = state().activeList
+
+    assertFalse("so the screen stays where it is", vm.mergeList(list.id, list.id))
+
+    assertEquals(open, state().activeListId)
+    assertTrue(state().visibleLists.any { it.id == list.id })
+  }
+
+  @Test
+  fun `closing the card forgets a merge half asked`() = runTest(dispatcher) {
+    repo.load()
+    val (into, from) = state().orderedVisibleLists.let { it[0] to it[1] }
+
+    vm.startRename(from)
+    vm.startMerge(from.id)
+    vm.chooseMergeTarget(into.id)
+    vm.cancelRename()
+
+    assertNull(vm.mergingList)
+    assertNull(vm.mergeTarget)
+    assertTrue("nothing was merged", state().visibleLists.any { it.id == from.id })
+  }
+
   // ── Staples ───────────────────────────────────────────────────────────────
 
   @Test

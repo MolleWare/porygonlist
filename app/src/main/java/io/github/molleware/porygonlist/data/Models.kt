@@ -286,15 +286,26 @@ data class GroceryList(
    * two orders (session 5), and one added while the other phone's first tick was on its way jumped
    * to the top once that tick arrived.
    */
-  fun withItemsAppended(added: List<GroceryItem>, at: Hlc): GroceryList {
+  fun withItemsAppended(added: List<GroceryItem>, at: Hlc): GroceryList =
+    withItemsPlaced(added, at) { order -> order.indexOfLast { !it.checked } }
+
+  /**
+   * Adds items that are already ticked at the very bottom, under the trolley, the way a tick moves
+   * one there — see [withItemSettled].
+   */
+  fun withTrolleyAppended(added: List<GroceryItem>, at: Hlc): GroceryList =
+    withItemsPlaced(added, at) { order -> order.lastIndex }
+
+  /** Adds [added] just below the item [anchorOf] picks out of [orderedItems], keyed in order. */
+  private fun withItemsPlaced(added: List<GroceryItem>, at: Hlc, anchorOf: (List<GroceryItem>) -> Int): GroceryList {
     if (added.isEmpty()) return this
 
     val order = orderedItems
-    val anchor = order.indexOfLast { !it.checked }
+    val anchor = anchorOf(order)
     var before = order.getOrNull(anchor)?.position?.value
     val after = order.getOrNull(anchor + 1)?.position?.value
     val keyable = order.none { it.position.value.isEmpty() } && (before == null || after == null || before < after)
-    if (!keyable) return withPositionsSpread(at).withItemsAppended(added, at)
+    if (!keyable) return withPositionsSpread(at).withItemsPlaced(added, at, anchorOf)
 
     val placed =
       added.map { item ->
@@ -466,6 +477,55 @@ data class GroceryList(
       pinned = pinned,
       wasSharedWith = people.filter { it.present && it.device != localDevice }.map { it.name }.filter { it.isNotBlank() },
     )
+  }
+
+  /**
+   * This list with everything on [other] brought across, as merging [other] into it leaves it.
+   *
+   * Something still to get on both — the same name by the folding adding uses, unticked on each side
+   * — becomes one line: this list's, where it already sits, asking for both quantities and for every
+   * recipe either was for. Anything else comes across as it is, name, quantity, tick and recipes,
+   * in the order [other] had it: what is still to get where a new item goes, and what is already in
+   * the trolley under this list's own trolley, where a tick sends it. Removed items stay behind.
+   *
+   * Each one is a new item, with an id from [newItemId] and every field stamped [at]. [other]'s ids
+   * cannot be reused, because [other] still exists on the phones it was shared with and carries them
+   * there. So a copied item reads as added here and now, by this phone: who added it is the id's
+   * own device, and an id can only ever be minted by the phone that mints it. Its old stamps are not
+   * kept either — they would name a writer the new item never had, perhaps someone not on this list.
+   *
+   * The people on this list are left exactly as they are.
+   */
+  fun withItemsMergedFrom(other: GroceryList, newItemId: () -> ItemId, at: Hlc): GroceryList {
+    val waiting = liveItems.filterNot { it.checked }
+    val bumped = HashMap<ItemId, GroceryItem>()
+    val copied = ArrayList<GroceryItem>()
+
+    other.orderedItems.forEach { theirs ->
+      val folded = WordTrie.fold(theirs.name.value)
+      val match = if (theirs.checked) null else waiting.firstOrNull { WordTrie.fold(it.name.value) == folded }
+      if (match != null) {
+        val ours = bumped[match.id] ?: match
+        val more = ours.copy(qty = ours.qty.set(ours.qty.value + theirs.qty.value, at))
+        bumped[match.id] = theirs.recipes.value.fold(more) { item, recipe -> item.forRecipe(recipe, at) }
+      } else {
+        val id = newItemId()
+        copied +=
+          GroceryItem(
+            id = id,
+            name = Field(theirs.name.value, at),
+            qty = Field(theirs.qty.value, at),
+            checked = theirs.checked,
+            checkedAt = at,
+            origin = theirs.origin,
+            removed = Field(false, at),
+            recipes = if (theirs.recipes.value.isEmpty()) Field(emptyList(), Hlc(0, 0, id.device)) else Field(theirs.recipes.value, at),
+          )
+      }
+    }
+
+    val (inTrolley, toGet) = copied.partition { it.checked }
+    return copy(items = items.map { bumped[it.id] ?: it }).withItemsAppended(toGet, at).withTrolleyAppended(inTrolley, at)
   }
 
   companion object {
@@ -737,6 +797,54 @@ data class AppState(
     if (target.pinned == pinned) return this
     // Moved to the end of the stored order, which is the end of whichever group it now belongs to.
     return copy(lists = lists.filterNot { it.id == id } + target.copy(pinned = pinned))
+  }
+
+  /**
+   * Takes a list off this phone, which is what Delete does.
+   *
+   * Local only: the people it was shared with keep their copies. Propagating a whole-list deletion
+   * would need a tombstone for the list itself, and handing one phone the power to wipe a shared list
+   * off everyone else's is not obviously right.
+   *
+   * The last list can go too. A new install starts with none, so no-lists is a state the app already
+   * has to show; refusing to delete the only one would make the bin stop working for no reason the
+   * owner can see.
+   */
+  fun withoutList(id: ListId, at: Hlc): AppState {
+    val going = lists.firstOrNull { it.id == id }
+    val shared = going != null && going.peersOf(localDevice).isNotEmpty()
+
+    val kept =
+      if (shared) {
+        // Someone else is on it, so this is leaving rather than deleting. The list stays, hidden,
+        // until every one of them has heard — see pruneDeliveredTombstones. Dropping it outright
+        // would leave them waiting for ever on a phone that had simply stopped caring.
+        lists.map { if (it.id == id) it.withPersonLeft(localDevice, at) else it }
+      } else {
+        lists.filterNot { it.id == id }
+      }
+
+    // An empty id is never minted, so this leaves nothing active, which is what no lists means.
+    val visible = kept.filter { it.personFor(localDevice)?.present == true }
+    return copy(lists = kept, activeListId = if (activeListId == id) visible.firstOrNull()?.id ?: ListId("") else activeListId)
+  }
+
+  /** The lists [id] could be merged into: every other one this phone shows. None, and none is offered. */
+  fun mergeTargetsFor(id: ListId): List<GroceryList> =
+    if (visibleLists.none { it.id == id }) emptyList() else orderedVisibleLists.filterNot { it.id == id }
+
+  /**
+   * Merges list [from] into list [into]: everything on it brought across — see
+   * [GroceryList.withItemsMergedFrom] — and then [from] taken off this phone exactly as Delete takes
+   * it, so anyone it was shared with keeps their copy. [into] keeps the people it had; nobody is
+   * added to a list by having been on the other one.
+   *
+   * Nothing happens unless both are lists this phone shows, and two different ones.
+   */
+  fun withListMerged(from: ListId, into: ListId, newItemId: () -> ItemId, at: Hlc): AppState {
+    val source = visibleLists.firstOrNull { it.id == from } ?: return this
+    if (mergeTargetsFor(from).none { it.id == into }) return this
+    return copy(lists = lists.map { if (it.id == into) it.withItemsMergedFrom(source, newItemId, at) else it }).withoutList(from, at)
   }
 
   /**

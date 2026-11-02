@@ -206,6 +206,38 @@ class FormatTest {
     assertEquals("not handed over yet", listCardMeta(sharedAgain, me, DeliveryLog()))
   }
 
+  // ── Merging one list into another ─────────────────────────────────────────
+
+  private val weekend = list.copy(id = ListId("list:2"), name = "Weekend", people = listOf(Person(me, "Ava", "A")))
+  private val solo = list.copy(people = listOf(Person(me, "Ava", "A")))
+
+  @Test
+  fun `the merge question names both lists`() {
+    assertEquals("Merge Weekend into Weekly shop?", mergeQuestion(weekend, list))
+  }
+
+  @Test
+  fun `merging away a list of your own says it is then deleted`() {
+    assertEquals("Weekend is then deleted.", mergeConsequence(weekend, solo, me))
+  }
+
+  @Test
+  fun `merging away a shared list says, as Delete does, that the others keep their copy`() {
+    val shared = weekend.copy(people = weekend.people + Person(hugo, "Hugo", "H"))
+    val sharedWithTwo = shared.copy(people = shared.people + Person(sam, "Sam", "S"))
+
+    assertEquals("Weekend is then deleted from this phone only — Hugo keeps their copy.", mergeConsequence(shared, solo, me))
+    assertEquals(
+      "Weekend is then deleted from this phone only — Hugo & Sam keep their copy.",
+      mergeConsequence(sharedWithTwo, solo, me),
+    )
+  }
+
+  @Test
+  fun `merging into a shared list says who will see what was on the other`() {
+    assertEquals("Weekend is then deleted. Hugo will see everything on it.", mergeConsequence(weekend, list, me))
+  }
+
   // ── A list someone shared, not yet opened ─────────────────────────────────
 
   private val hugoPaired = TrustedPeer(hugo, byteArrayOf(1), "Hugo", pairedAt = now)

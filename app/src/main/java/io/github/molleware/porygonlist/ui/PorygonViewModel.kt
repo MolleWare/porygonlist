@@ -776,6 +776,7 @@ class PorygonViewModel(
   fun startRename(list: GroceryList) {
     renamingList = list.id
     renameDraft = list.name
+    cancelMerge()
   }
 
   fun onRenameDraftChange(value: String) {
@@ -785,6 +786,7 @@ class PorygonViewModel(
   fun cancelRename() {
     renamingList = null
     renameDraft = ""
+    cancelMerge()
   }
 
   /** Renames a list, stamped with [GroceryList.nameAt] so the newer rename wins on merge. */
@@ -811,42 +813,59 @@ class PorygonViewModel(
   }
 
   /**
-   * Deletes a list from this phone.
-   *
-   * Local only, and the wording on the screen says so: the people you shared it with keep their
-   * copies. Propagating a whole-list deletion would need a tombstone for the list itself, and
-   * handing one phone the power to wipe a shared list off everyone else's is not obviously right.
-   *
-   * The last list can go too. A new install starts with none, so no-lists is a state the app already
-   * has to show; refusing to delete the only one would make the bin stop working for no reason the
-   * owner can see.
+   * Deletes a list from this phone — local only, and the wording on the screen says so: the people
+   * you shared it with keep their copies. See [AppState.withoutList].
    */
   fun deleteList(id: ListId) {
-    repo.update { s, node ->
-      val going = s.lists.firstOrNull { it.id == id }
-      val shared = going != null && going.peersOf(s.localDevice).isNotEmpty()
-
-      val lists =
-        if (shared) {
-          // Someone else is on it, so this is leaving rather than deleting. The list stays, hidden,
-          // until every one of them has heard — see AppState.pruneDeliveredTombstones. Dropping it
-          // outright would leave them waiting for ever on a phone that had simply stopped caring.
-          s.lists.map { if (it.id == id) it.withPersonLeft(s.localDevice, node.clock.tick()) else it }
-        } else {
-          s.lists.filterNot { it.id == id }
-        }
-
-      // An empty id is never minted, so this leaves nothing active, which is what no lists means.
-      val visible = lists.filter { it.personFor(s.localDevice)?.present == true }
-      s.copy(
-        lists = lists,
-        activeListId = if (s.activeListId == id) visible.firstOrNull()?.id ?: ListId("") else s.activeListId,
-      )
-    }
+    repo.update { s, node -> s.withoutList(id, node.clock.tick()) }
     confirmingListDelete = null
     // Delete is offered from the rename card, so that card is open on this list. Left open, it came
     // back with the list when someone shared it again — seen on the Pixel, 2026-10-21.
     if (renamingList == id) cancelRename()
+  }
+
+  /** The list whose card is asking which list to merge it into. Null while nothing is. */
+  var mergingList by mutableStateOf<ListId?>(null)
+    private set
+
+  /** The list picked to merge [mergingList] into, while the card asks whether to go ahead. */
+  var mergeTarget by mutableStateOf<ListId?>(null)
+    private set
+
+  fun startMerge(id: ListId) {
+    confirmingListDelete = null
+    mergingList = id
+    mergeTarget = null
+  }
+
+  fun chooseMergeTarget(into: ListId) {
+    if (mergingList != null) mergeTarget = into
+  }
+
+  fun cancelMerge() {
+    mergingList = null
+    mergeTarget = null
+  }
+
+  /**
+   * Merges one list into another, after the one question the card asks, and opens what is left.
+   *
+   * One stamp for the whole act: it is a single decision, and everything it writes — the items it
+   * brings across, and leaving the old list if that was shared — happened at the same moment. See
+   * [AppState.withListMerged]. No undo: the card said what would happen before it was pressed.
+   *
+   * Whether it merged: false only if one of the two lists had gone in the meantime.
+   */
+  fun mergeList(from: ListId, into: ListId): Boolean {
+    var merged = false
+    repo.update { s, node ->
+      s.withListMerged(from, into, node.ids::nextItem, node.clock.tick()).also { merged = it !== s }
+    }
+    cancelMerge()
+    // Merge is on the rename card too, and that card is open on the list that just went.
+    if (renamingList == from) cancelRename()
+    if (merged) openList(into)
+    return merged
   }
 
   /** Arranges this phone's Lists screen. Not stamped and never sent: the order is the owner's own. */

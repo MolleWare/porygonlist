@@ -82,6 +82,8 @@ import io.github.molleware.porygonlist.ui.clockLine
 import io.github.molleware.porygonlist.ui.itemCountLabel
 import io.github.molleware.porygonlist.data.sync.DeliveryLog
 import io.github.molleware.porygonlist.ui.listCardMeta
+import io.github.molleware.porygonlist.ui.mergeConsequence
+import io.github.molleware.porygonlist.ui.mergeQuestion
 import io.github.molleware.porygonlist.ui.millisToNextMinute
 import io.github.molleware.porygonlist.ui.syncDetail
 import io.github.molleware.porygonlist.ui.syncHeadline
@@ -112,6 +114,14 @@ fun ListsScreen(
   onAskDelete: (ListId) -> Unit,
   onCancelDelete: () -> Unit,
   onDelete: (ListId) -> Unit,
+  /** The list whose card is asking which list to merge it into, and the one picked, if any. */
+  mergingList: ListId?,
+  mergeTarget: ListId?,
+  onStartMerge: (ListId) -> Unit,
+  onChooseMergeTarget: (ListId) -> Unit,
+  onCancelMerge: () -> Unit,
+  /** Merges the first list into the second. The second then opens. */
+  onMerge: (ListId, ListId) -> Unit,
   /** Arranges this phone's lists. Never sent anywhere. */
   onMoveList: (ListId, Int) -> Unit,
   onSetPinned: (ListId, Boolean) -> Unit,
@@ -169,6 +179,8 @@ fun ListsScreen(
           scrollState = scrollState,
         ) { list, handle, dragging ->
           if (renamingList == list.id) {
+            val mergeTargets = state.mergeTargetsFor(list.id)
+            val into = mergeTargets.firstOrNull { mergingList == list.id && it.id == mergeTarget }
             ListEditCard(
               name = renameDraft,
               onNameChange = onRenameDraftChange,
@@ -182,6 +194,13 @@ fun ListsScreen(
               onAskDelete = { onAskDelete(list.id) },
               onCancelDelete = onCancelDelete,
               onDelete = { onDelete(list.id) },
+              mergeTargets = mergeTargets,
+              choosingMergeTarget = mergingList == list.id,
+              confirmingMerge = into?.let { mergeQuestion(list, it) to mergeConsequence(list, it, state.localDevice) },
+              onStartMerge = { onStartMerge(list.id) },
+              onChooseMergeTarget = onChooseMergeTarget,
+              onCancelMerge = onCancelMerge,
+              onMerge = { into?.let { onMerge(list.id, it.id) } },
             )
           } else {
             ListCard(
@@ -216,7 +235,7 @@ fun ListsScreen(
       IconActionButton(IconPaths.PLUS, contentDescription = "Make the list", onClick = onCreateList)
     }
     Text(
-      "Hold a list on the left to rename, pin or delete it, on the right to move it. The order is yours " +
+      "Hold a list on the left to rename, pin, merge or delete it, on the right to move it. The order is yours " +
         "alone — it doesn't change anyone else's phone.",
       style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
       color = Neutral700,
@@ -232,6 +251,10 @@ fun ListsScreen(
  *
  * Delete is always offered, the last list included (see PorygonViewModel.deleteList). The buttons
  * wrap: four in a row overran the card at a large font size, and the one pushed off was Delete.
+ *
+ * Merge is offered only when there is another list to merge into. Picking one asks once, saying
+ * what will happen, and pressing Merge does it — there is no undo to fall back on, so the question
+ * carries the weight.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -249,6 +272,16 @@ private fun ListEditCard(
   onAskDelete: () -> Unit,
   onCancelDelete: () -> Unit,
   onDelete: () -> Unit,
+  /** The lists this one could be merged into. Empty, and Merge is not offered. */
+  mergeTargets: List<GroceryList>,
+  /** The card is asking which list to merge into. */
+  choosingMergeTarget: Boolean,
+  /** The question and its consequence, once a list to merge into has been picked. */
+  confirmingMerge: Pair<String, String>?,
+  onStartMerge: () -> Unit,
+  onChooseMergeTarget: (ListId) -> Unit,
+  onCancelMerge: () -> Unit,
+  onMerge: () -> Unit,
 ) {
   Column(
     Modifier.fillMaxWidth()
@@ -269,7 +302,7 @@ private fun ListEditCard(
     FlowRow(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
       PrimaryButton("Save", onSave, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
       SecondaryButton("Cancel", onCancel, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
-      if (!confirmingDelete) {
+      if (!confirmingDelete && !choosingMergeTarget && confirmingMerge == null) {
         SecondaryButton(
           if (sharedWith > 0) "Sharing" else "Share",
           onShare,
@@ -282,6 +315,14 @@ private fun ListEditCard(
           style = PorygonType.Meta,
           contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
         )
+        if (mergeTargets.isNotEmpty()) {
+          SecondaryButton(
+            "Merge into…",
+            onStartMerge,
+            style = PorygonType.Meta,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
+          )
+        }
         SecondaryButton(
           "Delete",
           onAskDelete,
@@ -303,6 +344,33 @@ private fun ListEditCard(
       Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
         PrimaryButton("Delete", onDelete, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
         SecondaryButton("Keep it", onCancelDelete, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
+      }
+    }
+
+    if (choosingMergeTarget && confirmingMerge == null) {
+      Text("Merge into which list?", style = PorygonType.Meta, color = TextInk)
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        mergeTargets.forEach { target ->
+          SecondaryButton(
+            target.name,
+            { onChooseMergeTarget(target.id) },
+            style = PorygonType.Meta,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
+          )
+        }
+      }
+    }
+
+    if (confirmingMerge != null) {
+      Text(confirmingMerge.first, style = PorygonType.Meta, color = TextInk)
+      Text(
+        confirmingMerge.second,
+        style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+        color = Neutral700,
+      )
+      Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        PrimaryButton("Merge", onMerge, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
+        SecondaryButton("Keep both", onCancelMerge, style = PorygonType.Meta, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp))
       }
     }
   }

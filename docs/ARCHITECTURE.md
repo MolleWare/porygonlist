@@ -391,6 +391,17 @@ of time, so it can never wipe the names off. The newer stamp wins, except that t
 recipes added to the same item while apart are both kept, the newer's first, so both
 phones show the same line.
 
+Merging two lists (0.2.0) needs nothing new in either format, because it is a local
+act made of things that already travel. What it brings onto the list merged into are
+ordinary new items, minted by this phone's `IdFactory` and stamped now; something
+still to get on both is the target's own item with its quantity bumped. The list
+merged away goes exactly as Delete takes it (`AppState.withoutList`): dropped if
+nobody else is on it, otherwise left, with this phone's "left" tombstone travelling
+to the others, who keep their copy. The old items' ids are never reused, since they
+still name items on those copies. One consequence worth knowing: who added an item
+is the device in its id, so everything copied reads as added by the phone that
+merged, at the moment it merged.
+
 ---
 
 ## 7. What is left
