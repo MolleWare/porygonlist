@@ -339,7 +339,11 @@ private class Console(
         check(vm.recipeDraft == null) { vm.recipeNote }
       }
       "recipes" -> state.recipes.forEach { say("${it.name}: ${it.ingredientsText}") }
-      "cook" -> vm.useRecipe(checkNotNull(state.recipeNamed(rest)) { "no recipe '$rest'" }.name)
+      // Tapped, and added with everything left ticked.
+      "cook" -> {
+        vm.openRecipeChecklist(checkNotNull(state.recipeNamed(rest)) { "no recipe '$rest'" }.name)
+        vm.addFromChecklist()
+      }
       "bulk" -> {
         val count = rest.substringBefore(' ').toInt()
         val prefix = rest.substringAfter(' ', "Item").ifBlank { "Item" }

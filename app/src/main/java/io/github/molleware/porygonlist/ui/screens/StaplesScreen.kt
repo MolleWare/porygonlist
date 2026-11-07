@@ -11,11 +11,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -24,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,7 +45,9 @@ import io.github.molleware.porygonlist.theme.ShadowInk
 import io.github.molleware.porygonlist.theme.Shapes
 import io.github.molleware.porygonlist.theme.Surface
 import io.github.molleware.porygonlist.theme.TextInk
+import io.github.molleware.porygonlist.ui.RecipeChecklist
 import io.github.molleware.porygonlist.ui.RecipeDraft
+import io.github.molleware.porygonlist.ui.components.CheckCircle
 import io.github.molleware.porygonlist.ui.components.IconActionButton
 import io.github.molleware.porygonlist.ui.components.IconPaths
 import io.github.molleware.porygonlist.ui.components.PorygonTextField
@@ -58,8 +63,9 @@ import io.github.molleware.porygonlist.ui.components.tabBarClearance
  * tile's sub-label counts how often it has actually been used, which is the one thing about a
  * staple the app can know without being told.
  *
- * Recipes sit below the grid on the same bargain, a whole dish to a tap. A long press turns a recipe
- * into its own form, as a list card does, so the answer is where the question was.
+ * Recipes sit below the grid, a whole dish or a whole usual shop at once. A tap turns a recipe into
+ * a checklist of what goes in it, and a long press into its own form, as a list card does, so the
+ * answer is where the question was.
  */
 @Composable
 fun StaplesScreen(
@@ -74,7 +80,13 @@ fun StaplesScreen(
   onCancelRemove: () -> Unit,
   onRemove: (String) -> Unit,
   recipes: List<Recipe>,
-  onUseRecipe: (String) -> Unit,
+  /** The recipe tapped, open on what to add this time. */
+  checklist: RecipeChecklist?,
+  checklistNote: String,
+  onOpenChecklist: (String) -> Unit,
+  onToggleChecklist: (Int) -> Unit,
+  onAddFromChecklist: () -> Unit,
+  onCloseChecklist: () -> Unit,
   /** The recipe form, when it is open: on a new recipe, or on the one it names. */
   recipeDraft: RecipeDraft?,
   recipeNote: String,
@@ -144,9 +156,9 @@ fun StaplesScreen(
 
     SectionLabel("Recipes", Modifier.padding(top = 32.dp, bottom = 5.dp))
     Text(
-      if (recipes.isEmpty()) "Everything a dish needs, in one tap."
+      if (recipes.isEmpty()) "Everything a dish needs, in one place."
       else if (activeListName.isBlank()) "Make a list to add these to. Hold to edit."
-      else "Tap to add to $activeListName. Hold to edit.",
+      else "Tap to choose what to add to $activeListName. Hold to edit.",
       style = PorygonType.BodyLarge.copy(lineHeight = PorygonType.BodyLarge.fontSize * 1.5),
       color = Neutral700,
       modifier = Modifier.padding(bottom = 14.dp),
@@ -171,7 +183,16 @@ fun StaplesScreen(
     Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
       recipes.forEach { recipe ->
         if (recipeDraft?.editing == recipe.name) form()
-        else RecipeCard(recipe, onClick = { onUseRecipe(recipe.name) }, onLongClick = { onEditRecipe(recipe.name) })
+        else if (checklist?.recipe == recipe.name) {
+          RecipeChecklistCard(
+            recipe = recipe,
+            unticked = checklist.unticked,
+            note = checklistNote,
+            onToggle = onToggleChecklist,
+            onAdd = onAddFromChecklist,
+            onCancel = onCloseChecklist,
+          )
+        } else RecipeCard(recipe, onClick = { onOpenChecklist(recipe.name) }, onLongClick = { onEditRecipe(recipe.name) })
       }
       // A new recipe's form comes where it will be once it is saved: last.
       if (recipeDraft != null && recipeDraft.editing == null) form()
@@ -202,6 +223,56 @@ private fun RecipeCard(recipe: Recipe, onClick: () -> Unit, onLongClick: () -> U
   ) {
     Text(recipe.name, style = PorygonType.RowName, color = TextInk)
     Text(recipe.ingredientsText, style = PorygonType.Fine, color = Neutral700, modifier = Modifier.padding(top = 1.dp))
+  }
+}
+
+/**
+ * A recipe's ingredients, to untick what is not wanted this time. The button says how many, and what
+ * it could not do goes under the list, as the recipe form's does.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun RecipeChecklistCard(
+  recipe: Recipe,
+  unticked: Set<Int>,
+  note: String,
+  onToggle: (Int) -> Unit,
+  onAdd: () -> Unit,
+  onCancel: () -> Unit,
+) {
+  val buttonPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp)
+  Column(
+    Modifier.fillMaxWidth()
+      .shadow(Elevation.Sm, Shapes.Card, ambientColor = ShadowInk, spotColor = ShadowInk)
+      .clip(Shapes.Card)
+      .background(Surface)
+      .padding(horizontal = 18.dp, vertical = 16.dp),
+  ) {
+    Text(recipe.name, style = PorygonType.RowName, color = TextInk, modifier = Modifier.padding(bottom = 4.dp))
+    recipe.ingredients.forEachIndexed { index, ingredient ->
+      val ticked = index !in unticked
+      // The name is read out with the tick, so it needs no label of its own.
+      Row(
+        Modifier.fillMaxWidth()
+          .clip(Shapes.Row)
+          .toggleable(value = ticked, role = Role.Checkbox, onValueChange = { onToggle(index) })
+          .defaultMinSize(minHeight = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        CheckCircle(ticked)
+        Text(ingredient.label, style = PorygonType.ItemName, color = TextInk, modifier = Modifier.weight(1f))
+      }
+    }
+    if (note.isNotEmpty()) Text(note, style = PorygonType.Fine, color = Accent700, modifier = Modifier.padding(top = 4.dp))
+    FlowRow(
+      Modifier.padding(top = 11.dp),
+      horizontalArrangement = Arrangement.spacedBy(9.dp),
+      verticalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+      PrimaryButton("Add ${recipe.ingredients.size - unticked.size} to list", onAdd, style = PorygonType.Meta, contentPadding = buttonPadding)
+      SecondaryButton("Cancel", onCancel, style = PorygonType.Meta, contentPadding = buttonPadding)
+    }
   }
 }
 

@@ -679,7 +679,8 @@ data class Ingredient(val name: String, val qty: Int = 1) {
 }
 
 /**
- * A dish and what goes into it, put on a list in one tap.
+ * A dish and what goes into it, or a group of things always needed, put on a list together, less
+ * whatever is unticked that time.
  *
  * This phone's own, like a [Staple]: nothing about a recipe goes to a peer. What does travel is its
  * name, on each item it adds — see [GroceryItem.recipes].

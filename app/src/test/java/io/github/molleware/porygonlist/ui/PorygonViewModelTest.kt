@@ -529,12 +529,157 @@ class PorygonViewModelTest {
 
   private fun onList(name: String) = state().activeList.liveItems.filter { WordTrie.fold(it.name.value) == WordTrie.fold(name) }
 
+  /** A recipe tapped, and added with everything left ticked, as its checklist opens. */
+  private fun addWhole(name: String) {
+    vm.openRecipeChecklist(name)
+    vm.addFromChecklist()
+  }
+
+  @Test
+  fun `tapping a recipe opens it, all ticked, and adds nothing yet`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour, milk")
+    val before = state().activeList.liveItems
+
+    vm.openRecipeChecklist("pancakes")
+
+    assertEquals("under its own name", RecipeChecklist("Pancakes"), vm.recipeChecklist)
+    assertEquals(before, state().activeList.liveItems)
+  }
+
+  @Test
+  fun `a recipe that is not there opens nothing`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.openRecipeChecklist("Pancakes")
+
+    assertNull(vm.recipeChecklist)
+  }
+
+  @Test
+  fun `what is left ticked goes on the list, for the recipe, and the checklist closes`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour, milk")
+
+    vm.openRecipeChecklist("Pancakes")
+    vm.toggleChecklistIngredient(1)
+    assertEquals(setOf(1), vm.recipeChecklist?.unticked)
+    vm.addFromChecklist()
+
+    assertEquals(2, onList("Eggs").single().qty.value)
+    assertEquals(listOf("Pancakes"), onList("Eggs").single().recipes.value)
+    assertEquals(listOf("Pancakes"), onList("Milk").single().recipes.value)
+    assertTrue("left out", onList("Flour").isEmpty())
+    assertNull(vm.recipeChecklist)
+  }
+
+  @Test
+  fun `part of a recipe still merges into an item on the list and tags it, and what is left out is not touched`() = runTest(dispatcher) {
+    repo.load()
+    // The seed has Oat milk ×2 on the list, unticked.
+    makeRecipe("Porridge", "3 oat milk, oats")
+    vm.addItem("Oats")
+
+    vm.openRecipeChecklist("Porridge")
+    vm.toggleChecklistIngredient(1)
+    vm.addFromChecklist()
+
+    assertEquals(5, onList("Oat milk").single().qty.value)
+    assertEquals(listOf("Porridge"), onList("Oat milk").single().recipes.value)
+    assertEquals("what was left out is not touched", 1, onList("Oats").single().qty.value)
+    assertEquals(emptyList<String>(), onList("Oats").single().recipes.value)
+  }
+
+  @Test
+  fun `ticking one again puts it back in`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour")
+
+    vm.openRecipeChecklist("Pancakes")
+    vm.toggleChecklistIngredient(1)
+    vm.toggleChecklistIngredient(1)
+    vm.addFromChecklist()
+
+    assertEquals(1, onList("Flour").size)
+  }
+
+  @Test
+  fun `with nothing ticked the button adds nothing and says so, until something is`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour")
+    val before = state().activeList.liveItems
+
+    vm.openRecipeChecklist("Pancakes")
+    vm.toggleChecklistIngredient(0)
+    vm.toggleChecklistIngredient(1)
+    vm.addFromChecklist()
+
+    assertEquals("Tick what you want first.", vm.recipeChecklistNote)
+    assertEquals(before, state().activeList.liveItems)
+    assertEquals("still open", "Pancakes", vm.recipeChecklist?.recipe)
+
+    vm.toggleChecklistIngredient(0)
+    assertEquals("", vm.recipeChecklistNote)
+    vm.addFromChecklist()
+    assertEquals(1, onList("Eggs").size)
+    assertNull(vm.recipeChecklist)
+  }
+
+  @Test
+  fun `nothing unticked is remembered next time`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour")
+
+    vm.openRecipeChecklist("Pancakes")
+    vm.toggleChecklistIngredient(0)
+    vm.addFromChecklist()
+    vm.openRecipeChecklist("Pancakes")
+    assertEquals(emptySet<Int>(), vm.recipeChecklist?.unticked)
+
+    vm.toggleChecklistIngredient(0)
+    vm.closeRecipeChecklist()
+    assertNull(vm.recipeChecklist)
+    vm.openRecipeChecklist("Pancakes")
+    assertEquals(emptySet<Int>(), vm.recipeChecklist?.unticked)
+    assertEquals("nor kept on the recipe", listOf(Ingredient("Eggs", 2), Ingredient("Flour")), state().recipeNamed("Pancakes")!!.ingredients)
+  }
+
+  @Test
+  fun `closing the checklist adds nothing, and what it said goes with it`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "eggs")
+    val before = state().activeList.liveItems
+
+    vm.openRecipeChecklist("Pancakes")
+    vm.toggleChecklistIngredient(0)
+    vm.addFromChecklist()
+    vm.closeRecipeChecklist()
+    vm.openRecipeChecklist("Pancakes")
+
+    assertEquals("", vm.recipeChecklistNote)
+    vm.closeRecipeChecklist()
+    assertEquals(before, state().activeList.liveItems)
+  }
+
+  @Test
+  fun `with no list to put it on, it says so and stays open`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "eggs")
+    state().visibleLists.toList().forEach { vm.deleteList(it.id) }
+
+    vm.openRecipeChecklist("Pancakes")
+    vm.addFromChecklist()
+
+    assertEquals("Make a list to add these to.", vm.recipeChecklistNote)
+    assertEquals("Pancakes", vm.recipeChecklist?.recipe)
+  }
+
   @Test
   fun `using a recipe puts everything in it on the open list, each for it`() = runTest(dispatcher) {
     repo.load()
     makeRecipe("Pancakes", "2 eggs, flour, milk")
 
-    vm.useRecipe("Pancakes")
+    addWhole("Pancakes")
 
     assertEquals(2, onList("Eggs").single().qty.value)
     assertEquals(1, onList("Flour").single().qty.value)
@@ -550,8 +695,8 @@ class PorygonViewModelTest {
     makeRecipe("Porridge", "oat milk, 3 oats")
     makeRecipe("Latte", "2 Oat milk")
 
-    vm.useRecipe("Porridge")
-    vm.useRecipe("Latte")
+    addWhole("Porridge")
+    addWhole("Latte")
 
     val oatMilk = onList("Oat milk").single()
     assertEquals(5, oatMilk.qty.value)
@@ -565,7 +710,7 @@ class PorygonViewModelTest {
     // The seed has Tomatoes ticked off.
     makeRecipe("Salad", "2 tomatoes")
 
-    vm.useRecipe("Salad")
+    addWhole("Salad")
 
     val (ticked, fresh) = onList("Tomatoes").partition { it.checked }
     assertEquals("the done one is left as it was", emptyList<String>(), ticked.single().recipes.value)
@@ -578,8 +723,8 @@ class PorygonViewModelTest {
     repo.load()
     makeRecipe("Pancakes", "2 eggs, flour")
 
-    vm.useRecipe("Pancakes")
-    vm.useRecipe("pancakes")
+    addWhole("Pancakes")
+    addWhole("pancakes")
 
     assertEquals(4, onList("Eggs").single().qty.value)
     assertEquals(listOf("Pancakes"), onList("Eggs").single().recipes.value)
@@ -648,7 +793,7 @@ class PorygonViewModelTest {
   fun `deleting a recipe asks first, and leaves what it already added`() = runTest(dispatcher) {
     repo.load()
     makeRecipe("Pancakes", "2 eggs, flour")
-    vm.useRecipe("Pancakes")
+    addWhole("Pancakes")
 
     vm.startEditRecipe("Pancakes")
     vm.askDeleteRecipe()

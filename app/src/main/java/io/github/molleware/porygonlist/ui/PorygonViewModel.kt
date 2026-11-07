@@ -97,6 +97,9 @@ data class EditDraft(val itemId: ItemId, val name: String, val qty: Int, val add
  */
 data class RecipeDraft(val editing: String?, val name: String, val ingredients: String)
 
+/** A recipe open on what to add this time: [unticked] are the places of the ingredients left out. */
+data class RecipeChecklist(val recipe: String, val unticked: Set<Int> = emptySet())
+
 class PorygonViewModel(
   private val repo: ListRepository,
   private val monitor: NetworkMonitor,
@@ -1184,16 +1187,54 @@ class PorygonViewModel(
 
   // ── Recipes ───────────────────────────────────────────────────────────────
 
+  /** The recipe tapped, open on what to add this time. Null while none is. */
+  var recipeChecklist by mutableStateOf<RecipeChecklist?>(null)
+    private set
+
+  /** Why the checklist did not add, said under it. Empty while there is nothing to say. */
+  var recipeChecklistNote by mutableStateOf("")
+    private set
+
+  /** Opens a recipe's ingredients, all ticked: nothing unticked last time is remembered. */
+  fun openRecipeChecklist(name: String) {
+    val recipe = state.value?.recipeNamed(name) ?: return
+    recipeChecklist = RecipeChecklist(recipe.name)
+    recipeChecklistNote = ""
+  }
+
+  fun toggleChecklistIngredient(index: Int) {
+    recipeChecklist = recipeChecklist?.let { it.copy(unticked = if (index in it.unticked) it.unticked - index else it.unticked + index) }
+    recipeChecklistNote = ""
+  }
+
+  fun closeRecipeChecklist() {
+    recipeChecklist = null
+    recipeChecklistNote = ""
+  }
+
   /**
-   * Puts everything a recipe needs on the list being worked on, each item saying it is for it.
+   * Puts what is ticked on the list being worked on, each item saying it is for the recipe.
    *
    * One ingredient at a time through the same path a staple takes, so something already there and
    * unticked goes up by the recipe's quantity instead of being listed twice — and gains the recipe's
    * name, so it says it is for this as well as whatever it was for already.
+   *
+   * With nothing ticked, or no list to put it on, it adds nothing and says so.
    */
-  fun useRecipe(name: String) = repo.update { s, node ->
-    val recipe = s.recipeNamed(name) ?: return@update s
-    recipe.ingredients.fold(s) { state, it -> state.withItemAdded(node, it.name, qty = it.qty, forRecipe = recipe.name) }
+  fun addFromChecklist() {
+    val open = recipeChecklist ?: return
+    val s = state.value ?: return
+    val recipe = s.recipeNamed(open.recipe) ?: return closeRecipeChecklist()
+    val ticked = recipe.ingredients.filterIndexed { index, _ -> index !in open.unticked }
+    recipeChecklistNote =
+      when {
+        ticked.isEmpty() -> "Tick what you want first."
+        s.visibleLists.isEmpty() -> "Make a list to add these to."
+        else -> ""
+      }
+    if (recipeChecklistNote.isNotEmpty()) return
+    repo.update { now, node -> ticked.fold(now) { state, it -> state.withItemAdded(node, it.name, qty = it.qty, forRecipe = recipe.name) } }
+    closeRecipeChecklist()
   }
 
   /** The recipe form, open on a new recipe or on one being edited. Null while it is closed. */
