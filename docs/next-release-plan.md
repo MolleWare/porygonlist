@@ -112,6 +112,51 @@ checked by running the fake phone from a worktree at `ef88918`.
   collected on a receipt from before it arrived, so the third phone never heard. Collection now
   waits for a receipt from after this phone heard, kept in the save, never sent.
 
+### 7. List history
+
+Asked for and decided by Hugo, 2026-11-06. Local to this phone: nothing about history travels, and
+no sync format changes.
+
+**What is recorded**
+
+- One press of Clear ticked on this phone is one run: the time it was pressed, and each cleared
+  item's name and quantity. A press that clears nothing records nothing.
+- Only this phone's own clears. A clear that arrives from another phone is not recorded, nor is an
+  item removed by hand.
+- The newest 50 runs per list; the oldest drops off when a 51st is recorded.
+- History starts empty on update: earlier clears were never kept, and tombstones are no record of
+  them, since they are collected once delivered.
+- Saved as a new record type, which 0.1.0 skips. It is read with the state file, so the cap is what
+  keeps the startup budget.
+- It belongs to the list by id. Delete takes it away. Merge moves the other list's runs into the
+  target, newest first, capped at 50, because its items now live there. A kept private copy, which
+  gets a new id, keeps the history.
+
+**The history page**
+
+- A History button on the list screen opens a page for that list, reached and left the way Share
+  is, not a new tab.
+- Runs newest first, each titled with its date and time, its items beneath. Empty, it says what
+  will appear there.
+- Tapping an item selects it; tapping a run's title selects or unselects the whole run. A selection
+  can span runs. Selected items that fold to the same name count once, with the newest run's
+  quantity.
+- While anything is selected, three actions and a count: **Save as recipe** (asks for a name; a
+  name already taken is refused the way the recipe form refuses it), **Add to recipe** (pick one; an
+  ingredient it already has keeps its quantity), and **Put back on the list** (adds as adding does
+  today, so an unticked item of that name goes up by the quantity). The selection clears after any
+  of them.
+- History items are not editable and cannot be deleted one by one.
+
+**Using a recipe changes: checklist first**
+
+- Tapping a recipe no longer adds straight away. It opens its ingredients, all ticked, and an "Add N
+  to list" button. Untick what is not wanted this time; nothing is remembered about that next time.
+  With nothing ticked the button does nothing and says so. This replaces the one-tap add from
+  feature 3, and it is also how a group of things always needed is used, so there is no second kind.
+- A long press still edits the recipe. Quantities, the "for …" tag and the merge into an unticked
+  item work as in feature 3, for the ticked ingredients only.
+
 ## Needs Ava's phone, when it is back
 
 The two-phone checks of 2, 3, 4 (a merged list arriving on hers), 5 and 6, and an update of hers
