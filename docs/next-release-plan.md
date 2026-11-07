@@ -157,6 +157,12 @@ no sync format changes.
 - A long press still edits the recipe. Quantities, the "for …" tag and the merge into an unticked
   item work as in feature 3, for the ticked ingredients only.
 
+**Built.** As above, with these left to the build: the back link and back gesture return to the
+list by adding the page to the back stack, as Settings does, since Share's replacing it would make
+the back gesture leave the app. The same name twice in one run counts as it comes first. A selection
+lasts one visit to the page. Add to recipe with no recipes says so in its sheet. The three actions
+say nothing afterwards beyond the selection clearing.
+
 ## Needs Ava's phone, when it is back
 
 The two-phone checks of 2, 3, 4 (a merged list arriving on hers), 5 and 6, and an update of hers

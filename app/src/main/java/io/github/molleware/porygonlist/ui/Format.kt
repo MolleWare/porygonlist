@@ -60,7 +60,8 @@ fun relativeTime(
 private val DAY = DateTimeFormatter.ofPattern("EEEE d MMMM")
 
 /**
- * The date and time at the top of the Lists screen: "Sunday 1 November · 14:05".
+ * The date and time at the top of the Lists screen, and over a run of a list's history: "Sunday 1
+ * November · 14:05".
  *
  * The time follows the same 12/24-hour setting as every other time in the app.
  */

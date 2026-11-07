@@ -154,7 +154,7 @@ fun ListDetailScreen(
 
   Column(modifier.verticalScroll(scrollState).padding(top = 18.dp, bottom = tabBarClearance())) {
     Column(Modifier.padding(horizontal = 20.dp)) {
-      // In the back link's row, where it costs the list no height.
+      // In the back link's row, so it takes no line of its own from the list.
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         BackLink("All lists", onBack, tint = Accent700)
         SecondaryButton(

@@ -393,7 +393,7 @@ scrolls to reach the field its own intro paragraph was describing.
 
 | Format | Marker | Carries |
 | --- | --- | --- |
-| State file | `PLSTATE11` | Everything: the owner's name, staples, peers, networks, receipts |
+| State file | `PLSTATE11` | Everything: the owner's name, staples, recipes, list history, peers, networks, receipts |
 | Sync payload | `PLSYNC2` | Lists and people only |
 | Share message | `PL1` | Human-readable item run, no identity |
 
@@ -442,7 +442,24 @@ end of `item` in both formats. 0.1.0 reads an item's first seventeen columns and
 stops; what it sends back has none, which reads as no recipe stamped at the beginning
 of time, so it can never wipe the names off. The newer stamp wins, except that two
 recipes added to the same item while apart are both kept, the newer's first, so both
-phones show the same line.
+phones show the same line. Tapping a recipe opens a checklist of its ingredients,
+and only what stays ticked is added; what was unticked is not stored anywhere.
+
+List history (0.2.0) stays on the phone that has it too: one `history` record per
+run in the state file, after its list's items, a type 0.1.0 skips —
+`history|list|stamp|name|qty|name|qty…`. A run is one press of Clear ticked on this
+phone, so one stamp, the one the press gave the items it removed; a whole stamp and
+not just a time, because a clock following a peer's that runs ahead can give two
+presses the same wall time, and the page keys its rows by it. It hangs off `AppState`
+by list id rather than off `GroceryList`, which is what a payload is built from, so
+it has no way onto the wire; `PLSYNC2` is untouched. A line that does not read costs
+that one run. Each list keeps its newest 50, on write and again on read, which is
+what holds it to the startup budget: it is read with the rest of the file, a few
+dozen KB at the very most per list. A delete takes a list's runs at once, even while
+the list stays hidden for the others to hear; a merge moves them to the target,
+newest first and capped again; a kept private copy, having a new id, takes them with
+it. What a selection on the page comes to is worked out when it is used: names folded
+as matching folds them count once, as the newest run has them.
 
 Merging two lists (0.2.0) is a local act made of things that already travel, plus
 one column. What it brings onto the list merged into are new items, with ids minted
