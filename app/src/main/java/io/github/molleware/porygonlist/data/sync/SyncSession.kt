@@ -3,6 +3,7 @@ package io.github.molleware.porygonlist.data.sync
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.ConflictKind
+import io.github.molleware.porygonlist.data.movedTo
 
 /** Why a payload was not applied. */
 enum class RejectReason {
@@ -193,6 +194,8 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
       copy(
           lists = mergedLists + kept.values,
           activeListId = active,
+          // A kept copy has a new id; what this phone cleared from the list goes with it.
+          history = kept.entries.fold(history) { runs, (old, copy) -> runs.movedTo(old, copy.id) },
           clockHead = clock.head(),
           conflicts = cards,
           avatar = ownAvatar,

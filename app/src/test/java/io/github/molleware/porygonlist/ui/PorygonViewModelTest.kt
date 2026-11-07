@@ -5,10 +5,13 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.ClearedRun
 import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
+import io.github.molleware.porygonlist.data.Ingredient
 import io.github.molleware.porygonlist.data.ListRepository
+import io.github.molleware.porygonlist.data.historyOf
 import io.github.molleware.porygonlist.data.LocalNode
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
@@ -975,6 +978,82 @@ class PorygonViewModelTest {
     vm.clearChecked()
 
     assertEquals(after, state().activeList.liveItems.size)
+  }
+
+  // ── History ───────────────────────────────────────────────────────────────
+
+  private fun active() = state().activeList.id
+
+  private fun tick(name: String) = vm.toggleChecked(onList(name).first { !it.checked }.id)
+
+  @Test
+  fun `one press of clear is one run, of what it took off, at the press`() = runTest(dispatcher) {
+    repo.load()
+    vm.clearChecked()
+    val first = state().historyOf(active()).single()
+    assertEquals("the seed has Tomatoes ticked", listOf(Ingredient("Tomatoes")), first.items)
+
+    vm.addItem("Eggs")
+    vm.addItem("Eggs")
+    tick("Eggs")
+    vm.addItem("Bread")
+    vm.clearChecked()
+
+    val runs = state().historyOf(active())
+    assertEquals(2, runs.size)
+    assertEquals("the newest first", listOf(Ingredient("Eggs", 2)), runs[0].items)
+    assertEquals("one stamp: the one the items went under", state().activeList.items.single { it.name.value == "Eggs" }.removed.at, runs[0].at)
+    assertEquals(first, runs[1])
+  }
+
+  @Test
+  fun `a press that clears nothing records nothing`() = runTest(dispatcher) {
+    repo.load()
+    vm.clearChecked()
+    val once = state().history
+
+    vm.clearChecked()
+
+    assertEquals(once, state().history)
+  }
+
+  @Test
+  fun `an item removed by hand is not recorded`() = runTest(dispatcher) {
+    repo.load()
+    val tomatoes = onList("Tomatoes").single()
+    vm.openEditSheet(tomatoes, "you")
+    vm.askRemove()
+    vm.confirmRemove()
+
+    vm.clearChecked()
+
+    assertTrue("gone, and no run for it", onList("Tomatoes").isEmpty())
+    assertEquals(emptyList<ClearedRun>(), state().historyOf(active()))
+  }
+
+  @Test
+  fun `history is local to the list, and a deleted list's goes with it`() = runTest(dispatcher) {
+    repo.load()
+    vm.clearChecked()
+    val weekly = active()
+    assertEquals(1, state().historyOf(weekly).size)
+
+    vm.deleteList(weekly)
+
+    assertEquals(emptyList<ClearedRun>(), state().historyOf(weekly))
+  }
+
+  @Test
+  fun `merging from a list's card brings its history across`() = runTest(dispatcher) {
+    repo.load()
+    vm.clearChecked()
+    val from = active()
+    val into = state().mergeTargetsFor(from).first().id
+
+    assertTrue(vm.mergeList(from, into))
+
+    assertEquals(listOf(Ingredient("Tomatoes")), state().historyOf(into).single().items)
+    assertEquals(emptyList<ClearedRun>(), state().historyOf(from))
   }
 
   // ── Sharing a list with somebody new ──────────────────────────────────────

@@ -6,7 +6,8 @@ import java.util.zip.CRC32
  * A save as 0.1.0 (`ef88918`) wrote it: version 11 and sealed, but its `list` records stop at
  * `arrivedFrom`, before a kept copy noted who it had been shared with, its `meta` and `person`
  * records stop before the avatar and the stamp of a rename, its `item` and `conflictitem` records
- * stop at the position, before the recipes and a merged item's adder, and it holds no `recipe` or `background` records at all.
+ * stop at the position, before the recipes and a merged item's adder, and it holds no `recipe`,
+ * `background` or `history` records at all.
  *
  * Re-sealed with a fresh checksum, so it reads as the undamaged file that build wrote rather than as
  * a damaged new one. The writer was unchanged from `ef88918` until those fields, so this is its output.
@@ -15,7 +16,7 @@ fun as010(encoded: String): String {
   val body =
     encoded
       .lineSequence()
-      .filterNot { it.startsWith("end|") || it.startsWith("recipe|") || it.startsWith("background|") || it.isEmpty() }
+      .filterNot { it.startsWith("end|") || it.startsWith("recipe|") || it.startsWith("background|") || it.startsWith("history|") || it.isEmpty() }
       .map {
         when {
           it.startsWith("list|") -> it.substringBeforeLast('|')

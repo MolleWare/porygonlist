@@ -671,8 +671,12 @@ data class Staple(val name: String, val uses: Int = 0) {
       }
 }
 
-/** One thing a recipe needs, and how many. */
-data class Ingredient(val name: String, val qty: Int = 1)
+/** One thing a recipe needs, and how many. Also what is kept of an item once it is cleared. */
+data class Ingredient(val name: String, val qty: Int = 1) {
+  /** "Sourdough", or "Oat milk ×2" once there is more than one, as an item on a list reads. */
+  val label: String
+    get() = if (qty > 1) "$name ×$qty" else name
+}
 
 /**
  * A dish and what goes into it, put on a list in one tap.
@@ -822,6 +826,12 @@ data class AppState(
    * [io.github.molleware.porygonlist.data.net.backgroundSwitch]. This phone's own; never sent anywhere.
    */
   val backgroundSync: Boolean? = null,
+  /**
+   * What this phone has cleared from each list, newest first: see [ClearedRun]. A list with none has
+   * no entry. Here rather than on the list, because a [GroceryList] is what goes to other phones and
+   * this never does.
+   */
+  val history: Map<ListId, List<ClearedRun>> = emptyMap(),
 ) {
   /**
    * With no lists at all — a fresh install, or the last one deleted — this is [GroceryList.none]: a
@@ -905,7 +915,12 @@ data class AppState(
 
     // An empty id is never minted, so this leaves nothing active, which is what no lists means.
     val visible = kept.filter { it.personFor(localDevice)?.present == true }
-    return copy(lists = kept, activeListId = if (activeListId == id) visible.firstOrNull()?.id ?: ListId("") else activeListId)
+    return copy(
+      lists = kept,
+      activeListId = if (activeListId == id) visible.firstOrNull()?.id ?: ListId("") else activeListId,
+      // At once, even when the list stays hidden for the others to hear: nothing here shows it again.
+      history = history - id,
+    )
   }
 
   /** The lists [id] could be merged into: every other one this phone shows. None, and none is offered. */
@@ -916,14 +931,19 @@ data class AppState(
    * Merges list [from] into list [into]: everything on it brought across — see
    * [GroceryList.withItemsMergedFrom] — and then [from] taken off this phone exactly as Delete takes
    * it, so anyone it was shared with keeps their copy. [into] keeps the people it had; nobody is
-   * added to a list by having been on the other one.
+   * added to a list by having been on the other one. What this phone cleared from [from] moves to
+   * [into] too, since those items now live there.
    *
    * Nothing happens unless both are lists this phone shows, and two different ones.
    */
   fun withListMerged(from: ListId, into: ListId, newItemId: () -> ItemId, at: Hlc): AppState {
     val source = visibleLists.firstOrNull { it.id == from } ?: return this
     if (mergeTargetsFor(from).none { it.id == into }) return this
-    return copy(lists = lists.map { if (it.id == into) it.withItemsMergedFrom(source, newItemId, at) else it }).withoutList(from, at)
+    return copy(
+        lists = lists.map { if (it.id == into) it.withItemsMergedFrom(source, newItemId, at) else it },
+        history = history.movedTo(from, into),
+      )
+      .withoutList(from, at)
   }
 
   /**

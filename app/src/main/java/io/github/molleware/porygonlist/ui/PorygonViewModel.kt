@@ -29,6 +29,7 @@ import io.github.molleware.porygonlist.data.Staple
 import io.github.molleware.porygonlist.data.WordTrie
 import io.github.molleware.porygonlist.data.alreadyOn
 import io.github.molleware.porygonlist.data.suggestionVocabulary
+import io.github.molleware.porygonlist.data.withClearRecorded
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.ListenReason
@@ -1015,11 +1016,14 @@ class PorygonViewModel(
    * Ticking something off says you have it; it stays visible so you can see what you have got, and
    * this is what ends the shop. Tombstones rather than deletions, for the same reason a single
    * removal is: a phone that never heard about it would offer the whole trolley back.
+   *
+   * The one place a run of the list's history is recorded: this phone's own press, under the stamp
+   * the press gives the items. A clear heard from another phone, or an item removed by hand, is not.
    */
   fun clearChecked() {
     repo.update { s, node ->
       val stamp = node.clock.tick()
-      s.withActiveList { list ->
+      s.withClearRecorded(s.activeListId, stamp).withActiveList { list ->
         list.copy(
           items =
             list.items.map { item ->

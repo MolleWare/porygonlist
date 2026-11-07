@@ -103,6 +103,7 @@ object ShareCodec {
  * three columns at the end of `item` saying which recipes it is for, which it never reads. So did
  * the background sync switch, as a `background` record. And when this phone heard of a removal: one
  * stamp at the very end of `item` and of `person`, never sent, which 0.1.0 does not read either.
+ * And what this phone cleared from a list, as a `history` record per run, skipped the same way.
  */
 object StateCodec {
   private const val VERSION = "PLSTATE11"
@@ -254,6 +255,12 @@ object StateCodec {
         // only for a removal heard of from elsewhere.
         appendLine(record(*(listOf("item", list.id.value) + itemFields(item) + listOfNotNull(item.removalHeardAt?.encode())).toTypedArray()))
       }
+      // One line per run, as a recipe has one, its items in pairs after the stamp: a damaged line
+      // costs one run. A record type 0.1.0 never wrote, and skips.
+      state.historyOf(list.id).forEach { run ->
+        val cleared = run.items.flatMap { listOf(it.name, it.qty.toString()) }
+        appendLine(record(*(listOf("history", list.id.value, run.at.encode()) + cleared).toTypedArray()))
+      }
     }
   }
 
@@ -292,6 +299,7 @@ object StateCodec {
     val sharedWith = mutableMapOf<String, List<String>>()
     val people = mutableMapOf<String, MutableList<Person>>()
     val items = mutableMapOf<String, MutableList<GroceryItem>>()
+    val runs = mutableMapOf<String, MutableList<ClearedRun>>()
 
     for (line in lines.drop(1)) {
       val f = split(line)
@@ -387,6 +395,12 @@ object StateCodec {
             "item" -> {
               val item = parseItem(f, from = 2) ?: return@runCatching
               items.getOrPut(f[1]) { mutableListOf() } += item.copy(removalHeardAt = f.getOrNull(ITEM_HEARD)?.let { Hlc.decode(it) })
+            }
+            "history" -> {
+              val at = Hlc.decode(f[2]) ?: return@runCatching
+              val cleared =
+                f.drop(3).chunked(2).map { (name, qty) -> Ingredient(name, qty.toIntOrNull() ?: return@runCatching) }
+              if (cleared.isNotEmpty()) runs.getOrPut(f[1]) { mutableListOf() } += ClearedRun(at, cleared)
             }
           }
         }
@@ -489,6 +503,8 @@ object StateCodec {
       recipes = recipes,
       conflicts = conflicts,
       backgroundSync = backgroundSync,
+      // Through the rename like everything else about a list, and only for a list the file holds.
+      history = runs.entries.mapNotNull { (raw, kept) -> renamed.ids[raw]?.let { it to kept.asKept() } }.toMap(),
     )
   }
 
