@@ -6,11 +6,14 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.ClearedPick
+import io.github.molleware.porygonlist.data.ClearedRun
 import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.ConflictKind
 import io.github.molleware.porygonlist.data.ApprovedNetwork
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
+import io.github.molleware.porygonlist.data.Ingredient
 import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.ListRepository
 import io.github.molleware.porygonlist.data.initialOf
@@ -28,8 +31,13 @@ import io.github.molleware.porygonlist.data.ShareCodec
 import io.github.molleware.porygonlist.data.Staple
 import io.github.molleware.porygonlist.data.WordTrie
 import io.github.molleware.porygonlist.data.alreadyOn
+import io.github.molleware.porygonlist.data.historyOf
+import io.github.molleware.porygonlist.data.picked
 import io.github.molleware.porygonlist.data.suggestionVocabulary
+import io.github.molleware.porygonlist.data.toggling
+import io.github.molleware.porygonlist.data.togglingRun
 import io.github.molleware.porygonlist.data.withClearRecorded
+import io.github.molleware.porygonlist.data.withIngredients
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.ListenReason
@@ -74,6 +82,10 @@ enum class Sheet {
   IMPORT,
   /** Why nothing syncs behind a VPN, and how to leave this app out of it. */
   VPN,
+  /** A name for a new recipe, made of what is selected on the history page. */
+  SAVE_AS_RECIPE,
+  /** Which recipe gets what is selected on the history page. */
+  ADD_TO_RECIPE,
 }
 
 /** The item being edited, held apart from the list so Cancel is free. */
@@ -1232,13 +1244,15 @@ class PorygonViewModel(
       when {
         d.name.isBlank() -> "Give it a name first."
         recipe == null -> "Add what goes in it first."
-        taken != null -> "You already have a recipe called ${taken.name}."
+        taken != null -> takenNote(taken)
         else -> ""
       }
     if (recipe == null || taken != null) return
     repo.update { s, _ -> s.withRecipeSaved(recipe, replacing = d.editing) }
     closeRecipeForm()
   }
+
+  private fun takenNote(taken: Recipe) = "You already have a recipe called ${taken.name}."
 
   fun closeRecipeForm() {
     recipeDraft = null
@@ -1259,6 +1273,92 @@ class PorygonViewModel(
     val name = recipeDraft?.editing ?: return
     repo.update { s, _ -> s.withoutRecipe(name) }
     closeRecipeForm()
+  }
+
+  // ── History ───────────────────────────────────────────────────────────────
+
+  /**
+   * What is selected on the open list's history page, as a whole: a row reads whether it is in here
+   * through a derived state, so a tap redraws the row it changed and not the rest of the page.
+   */
+  var historySelection by mutableStateOf(emptySet<ClearedPick>())
+    private set
+
+  /** The name being typed for a recipe made of the selection. */
+  var historyRecipeName by mutableStateOf("")
+    private set
+
+  /** Why that name was refused, said under it. Empty while there is nothing to say. */
+  var historyRecipeNote by mutableStateOf("")
+    private set
+
+  /** The page opens with nothing selected: a selection is for one visit, not left waiting. */
+  fun openHistory() {
+    historySelection = emptySet()
+  }
+
+  fun toggleCleared(pick: ClearedPick) {
+    historySelection = historySelection.toggling(pick)
+  }
+
+  fun toggleClearedRun(run: ClearedRun) {
+    historySelection = historySelection.togglingRun(run)
+  }
+
+  /** What the selection comes to on the open list. See [picked]. */
+  private fun AppState.selected(): List<Ingredient> = historyOf(activeList.id).picked(historySelection)
+
+  /** Any of the three actions done: the selection is spent, and the sheet it was asked in goes. */
+  private fun selectionUsed() {
+    historySelection = emptySet()
+    closeSheet()
+  }
+
+  fun askSaveAsRecipe() {
+    historyRecipeName = ""
+    historyRecipeNote = ""
+    sheet = Sheet.SAVE_AS_RECIPE
+  }
+
+  fun onHistoryRecipeNameChange(value: String) {
+    historyRecipeName = value
+    historyRecipeNote = ""
+  }
+
+  /** A new recipe of the selection, refused as the recipe form refuses: blank, or a name taken. */
+  fun saveSelectionAsRecipe() {
+    val s = state.value ?: return
+    val name = historyRecipeName.trim()
+    val taken = s.recipeNamed(name)
+    historyRecipeNote =
+      when {
+        name.isEmpty() -> "Give it a name first."
+        taken != null -> takenNote(taken)
+        else -> ""
+      }
+    val ingredients = s.selected()
+    if (name.isEmpty() || taken != null || ingredients.isEmpty()) return
+    repo.update { now, _ -> now.withRecipeSaved(Recipe(name, ingredients)) }
+    selectionUsed()
+  }
+
+  fun askAddToRecipe() {
+    sheet = Sheet.ADD_TO_RECIPE
+  }
+
+  /** The selection added to the recipe called [name]; what it already has keeps its quantity. */
+  fun addSelectionToRecipe(name: String) {
+    repo.update { s, _ ->
+      val recipe = s.recipeNamed(name) ?: return@update s
+      s.withRecipeSaved(recipe.withIngredients(s.selected()), replacing = recipe.name)
+    }
+    selectionUsed()
+  }
+
+  /** The selection on the open list, the way adding works: an unticked item of that name goes up. */
+  fun putSelectionBack() {
+    repo.update { s, node -> s.selected().fold(s) { state, it -> state.withItemAdded(node, it.name, qty = it.qty) } }
+    selectionUsed()
   }
 
   // ── Conflict ──────────────────────────────────────────────────────────────

@@ -46,14 +46,17 @@ import io.github.molleware.porygonlist.data.net.BackgroundSync
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.WifiWatch
+import io.github.molleware.porygonlist.data.historyOf
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.ui.ClockFormat
 import io.github.molleware.porygonlist.ui.PorygonViewModel
 import io.github.molleware.porygonlist.ui.Sheet
+import io.github.molleware.porygonlist.ui.components.AddToRecipeSheet
 import io.github.molleware.porygonlist.ui.components.Confetti
 import io.github.molleware.porygonlist.ui.components.EditItemSheet
 import io.github.molleware.porygonlist.ui.components.ExportSheet
 import io.github.molleware.porygonlist.ui.components.ImportSheet
+import io.github.molleware.porygonlist.ui.components.SaveAsRecipeSheet
 import io.github.molleware.porygonlist.ui.components.Tab
 import io.github.molleware.porygonlist.ui.components.TabBar
 import io.github.molleware.porygonlist.ui.components.VpnSheet
@@ -61,6 +64,7 @@ import io.github.molleware.porygonlist.ui.nameFor
 import io.github.molleware.porygonlist.ui.networkLabel
 import io.github.molleware.porygonlist.ui.editSyncNote
 import io.github.molleware.porygonlist.ui.removeNote
+import io.github.molleware.porygonlist.ui.screens.HistoryScreen
 import io.github.molleware.porygonlist.ui.screens.ListDetailScreen
 import io.github.molleware.porygonlist.ui.screens.ListsScreen
 import io.github.molleware.porygonlist.ui.screens.NameScreen
@@ -271,11 +275,31 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   onKeepBoth = viewModel::keepBoth,
                   onKeepVersion = viewModel::keepVersion,
                   onShare = { backStack.goTo(Share) },
+                  onHistory = {
+                    viewModel.openHistory()
+                    backStack.add(History)
+                  },
                   confirmingClear = viewModel.confirmingClear,
                   onAskClear = viewModel::askClearChecked,
                   onCancelClear = viewModel::cancelClearChecked,
                   onClearChecked = viewModel::clearChecked,
                   onBack = { backStack.goTo(Lists) },
+                  modifier = Modifier.fillMaxSize(),
+                )
+              }
+              entry<History> {
+                HistoryScreen(
+                  listName = appState.activeList.name,
+                  runs = appState.historyOf(appState.activeList.id),
+                  // A function, not the value: read here, every tap would run this whole screen again.
+                  selection = { viewModel.historySelection },
+                  onToggleItem = viewModel::toggleCleared,
+                  onToggleRun = viewModel::toggleClearedRun,
+                  onSaveAsRecipe = viewModel::askSaveAsRecipe,
+                  onAddToRecipe = viewModel::askAddToRecipe,
+                  onPutBack = viewModel::putSelectionBack,
+                  // Back to the list it is a page of, as the back gesture goes.
+                  onBack = { if (backStack.size > 1) backStack.removeLastOrNull() else backStack.goTo(ListDetail) },
                   modifier = Modifier.fillMaxSize(),
                 )
               }
@@ -478,6 +502,16 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
             onDismiss = viewModel::closeSheet,
           )
         Sheet.VPN -> VpnSheet(onDismiss = viewModel::closeSheet)
+        Sheet.SAVE_AS_RECIPE ->
+          SaveAsRecipeSheet(
+            name = viewModel.historyRecipeName,
+            note = viewModel.historyRecipeNote,
+            onNameChange = viewModel::onHistoryRecipeNameChange,
+            onSave = viewModel::saveSelectionAsRecipe,
+            onDismiss = viewModel::closeSheet,
+          )
+        Sheet.ADD_TO_RECIPE ->
+          AddToRecipeSheet(recipes = appState.recipes, onPick = viewModel::addSelectionToRecipe, onDismiss = viewModel::closeSheet)
         null -> Unit
       }
     }
@@ -512,7 +546,7 @@ private fun NavKey.toTab(): Tab =
     is Shop -> Tab.SHOP
     is Staples -> Tab.STAPLES
     is Share -> Tab.SHARE
-    // A list you have opened still belongs to the Lists tab.
+    // A list you have opened still belongs to the Lists tab, and so does its history.
     else -> Tab.LISTS
   }
 

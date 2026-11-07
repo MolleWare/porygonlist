@@ -25,9 +25,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.molleware.porygonlist.data.Recipe
 import io.github.molleware.porygonlist.theme.Accent2800
 import io.github.molleware.porygonlist.theme.Accent700
 import io.github.molleware.porygonlist.theme.Bg
@@ -251,6 +253,64 @@ fun VpnSheet(onDismiss: () -> Unit) {
       modifier = Modifier.padding(top = 10.dp, bottom = 16.dp),
     )
     PrimaryButton("Got it", onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp))
+  }
+}
+
+/** A name for a new recipe made of what is selected on a list's history. */
+@Composable
+fun SaveAsRecipeSheet(name: String, note: String, onNameChange: (String) -> Unit, onSave: () -> Unit, onDismiss: () -> Unit) {
+  PorygonBottomSheet(onDismiss) {
+    Text("Save as recipe", style = PorygonType.SheetTitle, color = TextInk, modifier = Modifier.padding(bottom = 14.dp))
+    PorygonTextField(
+      value = name,
+      onValueChange = onNameChange,
+      placeholder = "Recipe name",
+      modifier = Modifier.fillMaxWidth(),
+      onSubmit = onSave,
+    )
+    Text(
+      note,
+      style = PorygonType.Fine,
+      color = Accent700,
+      modifier = Modifier.fillMaxWidth().heightIn(min = 17.dp).padding(top = 8.dp, bottom = 14.dp),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+      PrimaryButton("Save", onSave, modifier = Modifier.weight(1f).heightIn(min = 46.dp))
+      SecondaryButton("Cancel", onDismiss, modifier = Modifier.heightIn(min = 46.dp))
+    }
+  }
+}
+
+/** Which recipe gets what is selected on a list's history. Picking one is the whole of the answer. */
+@Composable
+fun AddToRecipeSheet(recipes: List<Recipe>, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+  PorygonBottomSheet(onDismiss) {
+    Text("Add to recipe", style = PorygonType.SheetTitle, color = TextInk, modifier = Modifier.padding(bottom = 3.dp))
+    Text(
+      if (recipes.isEmpty()) "You have no recipes yet. Save these as one instead." else "Anything it already has keeps its quantity.",
+      style = PorygonType.Meta.copy(fontSize = PorygonType.Fine.fontSize),
+      color = Neutral700,
+      modifier = Modifier.padding(bottom = 14.dp),
+    )
+    // Capped like the export sheet's text, so a long shelf of recipes scrolls instead of pushing Cancel away.
+    Column(
+      Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      recipes.forEach { recipe ->
+        Column(
+          Modifier.fillMaxWidth()
+            .clip(Shapes.Row)
+            .background(Surface)
+            .clickable(role = Role.Button) { onPick(recipe.name) }
+            .padding(horizontal = 16.dp, vertical = 13.dp)
+        ) {
+          Text(recipe.name, style = PorygonType.RowName, color = TextInk)
+          Text(recipe.ingredientsText, style = PorygonType.Fine, color = Neutral700, modifier = Modifier.padding(top = 1.dp))
+        }
+      }
+    }
+    SecondaryButton("Cancel", onDismiss, modifier = Modifier.padding(top = 14.dp).heightIn(min = 46.dp))
   }
 }
 

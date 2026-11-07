@@ -9,6 +9,9 @@ import kotlinx.serialization.Serializable
 /** One list, open for editing. Which list is held in app state, not in the key. */
 @Serializable data object ListDetail : NavKey
 
+/** What this phone has cleared from the list that is open: a page of its list, not a tab. */
+@Serializable data object History : NavKey
+
 /** Shopping mode. */
 @Serializable data object Shop : NavKey
 

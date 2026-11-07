@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.molleware.porygonlist.data.AppState
+import io.github.molleware.porygonlist.data.ClearedPick
 import io.github.molleware.porygonlist.data.ClearedRun
 import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.GroceryItem
@@ -1054,6 +1055,187 @@ class PorygonViewModelTest {
 
     assertEquals(listOf(Ingredient("Tomatoes")), state().historyOf(into).single().items)
     assertEquals(emptyList<ClearedRun>(), state().historyOf(from))
+  }
+
+  /** Two runs cleared from the open list: Eggs ×2 and Milk, and before them Eggs ×6 and Tea ×3. */
+  private fun twoRuns() {
+    vm.clearChecked()
+    repeat(6) { vm.addItem("Eggs") }
+    tick("Eggs")
+    repeat(3) { vm.addItem("Tea") }
+    tick("Tea")
+    vm.clearChecked()
+    repeat(2) { vm.addItem("eggs") }
+    tick("eggs")
+    vm.addItem("Milk")
+    tick("Milk")
+    vm.clearChecked()
+  }
+
+  /** The newest run, with everything in the one before it selected too. */
+  private fun selectingTwoRuns(): List<ClearedRun> {
+    twoRuns()
+    val runs = state().historyOf(active())
+    vm.openHistory()
+    vm.toggleClearedRun(runs[0])
+    vm.toggleClearedRun(runs[1])
+    return runs
+  }
+
+  @Test
+  fun `a selection can be built by item and by run, and opening the page starts it afresh`() = runTest(dispatcher) {
+    repo.load()
+    twoRuns()
+    val (newest, older) = state().historyOf(active())
+
+    vm.openHistory()
+    vm.toggleCleared(ClearedPick(older.at, 0))
+    vm.toggleClearedRun(newest)
+    assertEquals(setOf(ClearedPick(older.at, 0), ClearedPick(newest.at, 0), ClearedPick(newest.at, 1)), vm.historySelection)
+
+    vm.toggleCleared(ClearedPick(older.at, 0))
+    vm.toggleClearedRun(newest)
+    assertEquals(emptySet<ClearedPick>(), vm.historySelection)
+
+    vm.toggleClearedRun(newest)
+    vm.openHistory()
+    assertEquals(emptySet<ClearedPick>(), vm.historySelection)
+  }
+
+  @Test
+  fun `saved as a recipe, the selection folds to the newest run's quantities and clears`() = runTest(dispatcher) {
+    repo.load()
+    selectingTwoRuns()
+
+    vm.askSaveAsRecipe()
+    assertEquals(Sheet.SAVE_AS_RECIPE, vm.sheet)
+    vm.onHistoryRecipeNameChange("  Weekly basics ")
+    vm.saveSelectionAsRecipe()
+
+    assertEquals(
+      Recipe("Weekly basics", listOf(Ingredient("eggs", 2), Ingredient("Milk"), Ingredient("Tea", 3))),
+      state().recipeNamed("Weekly basics"),
+    )
+    assertEquals(emptySet<ClearedPick>(), vm.historySelection)
+    assertNull(vm.sheet)
+  }
+
+  @Test
+  fun `a recipe's name is refused the way the form refuses it, and nothing is lost`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "2 eggs, flour")
+    val selection = selectingTwoRuns().let { vm.historySelection }
+
+    vm.askSaveAsRecipe()
+    vm.saveSelectionAsRecipe()
+    assertEquals("Give it a name first.", vm.historyRecipeNote)
+    assertEquals(1, state().recipes.size)
+
+    vm.onHistoryRecipeNameChange("pancakes")
+    assertEquals("typing again clears the note", "", vm.historyRecipeNote)
+    vm.saveSelectionAsRecipe()
+
+    assertEquals("You already have a recipe called Pancakes.", vm.historyRecipeNote)
+    assertEquals("the other recipe is untouched", listOf(Recipe("Pancakes", listOf(Ingredient("Eggs", 2), Ingredient("Flour")))), state().recipes)
+    assertEquals("the sheet stays, for another name", Sheet.SAVE_AS_RECIPE, vm.sheet)
+    assertEquals(selection, vm.historySelection)
+  }
+
+  @Test
+  fun `the name asked for starts empty each time, with nothing said under it`() = runTest(dispatcher) {
+    repo.load()
+    selectingTwoRuns()
+    vm.askSaveAsRecipe()
+    vm.saveSelectionAsRecipe()
+    vm.onHistoryRecipeNameChange("Half typed")
+    vm.saveSelectionAsRecipe()
+    vm.closeSheet()
+    vm.toggleClearedRun(state().historyOf(active())[0])
+
+    vm.askSaveAsRecipe()
+
+    assertEquals("", vm.historyRecipeName)
+    assertEquals("", vm.historyRecipeNote)
+  }
+
+  @Test
+  fun `added to a recipe, an ingredient it has keeps its quantity, the rest go last, and the selection clears`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "5 eggs, flour")
+    selectingTwoRuns()
+
+    vm.askAddToRecipe()
+    assertEquals(Sheet.ADD_TO_RECIPE, vm.sheet)
+    vm.addSelectionToRecipe("Pancakes")
+
+    assertEquals(
+      listOf(Ingredient("Eggs", 5), Ingredient("Flour"), Ingredient("Milk"), Ingredient("Tea", 3)),
+      state().recipeNamed("Pancakes")!!.ingredients,
+    )
+    assertEquals(emptySet<ClearedPick>(), vm.historySelection)
+    assertNull(vm.sheet)
+  }
+
+  @Test
+  fun `put back, the selection goes on the list the way adding does, and clears`() = runTest(dispatcher) {
+    repo.load()
+    selectingTwoRuns()
+    // Oat milk is not in the runs; Eggs is unticked and on the list, so goes up by the quantity.
+    vm.addItem("Eggs")
+    val before = state().historyOf(active())
+
+    vm.putSelectionBack()
+
+    assertEquals("up by the newest run's quantity", 3, onList("Eggs").single().qty.value)
+    assertEquals("newly on the list", 1, onList("Milk").single().qty.value)
+    assertEquals(3, onList("Tea").single().qty.value)
+    assertEquals("said to be for nothing", emptyList<String>(), onList("Tea").single().recipes.value)
+    assertEquals(Origin.LOCAL, onList("Tea").single().origin)
+    assertEquals(emptySet<ClearedPick>(), vm.historySelection)
+    assertEquals("the history itself is not touched", before, state().historyOf(active()))
+  }
+
+  @Test
+  fun `put back beside a ticked item of that name is a new line, as adding is`() = runTest(dispatcher) {
+    repo.load()
+    selectingTwoRuns()
+    vm.addItem("Tea")
+    tick("Tea")
+
+    vm.putSelectionBack()
+
+    val (ticked, fresh) = onList("Tea").partition { it.checked }
+    assertEquals(1, ticked.single().qty.value)
+    assertEquals(3, fresh.single().qty.value)
+  }
+
+  @Test
+  fun `with nothing selected the actions do nothing`() = runTest(dispatcher) {
+    repo.load()
+    makeRecipe("Pancakes", "5 eggs, flour")
+    twoRuns()
+    val before = state()
+
+    vm.openHistory()
+    vm.putSelectionBack()
+    vm.addSelectionToRecipe("Pancakes")
+    vm.onHistoryRecipeNameChange("Nothing")
+    vm.saveSelectionAsRecipe()
+
+    assertEquals(before.lists, state().lists)
+    assertEquals(before.recipes, state().recipes)
+  }
+
+  @Test
+  fun `selecting does not write anything`() = runTest(dispatcher) {
+    repo.load()
+    twoRuns()
+    val before = state()
+
+    vm.openHistory()
+    vm.toggleClearedRun(before.historyOf(active())[0])
+
+    assertTrue(before === state())
   }
 
   // ── Sharing a list with somebody new ──────────────────────────────────────

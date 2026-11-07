@@ -116,6 +116,8 @@ fun ListDetailScreen(
   onKeepVersion: (Conflict, yours: Boolean) -> Unit,
   /** Opens sharing for this list — who has it, and who else could. */
   onShare: () -> Unit,
+  /** Opens what this phone has cleared from this list. */
+  onHistory: () -> Unit,
   confirmingClear: Boolean,
   onAskClear: () -> Unit,
   onCancelClear: () -> Unit,
@@ -152,7 +154,16 @@ fun ListDetailScreen(
 
   Column(modifier.verticalScroll(scrollState).padding(top = 18.dp, bottom = tabBarClearance())) {
     Column(Modifier.padding(horizontal = 20.dp)) {
-      BackLink("All lists", onBack, tint = Accent700)
+      // In the back link's row, where it costs the list no height.
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        BackLink("All lists", onBack, tint = Accent700)
+        SecondaryButton(
+          "History",
+          onHistory,
+          style = PorygonType.Meta,
+          contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
+        )
+      }
       Text(
         list.name,
         style = PorygonType.ScreenTitle,
