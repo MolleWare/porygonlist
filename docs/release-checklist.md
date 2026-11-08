@@ -1004,9 +1004,15 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
 - [ ] **Gamification, with a geo option.** The geo option is switched on and off in Settings. The
       privacy policy and Play's location declaration say location only reads the wifi's name; a geo
       option means updating both.
-- [ ] **List history.** This phone's own clears for each list, newest first and grouped by run,
+- [x] **List history.** This phone's own clears for each list, newest first and grouped by run,
       the last 50 runs. Items or runs can be saved as a recipe, added to one, or put back on the
       list. Tapping a recipe now opens a checklist first. See `docs/next-release-plan.md`, feature 7.
+      Pixel, 2026-11-08, `bbf54e9` beside the release app: passed. Checked: runs from the list
+      and from Shop; nothing recorded for a hand removal; cold restart; selection folding across
+      runs; all three actions, a blank name and a taken name; the checklist and its "Add 0" note;
+      merge interleaves runs; delete leaves no `history` record; History button and action bar at
+      font scale 2.0; no crash. Not checked: 50 runs scrolling, TalkBack, a kept copy (unit
+      tests only).
 - [ ] **Recipes beside staples.** A recipe is a sublist of its ingredients. One tap on it adds
       them all to the list, tagged, and each added item says which recipe it is an ingredient for.
 - [ ] **Sync is one switch in Settings.** Turning it on needs alarms allowed; without them it stays
