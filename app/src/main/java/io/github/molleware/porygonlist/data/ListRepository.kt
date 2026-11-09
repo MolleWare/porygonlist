@@ -270,7 +270,8 @@ class FileListRepository(
  * What this phone has now wins wherever the two hold the same thing: a list that has come back from
  * a peer since, or a phone paired again. Everything else in [kept] is added: the lists only it has,
  * with their open questions; the phones and networks; the name, staples, recipes and background sync
- * switch if none were set again; a list's history if it has none again.
+ * switch if none were set again; a list's history, learned staples and unwanted names, each if it
+ * has none again.
  * Receipts are not merged — losing them is safe, tombstones only stay longer.
  */
 internal fun AppState.withRecovered(kept: AppState): AppState {
@@ -292,6 +293,8 @@ internal fun AppState.withRecovered(kept: AppState): AppState {
     staples = staples.ifEmpty { kept.staples },
     recipes = recipes.ifEmpty { kept.recipes },
     history = kept.history + history,
+    learnedStaples = kept.learnedStaples + learnedStaples,
+    unwantedStaples = kept.unwantedStaples + unwantedStaples,
     backgroundSync = backgroundSync ?: kept.backgroundSync,
     conflicts = conflicts + kept.conflicts.filter { it.listId in backIds },
   )

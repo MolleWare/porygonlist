@@ -319,7 +319,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
               }
               entry<Staples> {
                 StaplesScreen(
-                  staples = appState.staples,
+                  staples = viewModel.stapleGrid(appState),
                   activeListName = appState.activeList.name,
                   draft = viewModel.stapleDraft,
                   onDraftChange = viewModel::onStapleDraftChange,

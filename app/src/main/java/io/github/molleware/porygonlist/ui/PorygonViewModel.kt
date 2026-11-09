@@ -36,8 +36,15 @@ import io.github.molleware.porygonlist.data.picked
 import io.github.molleware.porygonlist.data.suggestionVocabulary
 import io.github.molleware.porygonlist.data.toggling
 import io.github.molleware.porygonlist.data.togglingRun
+import io.github.molleware.porygonlist.data.staplesShownOn
 import io.github.molleware.porygonlist.data.withClearRecorded
+import io.github.molleware.porygonlist.data.withHandMadeStaple
 import io.github.molleware.porygonlist.data.withIngredients
+import io.github.molleware.porygonlist.data.withStapleAdded
+import io.github.molleware.porygonlist.data.withStapleRemoved
+import io.github.molleware.porygonlist.data.withStapleUsed
+import io.github.molleware.porygonlist.data.withStaplesLearned
+import java.time.ZoneId
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
 import io.github.molleware.porygonlist.data.net.ListenReason
@@ -1034,11 +1041,13 @@ class PorygonViewModel(
    *
    * The one place a run of the list's history is recorded: this phone's own press, under the stamp
    * the press gives the items. A clear heard from another phone, or an item removed by hand, is not.
+   * Right after it, the same press is when the list learns staples from its runs, and lets go of
+   * the ones it has forgotten — the only time either happens.
    */
   fun clearChecked() {
     repo.update { s, node ->
       val stamp = node.clock.tick()
-      s.withClearRecorded(s.activeListId, stamp).withActiveList { list ->
+      s.withClearRecorded(s.activeListId, stamp).withStaplesLearned(s.activeListId, stamp.wall, ZoneId.systemDefault()).withActiveList { list ->
         list.copy(
           items =
             list.items.map { item ->
@@ -1151,19 +1160,25 @@ class PorygonViewModel(
    * The count is the tile's whole sub-label, so it has to move in the same update as the item —
    * otherwise a tap adds the thing and the tile goes on claiming it has never been used.
    */
+  /** The Staples tab on the open list, as of now: hand-made first, then what the list taught. */
+  fun stapleGrid(state: AppState): List<Staple> =
+    state.staplesShownOn(state.activeList.id, System.currentTimeMillis(), ZoneId.systemDefault())
+
+  /** A tap is counted on the tile tapped: a hand-made staple, or failing that the open list's learned one. */
   fun useStaple(name: String) = repo.update { s, node ->
-    s.withItemAdded(node, name)
-      .copy(staples = s.staples.map { if (it.name == name) it.copy(uses = it.uses + 1) else it })
+    val added = s.withItemAdded(node, name)
+    if (added.staples.any { it.name == name }) added.copy(staples = added.staples.map { if (it.name == name) it.copy(uses = it.uses + 1) else it })
+    else added.withStapleUsed(added.activeListId, name)
   }
 
-  /** Adds to the grid. An existing staple is left as it is rather than duplicated. */
+  /**
+   * Adds to the grid. An existing staple is left as it is rather than duplicated. A learned staple of
+   * that name, on any list, gives way to it, and the name is no longer unwanted anywhere.
+   */
   fun addStaple() {
     val name = stapleDraft.trim()
     if (name.isEmpty()) return
-    repo.update { s, _ ->
-      if (s.staples.any { it.name.equals(name, ignoreCase = true) }) s
-      else s.copy(staples = s.staples + Staple(name))
-    }
+    repo.update { s, _ -> s.withHandMadeStaple(name) }
     stapleDraft = ""
   }
 
@@ -1179,9 +1194,15 @@ class PorygonViewModel(
     confirmingStaple = null
   }
 
-  /** Takes a tile off the grid. Nothing already added to a list is touched. */
+  /**
+   * Takes a tile off the grid. Nothing already added to a list is touched. A learned tile is also
+   * remembered as unwanted on the open list, so that list never teaches it again.
+   */
   fun removeStaple(name: String) {
-    repo.update { s, _ -> s.copy(staples = s.staples.filterNot { it.name == name }) }
+    repo.update { s, _ ->
+      if (s.staples.any { it.name == name }) s.copy(staples = s.staples.filterNot { it.name == name })
+      else s.withStapleRemoved(s.activeListId, name)
+    }
     confirmingStaple = null
   }
 
@@ -1675,6 +1696,10 @@ class PorygonViewModel(
    * overwriting it blind.
    *
    * [forRecipe] is the recipe it is being added for, which the item then names, new or bumped.
+   *
+   * Being this phone's add, it is also what keeps a learned staple of that name on the list from
+   * being forgotten, as of the add's own stamp. A paste does not come through here, deliberately:
+   * what it brings is someone else's message, as an add from another phone is.
    */
   private fun AppState.withItemAdded(
     node: LocalNode,
@@ -1691,10 +1716,11 @@ class PorygonViewModel(
       val fresh = node.newItem(trimmed, qty = qty, origin = origin)
       val item = if (forRecipe == null) fresh else fresh.forRecipe(forRecipe, fresh.name.at)
       return withActiveList { it.withItemsAppended(listOf(item), item.name.at) }
+        .withStapleAdded(activeListId, trimmed, item.name.at.wall, ZoneId.systemDefault())
     }
 
     val stamp = node.clock.tick()
-    return withActiveList { list ->
+    return withStapleAdded(activeListId, trimmed, stamp.wall, ZoneId.systemDefault()).withActiveList { list ->
       list.copy(
         items =
           list.items.map { item ->

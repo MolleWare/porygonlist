@@ -1,6 +1,7 @@
 package io.github.molleware.porygonlist.data
 
 import java.text.Normalizer
+import java.time.ZoneId
 
 /**
  * Prefix lookup over the things people put on a grocery list.
@@ -177,7 +178,8 @@ object CommonGroceries {
  *
  * The owner's own words come first and win every tie, in this order:
  *
- *  1. their staples, which they chose deliberately,
+ *  1. their staples, which they chose deliberately, and the open list's learned ones, as the
+ *     Staples tab shows them at [now],
  *  2. everything on any of their lists, including things already ticked off — how they spell it is
  *     what matters, not whether they still need it,
  *  3. the built-in list.
@@ -185,8 +187,10 @@ object CommonGroceries {
  * Things already on *this* list are left out. Offering someone a second "Tomatoes" is the duplicate
  * this feature exists to prevent.
  */
-fun AppState.suggestionVocabulary(): List<String> =
-  staples.map { it.name } + lists.flatMap { list -> list.items.map { it.name.value } } + CommonGroceries.names
+fun AppState.suggestionVocabulary(now: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): List<String> =
+  staplesShownOn(activeList.id, now, zone).map { it.name } +
+    lists.flatMap { list -> list.items.map { it.name.value } } +
+    CommonGroceries.names
 
 /** Names already live on [list], folded for comparison. */
 fun alreadyOn(list: GroceryList): Set<String> =

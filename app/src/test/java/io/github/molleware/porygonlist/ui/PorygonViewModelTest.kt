@@ -11,8 +11,10 @@ import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.Ingredient
+import io.github.molleware.porygonlist.data.LearnedStaple
 import io.github.molleware.porygonlist.data.ListRepository
 import io.github.molleware.porygonlist.data.historyOf
+import io.github.molleware.porygonlist.data.learnedOn
 import io.github.molleware.porygonlist.data.LocalNode
 import io.github.molleware.porygonlist.data.Origin
 import io.github.molleware.porygonlist.data.Person
@@ -492,6 +494,114 @@ class PorygonViewModelTest {
     val after = state().activeList.liveItems.single { it.name.value == "Eggs" }.qty
     assertNotEquals("a new write carries a new stamp", before.at, after.at)
     assertEquals("and records what it was written against", before.at, after.basedOn)
+  }
+
+  // ── Learned staples ───────────────────────────────────────────────────────
+
+  /** One press of Clear ticked with [name] in the trolley. */
+  private fun clearWith(name: String) {
+    vm.addItem(name)
+    vm.toggleChecked(onList(name).first { !it.checked }.id)
+    vm.clearChecked()
+  }
+
+  private fun learned() = state().learnedOn(state().activeList.id)
+
+  @Test
+  fun `a third clear with the same thing in it teaches it to the open list's grid`() = runTest(dispatcher) {
+    repo.load()
+    clearWith("Halloumi")
+    clearWith("Halloumi")
+    assertTrue("two is not enough", vm.stapleGrid(state()).none { it.name == "Halloumi" })
+
+    clearWith("halloumi")
+
+    assertEquals("as the newest run spells it", listOf("halloumi"), learned().map { it.name })
+    assertEquals("after the hand-made ones", Staple("halloumi"), vm.stapleGrid(state()).last())
+    assertEquals(state().historyOf(state().activeList.id).first().at.wall, learned().single().lastAdded)
+  }
+
+  @Test
+  fun `tapping a learned tile adds it and counts the tap there`() = runTest(dispatcher) {
+    repo.load()
+    repeat(3) { clearWith("Halloumi") }
+    val before = learned().single().lastAdded
+
+    vm.useStaple("Halloumi")
+
+    assertEquals(1, onList("Halloumi").single().qty.value)
+    assertEquals(1, learned().single().uses)
+    assertEquals("the hand-made ones are not touched", 0, state().staples.sumOf { it.uses })
+    assertTrue(learned().single().lastAdded >= before)
+  }
+
+  @Test
+  fun `any add on this phone keeps it, by the time of the add`() = runTest(dispatcher) {
+    repo.load()
+    repeat(3) { clearWith("Halloumi") }
+
+    vm.addItem("halloumi")
+
+    assertEquals(onList("Halloumi").single().name.at.wall, learned().single().lastAdded)
+    vm.addItem("Halloumi")
+    assertEquals("a bump is an add too", onList("Halloumi").single().qty.at.wall, learned().single().lastAdded)
+  }
+
+  @Test
+  fun `a pasted list is not an add of this phone's, and keeps nothing`() = runTest(dispatcher) {
+    repo.load()
+    repeat(3) { clearWith("Halloumi") }
+    val before = learned().single()
+
+    vm.openImport()
+    vm.onImportTextChange("PL1 · Weekly shop · halloumi")
+    vm.runImport()
+
+    assertEquals("pasted", 1, onList("Halloumi").size)
+    assertEquals(before, learned().single())
+  }
+
+  @Test
+  fun `a learned tile removed by hand is gone for good from that list`() = runTest(dispatcher) {
+    repo.load()
+    repeat(3) { clearWith("Halloumi") }
+
+    vm.askRemoveStaple("Halloumi")
+    assertEquals("the same confirm as any tile", "Halloumi", vm.confirmingStaple)
+    vm.removeStaple("Halloumi")
+    repeat(4) { clearWith("Halloumi") }
+
+    assertEquals(emptyList<LearnedStaple>(), learned())
+    assertTrue(vm.stapleGrid(state()).none { it.name == "Halloumi" })
+    assertNull(vm.confirmingStaple)
+  }
+
+  @Test
+  fun `making a hand-made staple of it lifts that, and stands in for a learned one`() = runTest(dispatcher) {
+    repo.load()
+    repeat(3) { clearWith("Halloumi") }
+    repeat(3) { clearWith("Feta") }
+    vm.removeStaple("Halloumi")
+
+    vm.onStapleDraftChange("halloumi")
+    vm.addStaple()
+    vm.onStapleDraftChange("Feta")
+    vm.addStaple()
+
+    assertEquals(emptyMap<Any, Any>(), state().unwantedStaples)
+    assertEquals(emptyList<LearnedStaple>(), learned())
+    assertEquals("once each", 1, vm.stapleGrid(state()).count { WordTrie.fold(it.name) == "feta" })
+    assertEquals(listOf("halloumi", "Feta"), state().staples.takeLast(2).map { it.name })
+  }
+
+  @Test
+  fun `removing a hand-made tile still just removes it`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.removeStaple("Eggs")
+
+    assertTrue(state().staples.none { it.name == "Eggs" })
+    assertEquals(emptyMap<Any, Any>(), state().unwantedStaples)
   }
 
   @Test

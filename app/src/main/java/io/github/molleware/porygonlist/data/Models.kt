@@ -833,6 +833,13 @@ data class AppState(
    * this never does.
    */
   val history: Map<ListId, List<ClearedRun>> = emptyMap(),
+  /**
+   * Staples this phone learned for each list from its runs, in the order they were learned: see
+   * [LearnedStaple]. Here for the same reason as [history], and never sent either.
+   */
+  val learnedStaples: Map<ListId, List<LearnedStaple>> = emptyMap(),
+  /** For each list, the folded names of learned staples removed by hand, never to be learned there again. */
+  val unwantedStaples: Map<ListId, Set<String>> = emptyMap(),
 ) {
   /**
    * With no lists at all — a fresh install, or the last one deleted — this is [GroceryList.none]: a
@@ -921,6 +928,8 @@ data class AppState(
       activeListId = if (activeListId == id) visible.firstOrNull()?.id ?: ListId("") else activeListId,
       // At once, even when the list stays hidden for the others to hear: nothing here shows it again.
       history = history - id,
+      learnedStaples = learnedStaples - id,
+      unwantedStaples = unwantedStaples - id,
     )
   }
 
@@ -933,7 +942,7 @@ data class AppState(
    * [GroceryList.withItemsMergedFrom] — and then [from] taken off this phone exactly as Delete takes
    * it, so anyone it was shared with keeps their copy. [into] keeps the people it had; nobody is
    * added to a list by having been on the other one. What this phone cleared from [from] moves to
-   * [into] too, since those items now live there.
+   * [into] too, since those items now live there, and so do the staples it learned there.
    *
    * Nothing happens unless both are lists this phone shows, and two different ones.
    */
@@ -944,6 +953,7 @@ data class AppState(
         lists = lists.map { if (it.id == into) it.withItemsMergedFrom(source, newItemId, at) else it },
         history = history.movedTo(from, into),
       )
+      .withStaplesMoved(from, into)
       .withoutList(from, at)
   }
 

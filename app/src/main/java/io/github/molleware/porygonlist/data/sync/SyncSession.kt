@@ -4,6 +4,7 @@ import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.ConflictKind
 import io.github.molleware.porygonlist.data.movedTo
+import io.github.molleware.porygonlist.data.withStaplesMoved
 
 /** Why a payload was not applied. */
 enum class RejectReason {
@@ -202,6 +203,8 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
           displayName = ownName,
           displayNameAt = ownNameAt,
         )
+        // And so do the staples it learned there.
+        .let { merged -> kept.entries.fold(merged) { state, (old, copy) -> state.withStaplesMoved(old, copy.id) } }
         .pruneDeliveredTombstones(),
     clashes = clashes,
     duplicates = duplicates,

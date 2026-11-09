@@ -103,7 +103,8 @@ object ShareCodec {
  * three columns at the end of `item` saying which recipes it is for, which it never reads. So did
  * the background sync switch, as a `background` record. And when this phone heard of a removal: one
  * stamp at the very end of `item` and of `person`, never sent, which 0.1.0 does not read either.
- * And what this phone cleared from a list, as a `history` record per run, skipped the same way.
+ * And what this phone cleared from a list, as a `history` record per run, skipped the same way, as
+ * are the staples learned from those runs, `learned`, and the names unwanted among them, `unwanted`.
  */
 object StateCodec {
   private const val VERSION = "PLSTATE11"
@@ -261,6 +262,12 @@ object StateCodec {
         val cleared = run.items.flatMap { listOf(it.name, it.qty.toString()) }
         appendLine(record(*(listOf("history", list.id.value, run.at.encode()) + cleared).toTypedArray()))
       }
+      // The staples learned for the list, one line each, and the names unwanted on it: two more
+      // record types 0.1.0 never wrote, and skips.
+      state.learnedOn(list.id).forEach {
+        appendLine(record("learned", list.id.value, it.name, it.lastAdded.toString(), it.uses.toString()))
+      }
+      state.unwantedOn(list.id).forEach { appendLine(record("unwanted", list.id.value, it)) }
     }
   }
 
@@ -300,6 +307,8 @@ object StateCodec {
     val people = mutableMapOf<String, MutableList<Person>>()
     val items = mutableMapOf<String, MutableList<GroceryItem>>()
     val runs = mutableMapOf<String, MutableList<ClearedRun>>()
+    val learned = mutableMapOf<String, MutableList<LearnedStaple>>()
+    val unwanted = mutableMapOf<String, MutableSet<String>>()
 
     for (line in lines.drop(1)) {
       val f = split(line)
@@ -402,6 +411,11 @@ object StateCodec {
                 f.drop(3).chunked(2).map { (name, qty) -> Ingredient(name, qty.toIntOrNull() ?: return@runCatching) }
               if (cleared.isNotEmpty()) runs.getOrPut(f[1]) { mutableListOf() } += ClearedRun(at, cleared)
             }
+            "learned" -> {
+              val staple = LearnedStaple(f[2], lastAdded = f[3].toLong(), uses = f[4].toInt())
+              if (staple.name.isNotBlank()) learned.getOrPut(f[1]) { mutableListOf() } += staple
+            }
+            "unwanted" -> if (f[2].isNotBlank()) unwanted.getOrPut(f[1]) { mutableSetOf() } += f[2]
           }
         }
         // One malformed line should not cost the whole file — skip it and keep the rest.
@@ -505,6 +519,8 @@ object StateCodec {
       backgroundSync = backgroundSync,
       // Through the rename like everything else about a list, and only for a list the file holds.
       history = runs.entries.mapNotNull { (raw, kept) -> renamed.ids[raw]?.let { it to kept.asKept() } }.toMap(),
+      learnedStaples = learned.entries.mapNotNull { (raw, kept) -> renamed.ids[raw]?.let { it to kept.asKept() } }.toMap(),
+      unwantedStaples = unwanted.entries.mapNotNull { (raw, names) -> renamed.ids[raw]?.let { it to names.toSet() } }.toMap(),
     )
   }
 
