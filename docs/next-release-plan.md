@@ -204,6 +204,11 @@ and no sync format changes. Built on feature 7's runs.
 - New record types in the state file, which 0.1.0 skips. Still `PLSTATE11`.
 - The add field's suggestions rank the open list's learned staples with the hand-made ones.
 
+**Built.** As above, with these left to the build: a paste is not an add for "last added", since
+what it brings is someone else's message. A name is not learned when the newest run holding it is
+already three months old, or it would be learned only to be hidden. On a merge, a name the target
+has marked unwanted stays unwanted, and the source's learned staple of that name is dropped.
+
 ## Needs Ava's phone, when it is back
 
 The two-phone checks of 2, 3, 4 (a merged list arriving on hers), 5 and 6, and an update of hers

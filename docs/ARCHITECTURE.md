@@ -393,7 +393,7 @@ scrolls to reach the field its own intro paragraph was describing.
 
 | Format | Marker | Carries |
 | --- | --- | --- |
-| State file | `PLSTATE11` | Everything: the owner's name, staples, recipes, list history, peers, networks, receipts |
+| State file | `PLSTATE11` | Everything: the owner's name, staples (made and learned), recipes, list history, peers, networks, receipts |
 | Sync payload | `PLSYNC2` | Lists and people only |
 | Share message | `PL1` | Human-readable item run, no identity |
 
@@ -460,6 +460,21 @@ the list stays hidden for the others to hear; a merge moves them to the target,
 newest first and capped again; a kept private copy, having a new id, takes them with
 it. What a selection on the page comes to is worked out when it is used: names folded
 as matching folds them count once, as the newest run has them.
+
+Learned staples (0.2.0) are made from those runs and stay on the phone the same way:
+`learned|list|name|lastAdded|uses` per staple and `unwanted|list|folded name` per name
+removed by hand, two more types 0.1.0 skips, kept by list id on `AppState` beside the
+history (`data/LearnedStaples.kt`). Learning runs in the same update as recording a
+run, inside Clear ticked, and nowhere else: a name in 3 of the list's last 4 runs is
+learned unless it is a hand-made staple, already learned or unwanted there. That same
+press drops the list's forgotten ones from the save. Forgetting is 3 calendar months
+after `lastAdded` in the phone's zone; until that press it is only hidden, by the grid
+and the suggestions filtering at display, so nothing runs at startup. `lastAdded` is a
+wall time, moved on by the view model's one add path, so a paste and anything that
+arrives from another phone leave it alone. A hand-made staple of the same folded name
+replaces a learned one on every list and lifts the name's being unwanted everywhere.
+Delete, merge, a kept copy and recovering a set-aside save treat them as history; on a
+merge the target keeps its own staple, or unwanted mark, for a name both have.
 
 Merging two lists (0.2.0) is a local act made of things that already travel, plus
 one column. What it brings onto the list merged into are new items, with ids minted
