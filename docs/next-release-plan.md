@@ -194,7 +194,9 @@ and no sync format changes. Built on feature 7's runs.
 - Unused for 3 calendar months, it is gone: hidden from the grid from then on, and dropped from the
   save at the next Clear ticked on that list.
 - Removed by hand (the same gesture and confirm as a hand-made tile), it is remembered as unwanted
-  for that list and never learned there again. Making a hand-made staple of that name lifts that.
+  for that list and not learned there again for the next 50 presses of Clear ticked on it (Hugo,
+  2026-11-09), after which it can be learned again by the usual rule. Making a hand-made staple
+  of that name lifts it at once.
 
 **Belongs to its list**
 

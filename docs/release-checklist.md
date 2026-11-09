@@ -1024,7 +1024,8 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
       cold restart; merge moves them; after 3 months unused (save edited) hidden but kept, dropped
       at the next clear, while one under 3 months stays; a `PLSTATE10` save reads; delete leaves no
       `learned`, `unwanted` or `history` record; no crash. Not checked: a kept copy, adds arriving
-      from another phone (unit tests only).
+      from another phone (unit tests only). Changed after the check (Hugo, 2026-11-09): a staple
+      removed by hand can be learned again after 50 more clears of its list; unit tests only.
 - [ ] **Recipes beside staples.** A recipe is a sublist of its ingredients. One tap on it adds
       them all to the list, tagged, and each added item says which recipe it is an ingredient for.
 - [ ] **Sync is one switch in Settings.** Turning it on needs alarms allowed; without them it stays

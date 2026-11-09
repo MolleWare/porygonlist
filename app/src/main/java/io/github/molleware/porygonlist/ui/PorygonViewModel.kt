@@ -1196,12 +1196,12 @@ class PorygonViewModel(
 
   /**
    * Takes a tile off the grid. Nothing already added to a list is touched. A learned tile is also
-   * remembered as unwanted on the open list, so that list never teaches it again.
+   * remembered as unwanted on the open list, so that list does not teach it again for 50 clears.
    */
   fun removeStaple(name: String) {
-    repo.update { s, _ ->
+    repo.update { s, node ->
       if (s.staples.any { it.name == name }) s.copy(staples = s.staples.filterNot { it.name == name })
-      else s.withStapleRemoved(s.activeListId, name)
+      else s.withStapleRemoved(s.activeListId, name, node.clock.tick())
     }
     confirmingStaple = null
   }

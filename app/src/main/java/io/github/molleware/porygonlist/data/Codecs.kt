@@ -267,7 +267,7 @@ object StateCodec {
       state.learnedOn(list.id).forEach {
         appendLine(record("learned", list.id.value, it.name, it.lastAdded.toString(), it.uses.toString()))
       }
-      state.unwantedOn(list.id).forEach { appendLine(record("unwanted", list.id.value, it)) }
+      state.unwantedSince(list.id).forEach { (name, since) -> appendLine(record("unwanted", list.id.value, name, since.encode())) }
     }
   }
 
@@ -308,7 +308,7 @@ object StateCodec {
     val items = mutableMapOf<String, MutableList<GroceryItem>>()
     val runs = mutableMapOf<String, MutableList<ClearedRun>>()
     val learned = mutableMapOf<String, MutableList<LearnedStaple>>()
-    val unwanted = mutableMapOf<String, MutableSet<String>>()
+    val unwanted = mutableMapOf<String, MutableMap<String, Hlc>>()
 
     for (line in lines.drop(1)) {
       val f = split(line)
@@ -415,7 +415,11 @@ object StateCodec {
               val staple = LearnedStaple(f[2], lastAdded = f[3].toLong(), uses = f[4].toInt())
               if (staple.name.isNotBlank()) learned.getOrPut(f[1]) { mutableListOf() } += staple
             }
-            "unwanted" -> if (f[2].isNotBlank()) unwanted.getOrPut(f[1]) { mutableSetOf() } += f[2]
+            // Absent in the test builds that wrote these before they lapsed: removed before any run.
+            "unwanted" ->
+              if (f[2].isNotBlank())
+                unwanted.getOrPut(f[1]) { mutableMapOf() }[f[2]] =
+                  f.getOrNull(3)?.let { Hlc.decode(it) } ?: Hlc(0, 0, DeviceId(f[1].substringBefore(':')))
           }
         }
         // One malformed line should not cost the whole file — skip it and keep the rest.
@@ -520,7 +524,7 @@ object StateCodec {
       // Through the rename like everything else about a list, and only for a list the file holds.
       history = runs.entries.mapNotNull { (raw, kept) -> renamed.ids[raw]?.let { it to kept.asKept() } }.toMap(),
       learnedStaples = learned.entries.mapNotNull { (raw, kept) -> renamed.ids[raw]?.let { it to kept.asKept() } }.toMap(),
-      unwantedStaples = unwanted.entries.mapNotNull { (raw, names) -> renamed.ids[raw]?.let { it to names.toSet() } }.toMap(),
+      unwantedStaples = unwanted.entries.mapNotNull { (raw, names) -> renamed.ids[raw]?.let { it to names.toMap() } }.toMap(),
     )
   }
 

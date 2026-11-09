@@ -71,6 +71,9 @@ private fun AppState.learn(list: ListId = WEEKLY, now: Long = newest(10)) = with
 
 private fun AppState.names(list: ListId = WEEKLY) = learnedOn(list).map { it.name }
 
+/** [names] removed by hand the day before the first run [cleared] makes. */
+private fun unwanted(vararg names: String) = names.associateWith { Hlc(JAN_10 - DAY, 0, HUGO) }
+
 private fun AppState.shown(list: ListId = WEEKLY, now: Long = newest(10)) = staplesShownOn(list, now, LONDON).map { it.name }
 
 private fun saved(state: AppState) = StateCodec.decode(StateCodec.encode(state))!!
@@ -302,32 +305,54 @@ class LearnedStaplesTest {
   // ── By hand ───────────────────────────────────────────────────────────────
 
   @Test
-  fun `removed by hand, it goes and is never learned on that list again`() {
+  fun `removed by hand, it goes and is not learned on that list again`() {
     val state = hugos(aList(WEEKLY), aList(PARTY)).cleared(WEEKLY, eggs, eggs, eggs).cleared(PARTY, eggs, eggs, eggs).learn(WEEKLY)
 
-    val removed = state.withStapleRemoved(WEEKLY, "Eggs")
+    val removed = state.withStapleRemoved(WEEKLY, "Eggs", Hlc(newest(3) + 1, 0, HUGO))
 
     assertEquals(emptyList<String>(), removed.names(WEEKLY))
-    assertEquals(setOf("eggs"), removed.unwantedOn(WEEKLY))
+    assertEquals(mapOf("eggs" to Hlc(newest(3) + 1, 0, HUGO)), removed.unwantedSince(WEEKLY))
     assertEquals(emptyList<String>(), removed.cleared(WEEKLY, eggs, eggs, eggs, eggs).learn(WEEKLY).names(WEEKLY))
     assertEquals("another list still learns it", listOf("Eggs"), removed.learn(PARTY).names(PARTY))
+  }
+
+  @Test
+  fun `an unwanted name can be learned again once 50 of the list's runs have come since`() {
+    val state = hugos().copy(unwantedStaples = mapOf(WEEKLY to unwanted("eggs")))
+
+    val after49 = state.cleared(WEEKLY, *Array(49) { eggs }).learn(now = newest(49))
+    val after50 = state.cleared(WEEKLY, *Array(50) { eggs }).learn(now = newest(50))
+
+    assertEquals(emptyList<String>(), after49.names())
+    assertEquals(setOf("eggs"), after49.unwantedOn(WEEKLY))
+    assertEquals(listOf("Eggs"), after50.names())
+    assertEquals(emptyMap<ListId, Map<String, Hlc>>(), after50.unwantedStaples)
+  }
+
+  @Test
+  fun `a lapsed unwanted name leaves the save at that clear, learned again or not`() {
+    val state = hugos().copy(unwantedStaples = mapOf(WEEKLY to unwanted("eggs", "tea") + ("milk" to Hlc(newest(2), 0, HUGO))))
+
+    val after = state.cleared(WEEKLY, *Array(50) { listOf("Bread") }).learn(now = newest(50))
+
+    assertEquals("milk came after two of the runs, so 48 are newer", mapOf(WEEKLY to mapOf("milk" to Hlc(newest(2), 0, HUGO))), after.unwantedStaples)
   }
 
   @Test
   fun `removing a name that is not a learned staple changes nothing`() {
     val state = hugos().cleared(WEEKLY, eggs, eggs, eggs).learn()
 
-    assertSame(state, state.withStapleRemoved(WEEKLY, "Milk"))
+    assertSame(state, state.withStapleRemoved(WEEKLY, "Milk", Hlc(newest(10), 0, HUGO)))
   }
 
   @Test
   fun `a hand-made staple of an unwanted name lifts it on every list`() {
-    val state = hugos(aList(WEEKLY), aList(PARTY)).copy(unwantedStaples = mapOf(WEEKLY to setOf("eggs", "milk"), PARTY to setOf("eggs")))
+    val state = hugos(aList(WEEKLY), aList(PARTY)).copy(unwantedStaples = mapOf(WEEKLY to unwanted("eggs", "milk"), PARTY to unwanted("eggs")))
 
     val after = state.withHandMadeStaple("Eggs")
 
     assertEquals(listOf(Staple("Eggs")), after.staples)
-    assertEquals(mapOf(WEEKLY to setOf("milk")), after.unwantedStaples)
+    assertEquals(mapOf(WEEKLY to unwanted("milk")), after.unwantedStaples)
   }
 
   @Test
@@ -360,7 +385,7 @@ class LearnedStaplesTest {
             WEEKLY to listOf(LearnedStaple("Eggs", newest(2), uses = 3)),
             PARTY to listOf(LearnedStaple("eggs", newest(4), uses = 9), LearnedStaple("Crisps", newest(3)), LearnedStaple("Milk", newest(3))),
           ),
-        unwantedStaples = mapOf(WEEKLY to setOf("milk"), PARTY to setOf("tea")),
+        unwantedStaples = mapOf(WEEKLY to unwanted("milk"), PARTY to mapOf("tea" to Hlc(newest(3), 1, HUGO))),
       )
 
   @Test
@@ -450,7 +475,7 @@ class LearnedStaplesTest {
     val list = aList(WEEKLY, people = WITH_AVA)
     val state = hugos(list).copy(
       learnedStaples = mapOf(WEEKLY to listOf(LearnedStaple("Secret sauce", 123_456_789, uses = 77))),
-      unwantedStaples = mapOf(WEEKLY to setOf("mystery")),
+      unwantedStaples = mapOf(WEEKLY to unwanted("mystery")),
     )
 
     val wire = SyncCodec.encode(state.payloadFor(AVA, HybridClock(HUGO, now = { 9_000 }))!!)
@@ -491,7 +516,7 @@ class LearnedStaplesTest {
       val restored = StateCodec.decode(old)!!
 
       assertEquals(emptyMap<ListId, List<LearnedStaple>>(), restored.learnedStaples)
-      assertEquals(emptyMap<ListId, Set<String>>(), restored.unwantedStaples)
+      assertEquals(emptyMap<ListId, Map<String, Hlc>>(), restored.unwantedStaples)
       assertEquals(state.lists.map { it.id }, restored.lists.map { it.id })
     }
   }
@@ -500,7 +525,7 @@ class LearnedStaplesTest {
   fun `a damaged line costs only itself`() {
     val encoded = asVersion10(StateCodec.encode(both()))
     val crisps = encoded.lines().single { it.startsWith("learned|") && it.contains("Crisps") }
-    val tea = encoded.lines().single { it.startsWith("unwanted|") && it.endsWith("tea") }
+    val tea = encoded.lines().single { it.startsWith("unwanted|") && it.contains("|tea|") }
 
     for (damaged in listOf(crisps.replace("|${newest(3)}|", "|soon|"), crisps.substringBeforeLast('|'), "learned|${PARTY.value}||${newest(3)}|0")) {
       val restored = StateCodec.decode(encoded.replace(crisps, damaged))!!
@@ -519,7 +544,16 @@ class LearnedStaplesTest {
     val restored = StateCodec.decode(encoded + "\nlearned|${PARTY.value}|Eggs|1000|0\nunwanted|${PARTY.value}|milk\n")!!
 
     assertEquals(emptyMap<ListId, List<LearnedStaple>>(), restored.learnedStaples)
-    assertEquals(emptyMap<ListId, Set<String>>(), restored.unwantedStaples)
+    assertEquals(emptyMap<ListId, Map<String, Hlc>>(), restored.unwantedStaples)
+  }
+
+  @Test
+  fun `an unwanted line without its time, as the first test builds wrote it, reads as removed before any run`() {
+    val encoded = asVersion10(StateCodec.encode(hugos()))
+
+    val restored = StateCodec.decode(encoded + "\nunwanted|${WEEKLY.value}|milk\n")!!
+
+    assertEquals(mapOf("milk" to Hlc(0, 0, HUGO)), restored.unwantedSince(WEEKLY))
   }
 
   @Test

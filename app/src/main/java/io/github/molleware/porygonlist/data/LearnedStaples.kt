@@ -1,5 +1,6 @@
 package io.github.molleware.porygonlist.data
 
+import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ListId
 import java.time.Instant
 import java.time.ZoneId
@@ -10,6 +11,12 @@ const val STAPLE_RUNS_NEEDED = 3
 
 /** How long a learned staple keeps without being added, in calendar months. */
 const val STAPLE_MONTHS = 3L
+
+/**
+ * How many of a list's runs a learned staple removed by hand stays unwanted there for. Counted from
+ * the list's kept runs, so it can be no more than [HISTORY_RUNS].
+ */
+const val UNWANTED_RUNS = HISTORY_RUNS
 
 /**
  * A staple this phone learned for one list, by that list being cleared with it again and again.
@@ -30,8 +37,17 @@ fun LearnedStaple.forgottenBy(now: Long, zone: ZoneId): Boolean =
 /** [list]'s learned staples as kept, forgotten ones included until its next Clear ticked. */
 fun AppState.learnedOn(list: ListId): List<LearnedStaple> = learnedStaples[list].orEmpty()
 
-/** The folded names removed from [list]'s staples by hand. */
-fun AppState.unwantedOn(list: ListId): Set<String> = unwantedStaples[list].orEmpty()
+/** The folded names removed from [list]'s staples by hand, lapsed ones included until its next Clear ticked. */
+fun AppState.unwantedOn(list: ListId): Set<String> = unwantedStaples[list].orEmpty().keys
+
+/** [list]'s unwanted names, each with when it was removed. */
+fun AppState.unwantedSince(list: ListId): Map<String, Hlc> = unwantedStaples[list].orEmpty()
+
+/** The ones of [list]'s unwanted names that [UNWANTED_RUNS] of its runs have not yet come since. */
+private fun AppState.stillUnwanted(list: ListId): Map<String, Hlc> {
+  val runs = historyOf(list)
+  return unwantedSince(list).filterValues { since -> runs.count { it.at > since } < UNWANTED_RUNS }
+}
 
 /**
  * The Staples tab on [list] at [now]: the hand-made ones, in the order they were made, then the
@@ -45,19 +61,21 @@ fun AppState.staplesShownOn(list: ListId, now: Long, zone: ZoneId): List<Staple>
 /**
  * What a press of Clear ticked on [list] at [now] teaches, once its run is recorded.
  *
- * First the list's forgotten staples go from the save. Then anything in at least [STAPLE_RUNS_NEEDED]
- * of its last [STAPLE_RUNS] runs, by folded name, is learned, as the newest run that holds it spells
- * it and as of that run — unless it is a hand-made staple, already learned here, or unwanted here,
- * and unless that run is itself long enough ago to be forgotten already. Several at once keep the
- * order the newest run has them. Comes back as it was when nothing changes.
+ * First the list's forgotten staples go from the save, and so do the unwanted names [UNWANTED_RUNS]
+ * of its runs have come since. Then anything in at least [STAPLE_RUNS_NEEDED] of its last
+ * [STAPLE_RUNS] runs, by folded name, is learned, as the newest run that holds it spells it and as of
+ * that run — unless it is a hand-made staple, already learned here, or still unwanted here, and unless
+ * that run is itself long enough ago to be forgotten already. Several at once keep the order the
+ * newest run has them. Comes back as it was when nothing changes.
  */
 fun AppState.withStaplesLearned(list: ListId, now: Long, zone: ZoneId): AppState {
   val kept = learnedOn(list).filterNot { it.forgottenBy(now, zone) }
+  val unwanted = stillUnwanted(list)
   val recent = historyOf(list).take(STAPLE_RUNS)
   val learned =
     if (recent.size < STAPLE_RUNS_NEEDED) emptyList()
     else {
-      val taken = (staples.map { WordTrie.fold(it.name) } + kept.map { WordTrie.fold(it.name) } + unwantedOn(list)).toSet()
+      val taken = (staples.map { WordTrie.fold(it.name) } + kept.map { WordTrie.fold(it.name) } + unwanted.keys).toSet()
       val runsHolding = recent.flatMap { run -> run.items.map { WordTrie.fold(it.name) }.distinct() }.groupingBy { it }.eachCount()
       recent
         .flatMap { run -> run.items.map { it.name to run.at.wall } }
@@ -68,8 +86,11 @@ fun AppState.withStaplesLearned(list: ListId, now: Long, zone: ZoneId): AppState
         .filterNot { it.forgottenBy(now, zone) }
     }
   val next = kept + learned
-  if (next == learnedOn(list)) return this
-  return copy(learnedStaples = if (next.isEmpty()) learnedStaples - list else learnedStaples + (list to next))
+  if (next == learnedOn(list) && unwanted == unwantedSince(list)) return this
+  return copy(
+    learnedStaples = if (next.isEmpty()) learnedStaples - list else learnedStaples + (list to next),
+    unwantedStaples = if (unwanted.isEmpty()) unwantedStaples - list else unwantedStaples + (list to unwanted),
+  )
 }
 
 /**
@@ -93,14 +114,17 @@ fun AppState.withStapleUsed(list: ListId, name: String): AppState {
   return copy(learnedStaples = learnedStaples + (list to learned.map { if (it.name == name) it.copy(uses = it.uses + 1) else it }))
 }
 
-/** [list]'s learned staple called [name] removed by hand: gone, and never learned there again. */
-fun AppState.withStapleRemoved(list: ListId, name: String): AppState {
+/**
+ * [list]'s learned staple called [name] removed by hand [at]: gone, and not learned there again until
+ * [UNWANTED_RUNS] of the list's runs have come since.
+ */
+fun AppState.withStapleRemoved(list: ListId, name: String, at: Hlc): AppState {
   val learned = learnedOn(list)
   if (learned.none { it.name == name }) return this
   val left = learned.filterNot { it.name == name }
   return copy(
     learnedStaples = if (left.isEmpty()) learnedStaples - list else learnedStaples + (list to left),
-    unwantedStaples = unwantedStaples + (list to unwantedOn(list) + WordTrie.fold(name)),
+    unwantedStaples = unwantedStaples + (list to unwantedSince(list) + (WordTrie.fold(name) to at)),
   )
 }
 
@@ -127,7 +151,7 @@ fun AppState.withHandMadeStaple(name: String): AppState {
  */
 fun AppState.withStaplesMoved(from: ListId, into: ListId): AppState {
   if (from !in learnedStaples && from !in unwantedStaples) return this
-  val unwanted = unwantedOn(into) + unwantedOn(from)
+  val unwanted = unwantedSince(from) + unwantedSince(into)
   val has = learnedOn(into).map { WordTrie.fold(it.name) }.toSet() + unwantedOn(into)
   val learned = learnedOn(into) + learnedOn(from).filterNot { WordTrie.fold(it.name) in has }
   return copy(

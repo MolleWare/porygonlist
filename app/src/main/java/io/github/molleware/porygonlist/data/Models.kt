@@ -838,8 +838,11 @@ data class AppState(
    * [LearnedStaple]. Here for the same reason as [history], and never sent either.
    */
   val learnedStaples: Map<ListId, List<LearnedStaple>> = emptyMap(),
-  /** For each list, the folded names of learned staples removed by hand, never to be learned there again. */
-  val unwantedStaples: Map<ListId, Set<String>> = emptyMap(),
+  /**
+   * For each list, the folded names of learned staples removed by hand, each with when: not learned
+   * there again until [UNWANTED_RUNS] of the list's runs have come since.
+   */
+  val unwantedStaples: Map<ListId, Map<String, Hlc>> = emptyMap(),
 ) {
   /**
    * With no lists at all — a fresh install, or the last one deleted — this is [GroceryList.none]: a

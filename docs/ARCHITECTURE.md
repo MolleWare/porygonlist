@@ -462,12 +462,14 @@ it. What a selection on the page comes to is worked out when it is used: names f
 as matching folds them count once, as the newest run has them.
 
 Learned staples (0.2.0) are made from those runs and stay on the phone the same way:
-`learned|list|name|lastAdded|uses` per staple and `unwanted|list|folded name` per name
-removed by hand, two more types 0.1.0 skips, kept by list id on `AppState` beside the
-history (`data/LearnedStaples.kt`). Learning runs in the same update as recording a
-run, inside Clear ticked, and nowhere else: a name in 3 of the list's last 4 runs is
-learned unless it is a hand-made staple, already learned or unwanted there. That same
-press drops the list's forgotten ones from the save. Forgetting is 3 calendar months
+`learned|list|name|lastAdded|uses` per staple and `unwanted|list|folded name|removedAt`
+per name removed by hand, two more types 0.1.0 skips, kept by list id on `AppState`
+beside the history (`data/LearnedStaples.kt`). Learning runs in the same update as
+recording a run, inside Clear ticked, and nowhere else: a name in 3 of the list's last 4
+runs is learned unless it is a hand-made staple, already learned or unwanted there. That
+same press drops the list's forgotten ones from the save, and its unwanted marks that 50
+of its runs are newer than. `removedAt` is a clock tick, so it compares with the runs'
+stamps, and the 50-run history cap means counting the kept runs is enough. Forgetting is 3 calendar months
 after `lastAdded` in the phone's zone; until that press it is only hidden, by the grid
 and the suggestions filtering at display, so nothing runs at startup. `lastAdded` is a
 wall time, moved on by the view model's one add path, so a paste and anything that
