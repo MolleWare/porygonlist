@@ -296,6 +296,7 @@ internal fun AppState.withRecovered(kept: AppState): AppState {
     learnedStaples = kept.learnedStaples + learnedStaples,
     unwantedStaples = kept.unwantedStaples + unwantedStaples,
     backgroundSync = backgroundSync ?: kept.backgroundSync,
+    stapleComeback = if (stapleComeback == StapleComeback.DEFAULT) kept.stapleComeback else stapleComeback,
     conflicts = conflicts + kept.conflicts.filter { it.listId in backIds },
   )
 }

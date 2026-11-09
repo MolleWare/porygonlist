@@ -365,6 +365,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   },
                   onUnpair = viewModel::unpair,
                   onBackgroundSync = onBackgroundSync,
+                  onStapleComeback = viewModel::setStapleComeback,
                   confirmingDelete = viewModel.confirmingIdentityDelete,
                   onAskDelete = viewModel::askDeleteIdentity,
                   onCancelDelete = viewModel::cancelDeleteIdentity,

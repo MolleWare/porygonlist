@@ -11,6 +11,7 @@ import io.github.molleware.porygonlist.data.sync.SyncPayload
 import io.github.molleware.porygonlist.data.sync.SyncResult
 import io.github.molleware.porygonlist.data.sync.payloadFor
 import io.github.molleware.porygonlist.data.sync.receive
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
@@ -71,8 +72,13 @@ private fun AppState.learn(list: ListId = WEEKLY, now: Long = newest(10)) = with
 
 private fun AppState.names(list: ListId = WEEKLY) = learnedOn(list).map { it.name }
 
-/** [names] removed by hand the day before the first run [cleared] makes. */
-private fun unwanted(vararg names: String) = names.associateWith { Hlc(JAN_10 - DAY, 0, HUGO) }
+/** When [unwanted] says its names were removed by hand: the day before the first run [cleared] makes. */
+private val REMOVED = JAN_10 - DAY
+
+private const val WEEK = 7 * DAY
+
+/** [names] removed by hand at [REMOVED]. */
+private fun unwanted(vararg names: String) = names.associateWith { Hlc(REMOVED, 0, HUGO) }
 
 private fun AppState.shown(list: ListId = WEEKLY, now: Long = newest(10)) = staplesShownOn(list, now, LONDON).map { it.name }
 
@@ -317,25 +323,65 @@ class LearnedStaplesTest {
   }
 
   @Test
-  fun `an unwanted name can be learned again once 50 of the list's runs have come since`() {
-    val state = hugos().copy(unwantedStaples = mapOf(WEEKLY to unwanted("eggs")))
+  fun `an unwanted name can be learned again 5 weeks after it was removed, by default`() {
+    val state = hugos().copy(unwantedStaples = mapOf(WEEKLY to unwanted("eggs"))).cleared(WEEKLY, eggs, eggs, eggs)
 
-    val after49 = state.cleared(WEEKLY, *Array(49) { eggs }).learn(now = newest(49))
-    val after50 = state.cleared(WEEKLY, *Array(50) { eggs }).learn(now = newest(50))
+    val before = state.learn(now = REMOVED + 5 * WEEK - 1)
+    val after = state.learn(now = REMOVED + 5 * WEEK)
 
-    assertEquals(emptyList<String>(), after49.names())
-    assertEquals(setOf("eggs"), after49.unwantedOn(WEEKLY))
-    assertEquals(listOf("Eggs"), after50.names())
-    assertEquals(emptyMap<ListId, Map<String, Hlc>>(), after50.unwantedStaples)
+    assertEquals(StapleComeback.FIVE_WEEKS, hugos().stapleComeback)
+    assertEquals(emptyList<String>(), before.names())
+    assertEquals(setOf("eggs"), before.unwantedOn(WEEKLY))
+    assertEquals(listOf("Eggs"), after.names())
+    assertEquals(emptyMap<ListId, Map<String, Hlc>>(), after.unwantedStaples)
+  }
+
+  @Test
+  fun `each choice keeps it away that many weeks, and never keeps it away for good`() {
+    // Removed so that it may come back an hour after the newest of three runs, however many weeks.
+    val due = newest(3) + 60 * 60 * 1000
+    val runs = hugos().cleared(WEEKLY, eggs, eggs, eggs)
+
+    for (choice in StapleComeback.entries.filter { it.weeks != null }) {
+      val removed = Instant.ofEpochMilli(due).atZone(LONDON).minusWeeks(choice.weeks!!).toInstant().toEpochMilli()
+      val chosen = runs.copy(unwantedStaples = mapOf(WEEKLY to mapOf("eggs" to Hlc(removed, 0, HUGO))), stapleComeback = choice)
+      assertEquals(choice.label, emptyList<String>(), chosen.learn(now = due - 1).names())
+      assertEquals(choice.label, listOf("Eggs"), chosen.learn(now = due).names())
+    }
+    val state = runs.copy(unwantedStaples = mapOf(WEEKLY to unwanted("eggs")))
+    val never = state.copy(stapleComeback = StapleComeback.NEVER).learn(now = newest(3) + 520 * WEEK)
+    assertEquals(emptyList<String>(), never.names())
+    assertEquals(setOf("eggs"), never.unwantedOn(WEEKLY))
+  }
+
+  @Test
+  fun `the weeks are calendar weeks, across a clock change`() {
+    // Removed at noon on 1 March 2026; the clocks go forward on 29 March, so five weeks on is noon on
+    // 5 April, an hour short of 35 days of milliseconds.
+    val removed = day(2026, 3, 1)
+    val state = hugos().copy(unwantedStaples = mapOf(WEEKLY to mapOf("eggs" to Hlc(removed, 0, HUGO))))
+
+    assertEquals(setOf("eggs"), state.learn(now = day(2026, 4, 5, hour = 11, minute = 59)).unwantedOn(WEEKLY))
+    assertEquals(emptySet<String>(), state.learn(now = day(2026, 4, 5)).unwantedOn(WEEKLY))
+  }
+
+  @Test
+  fun `changing the choice counts from when each was removed`() {
+    val state = hugos().copy(unwantedStaples = mapOf(WEEKLY to unwanted("eggs")), stapleComeback = StapleComeback.NEVER)
+
+    val after = state.copy(stapleComeback = StapleComeback.ONE_WEEK).learn(now = REMOVED + WEEK)
+
+    assertEquals(emptyMap<ListId, Map<String, Hlc>>(), after.unwantedStaples)
   }
 
   @Test
   fun `a lapsed unwanted name leaves the save at that clear, learned again or not`() {
-    val state = hugos().copy(unwantedStaples = mapOf(WEEKLY to unwanted("eggs", "tea") + ("milk" to Hlc(newest(2), 0, HUGO))))
+    val later = Hlc(REMOVED + 3 * WEEK, 0, HUGO)
+    val state = hugos().copy(unwantedStaples = mapOf(WEEKLY to unwanted("eggs", "tea") + ("milk" to later))).cleared(WEEKLY, listOf("Bread"))
 
-    val after = state.cleared(WEEKLY, *Array(50) { listOf("Bread") }).learn(now = newest(50))
+    val after = state.learn(now = REMOVED + 5 * WEEK)
 
-    assertEquals("milk came after two of the runs, so 48 are newer", mapOf(WEEKLY to mapOf("milk" to Hlc(newest(2), 0, HUGO))), after.unwantedStaples)
+    assertEquals(mapOf(WEEKLY to mapOf("milk" to later)), after.unwantedStaples)
   }
 
   @Test
@@ -545,6 +591,29 @@ class LearnedStaplesTest {
 
     assertEquals(emptyMap<ListId, List<LearnedStaple>>(), restored.learnedStaples)
     assertEquals(emptyMap<ListId, Map<String, Hlc>>(), restored.unwantedStaples)
+  }
+
+  @Test
+  fun `the choice of weeks survives a save, and the default writes nothing`() {
+    for (choice in StapleComeback.entries) {
+      assertEquals(choice, saved(hugos().copy(stapleComeback = choice)).stapleComeback)
+    }
+    assertTrue(StateCodec.encode(hugos()).lines().none { it.startsWith("comeback|") })
+  }
+
+  @Test
+  fun `a choice this build does not know reads as the default`() {
+    val encoded = asVersion10(StateCodec.encode(hugos()))
+
+    assertEquals(StapleComeback.DEFAULT, StateCodec.decode(encoded + "\ncomeback|52\n")!!.stapleComeback)
+  }
+
+  @Test
+  fun `a chosen number of weeks comes back with a save set aside, unless one was chosen again`() {
+    val kept = hugos().copy(stapleComeback = StapleComeback.NEVER)
+
+    assertEquals(StapleComeback.NEVER, hugos().withRecovered(kept).stapleComeback)
+    assertEquals(StapleComeback.ONE_WEEK, hugos().copy(stapleComeback = StapleComeback.ONE_WEEK).withRecovered(kept).stapleComeback)
   }
 
   @Test

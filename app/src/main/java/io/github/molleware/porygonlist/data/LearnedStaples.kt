@@ -13,10 +13,30 @@ const val STAPLE_RUNS_NEEDED = 3
 const val STAPLE_MONTHS = 3L
 
 /**
- * How many of a list's runs a learned staple removed by hand stays unwanted there for. Counted from
- * the list's kept runs, so it can be no more than [HISTORY_RUNS].
+ * How long a learned staple removed by hand stays away from its list before it can be learned there
+ * again, as chosen in Settings: a number of calendar weeks, or never. Saved by [key].
  */
-const val UNWANTED_RUNS = HISTORY_RUNS
+enum class StapleComeback(val weeks: Long?, val label: String, val key: String) {
+  ONE_WEEK(1, "1 week", "1"),
+  FIVE_WEEKS(5, "5 weeks", "5"),
+  TEN_WEEKS(10, "10 weeks", "10"),
+  TWENTY_FIVE_WEEKS(25, "25 weeks", "25"),
+  NEVER(null, "Never", "never");
+
+  companion object {
+    /** Until the owner chooses (Hugo, 2026-11-09). */
+    val DEFAULT = FIVE_WEEKS
+
+    /** The choice saved as [key], or null for one this build does not know. */
+    fun ofKey(key: String): StapleComeback? = entries.firstOrNull { it.key == key }
+  }
+}
+
+/** Whether a staple removed [since] may come back by [now] in [zone] under [comeback]. */
+private fun lapsed(since: Hlc, now: Long, zone: ZoneId, comeback: StapleComeback): Boolean {
+  val weeks = comeback.weeks ?: return false
+  return !Instant.ofEpochMilli(now).isBefore(Instant.ofEpochMilli(since.wall).atZone(zone).plusWeeks(weeks).toInstant())
+}
 
 /**
  * A staple this phone learned for one list, by that list being cleared with it again and again.
@@ -43,11 +63,9 @@ fun AppState.unwantedOn(list: ListId): Set<String> = unwantedStaples[list].orEmp
 /** [list]'s unwanted names, each with when it was removed. */
 fun AppState.unwantedSince(list: ListId): Map<String, Hlc> = unwantedStaples[list].orEmpty()
 
-/** The ones of [list]'s unwanted names that [UNWANTED_RUNS] of its runs have not yet come since. */
-private fun AppState.stillUnwanted(list: ListId): Map<String, Hlc> {
-  val runs = historyOf(list)
-  return unwantedSince(list).filterValues { since -> runs.count { it.at > since } < UNWANTED_RUNS }
-}
+/** The ones of [list]'s unwanted names still kept away at [now], by the [StapleComeback] chosen. */
+private fun AppState.stillUnwanted(list: ListId, now: Long, zone: ZoneId): Map<String, Hlc> =
+  unwantedSince(list).filterValues { since -> !lapsed(since, now, zone, stapleComeback) }
 
 /**
  * The Staples tab on [list] at [now]: the hand-made ones, in the order they were made, then the
@@ -61,8 +79,8 @@ fun AppState.staplesShownOn(list: ListId, now: Long, zone: ZoneId): List<Staple>
 /**
  * What a press of Clear ticked on [list] at [now] teaches, once its run is recorded.
  *
- * First the list's forgotten staples go from the save, and so do the unwanted names [UNWANTED_RUNS]
- * of its runs have come since. Then anything in at least [STAPLE_RUNS_NEEDED] of its last
+ * First the list's forgotten staples go from the save, and so do the unwanted names removed long
+ * enough ago for the [StapleComeback] chosen. Then anything in at least [STAPLE_RUNS_NEEDED] of its last
  * [STAPLE_RUNS] runs, by folded name, is learned, as the newest run that holds it spells it and as of
  * that run — unless it is a hand-made staple, already learned here, or still unwanted here, and unless
  * that run is itself long enough ago to be forgotten already. Several at once keep the order the
@@ -70,7 +88,7 @@ fun AppState.staplesShownOn(list: ListId, now: Long, zone: ZoneId): List<Staple>
  */
 fun AppState.withStaplesLearned(list: ListId, now: Long, zone: ZoneId): AppState {
   val kept = learnedOn(list).filterNot { it.forgottenBy(now, zone) }
-  val unwanted = stillUnwanted(list)
+  val unwanted = stillUnwanted(list, now, zone)
   val recent = historyOf(list).take(STAPLE_RUNS)
   val learned =
     if (recent.size < STAPLE_RUNS_NEEDED) emptyList()
@@ -115,8 +133,8 @@ fun AppState.withStapleUsed(list: ListId, name: String): AppState {
 }
 
 /**
- * [list]'s learned staple called [name] removed by hand [at]: gone, and not learned there again until
- * [UNWANTED_RUNS] of the list's runs have come since.
+ * [list]'s learned staple called [name] removed by hand [at]: gone, and not learned there again for
+ * as long as the [StapleComeback] chosen says, counted from [at].
  */
 fun AppState.withStapleRemoved(list: ListId, name: String, at: Hlc): AppState {
   val learned = learnedOn(list)

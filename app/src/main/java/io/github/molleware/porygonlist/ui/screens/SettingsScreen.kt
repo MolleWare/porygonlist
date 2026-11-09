@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.github.molleware.porygonlist.data.AppState
 import io.github.molleware.porygonlist.data.Avatars
+import io.github.molleware.porygonlist.data.StapleComeback
 import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.initialOf
 import io.github.molleware.porygonlist.data.net.BackgroundSwitch
@@ -61,6 +62,7 @@ import io.github.molleware.porygonlist.theme.Accent2
 import io.github.molleware.porygonlist.theme.Accent2100
 import io.github.molleware.porygonlist.theme.Accent700
 import io.github.molleware.porygonlist.theme.Accent800
+import io.github.molleware.porygonlist.theme.Divider
 import io.github.molleware.porygonlist.theme.Neutral700
 import io.github.molleware.porygonlist.theme.PorygonType
 import io.github.molleware.porygonlist.theme.Shapes
@@ -92,6 +94,8 @@ fun SettingsScreen(
   onUnpair: (DeviceId) -> Unit,
   /** The background sync switch, turned on or off. */
   onBackgroundSync: (Boolean) -> Unit,
+  /** How long a removed learned staple stays away, chosen. */
+  onStapleComeback: (StapleComeback) -> Unit,
   confirmingDelete: Boolean,
   onAskDelete: () -> Unit,
   onCancelDelete: () -> Unit,
@@ -188,6 +192,15 @@ fun SettingsScreen(
       SectionLabel("With the app closed", Modifier.padding(top = 26.dp, bottom = 10.dp))
       BackgroundSyncCard(state.backgroundSync, onBackgroundSync)
     }
+
+    SectionLabel("Staples", Modifier.padding(top = 26.dp, bottom = 10.dp))
+    Text(
+      "A staple you remove can come back on its own if you keep buying it, but not before:",
+      style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+      color = Neutral700,
+      modifier = Modifier.padding(bottom = 10.dp),
+    )
+    StapleComebackChoices(state.stapleComeback, onStapleComeback)
 
     SectionLabel("Starting over", Modifier.padding(top = 30.dp, bottom = 10.dp))
     DeleteIdentityCard(
@@ -340,6 +353,38 @@ private fun AvatarChoices(initial: String, chosen: String, onChoose: (String) ->
     // Only what this phone can draw: an emoji its fonts lack would be an empty circle to choose.
     Avatars.choosable(systemGlyphs::canDraw).forEach { choice ->
       AvatarOption(initial, choice.id, "${choice.name} avatar", selected = chosen == choice.id) { onChoose(choice.id) }
+    }
+  }
+}
+
+/**
+ * How long a removed learned staple stays away: one pill per [StapleComeback], the chosen one filled.
+ * One tap chooses, as with the avatar.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StapleComebackChoices(chosen: StapleComeback, onChoose: (StapleComeback) -> Unit) {
+  FlowRow(
+    Modifier.selectableGroup(),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    StapleComeback.entries.forEach { choice ->
+      val selected = choice == chosen
+      Box(
+        Modifier.heightIn(min = 44.dp)
+          .clip(Shapes.Pill)
+          .then(if (selected) Modifier.background(Accent) else Modifier.border(1.dp, Divider, Shapes.Pill))
+          .selectable(selected = selected, role = Role.RadioButton, onClick = { onChoose(choice) })
+          .padding(horizontal = 14.dp, vertical = 9.dp),
+        contentAlignment = Alignment.Center,
+      ) {
+        Text(
+          choice.label,
+          style = PorygonType.Meta.copy(fontFamily = PorygonType.InlineHeading.fontFamily),
+          color = if (selected) Accent100 else TextInk,
+        )
+      }
     }
   }
 }

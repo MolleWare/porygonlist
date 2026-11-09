@@ -840,9 +840,11 @@ data class AppState(
   val learnedStaples: Map<ListId, List<LearnedStaple>> = emptyMap(),
   /**
    * For each list, the folded names of learned staples removed by hand, each with when: not learned
-   * there again until [UNWANTED_RUNS] of the list's runs have come since.
+   * there again until [stapleComeback] says.
    */
   val unwantedStaples: Map<ListId, Map<String, Hlc>> = emptyMap(),
+  /** How long a learned staple removed by hand stays away, as chosen in Settings. This phone's own. */
+  val stapleComeback: StapleComeback = StapleComeback.DEFAULT,
 ) {
   /**
    * With no lists at all — a fresh install, or the last one deleted — this is [GroceryList.none]: a

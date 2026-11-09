@@ -202,6 +202,10 @@ object StateCodec {
     // never wrote, and skips; absent, it reads as never touched.
     state.backgroundSync?.let { appendLine(record("background", it.bool())) }
 
+    // How long a removed learned staple stays away, once chosen other than the default. Another
+    // record type 0.1.0 skips; absent, or a choice this build does not know, it reads as the default.
+    if (state.stapleComeback != StapleComeback.DEFAULT) appendLine(record("comeback", state.stapleComeback.key))
+
     // One line per recipe, its ingredients in pairs after the name, so a damaged line costs one
     // recipe and can never hand its ingredients to the one before. A record type 0.1.0 never wrote,
     // and skips.
@@ -294,6 +298,7 @@ object StateCodec {
     val staples = mutableListOf<Staple>()
     val recipes = mutableListOf<Recipe>()
     var backgroundSync: Boolean? = null
+    var stapleComeback = StapleComeback.DEFAULT
     val receipts = mutableMapOf<DeviceId, Hlc>()
 
     // Lists are rebuilt in file order; their people and items arrive on following lines.
@@ -358,6 +363,7 @@ object StateCodec {
                 ApprovedNetwork(NetworkFingerprint(f[1]), f[2], f[3].takeUnless { it == "Approved just now" } ?: "Approved", f[4] == "1")
             "staple" -> staples += Staple(f[1], f[2].toIntOrNull() ?: 0)
             "background" -> backgroundSync = f[1] == "1"
+            "comeback" -> stapleComeback = StapleComeback.ofKey(f[1]) ?: StapleComeback.DEFAULT
             "recipe" -> {
               val ingredients =
                 f.drop(2).chunked(2).map { (name, qty) -> Ingredient(name, qty.toIntOrNull() ?: return@runCatching) }
@@ -521,6 +527,7 @@ object StateCodec {
       recipes = recipes,
       conflicts = conflicts,
       backgroundSync = backgroundSync,
+      stapleComeback = stapleComeback,
       // Through the rename like everything else about a list, and only for a list the file holds.
       history = runs.entries.mapNotNull { (raw, kept) -> renamed.ids[raw]?.let { it to kept.asKept() } }.toMap(),
       learnedStaples = learned.entries.mapNotNull { (raw, kept) -> renamed.ids[raw]?.let { it to kept.asKept() } }.toMap(),

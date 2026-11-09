@@ -10,6 +10,7 @@ import io.github.molleware.porygonlist.data.ClearedPick
 import io.github.molleware.porygonlist.data.ClearedRun
 import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.ConflictKind
+import io.github.molleware.porygonlist.data.StapleComeback
 import io.github.molleware.porygonlist.data.ApprovedNetwork
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
@@ -299,6 +300,9 @@ class PorygonViewModel(
    * alarm is the screen's to do, since it needs Android's context and whether alarms are allowed.
    */
   fun setBackgroundSync(on: Boolean) = repo.update { s, _ -> s.copy(backgroundSync = on) }
+
+  /** How long a learned staple removed by hand stays away, chosen in Settings. */
+  fun setStapleComeback(choice: StapleComeback) = repo.update { s, _ -> s.copy(stapleComeback = choice) }
 
   /** Writes down the default the switch has been reading, once there is one. See [settledChoice]. */
   fun settleBackgroundSync(alarmsAllowed: Boolean) =
@@ -1196,7 +1200,7 @@ class PorygonViewModel(
 
   /**
    * Takes a tile off the grid. Nothing already added to a list is touched. A learned tile is also
-   * remembered as unwanted on the open list, so that list does not teach it again for 50 clears.
+   * remembered as unwanted on the open list, so that list does not teach it again for the weeks chosen in Settings.
    */
   fun removeStaple(name: String) {
     repo.update { s, node ->
