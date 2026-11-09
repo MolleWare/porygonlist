@@ -1013,6 +1013,9 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
       merge interleaves runs; delete leaves no `history` record; History button and action bar at
       font scale 2.0; no crash. Not checked: 50 runs scrolling, TalkBack, a kept copy (unit
       tests only).
+- [ ] **Learned staples.** An item in 3 of a list's last 4 runs becomes a staple of that list,
+      quietly; one unused for 3 months goes. Hand-made staples stay shared and never expire. See
+      `docs/next-release-plan.md`, feature 8.
 - [ ] **Recipes beside staples.** A recipe is a sublist of its ingredients. One tap on it adds
       them all to the list, tagged, and each added item says which recipe it is an ingredient for.
 - [ ] **Sync is one switch in Settings.** Turning it on needs alarms allowed; without them it stays

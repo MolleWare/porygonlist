@@ -163,6 +163,47 @@ the back gesture leave the app. The same name twice in one run counts as it come
 lasts one visit to the page. Add to recipe with no recipes says so in its sheet. The three actions
 say nothing afterwards beyond the selection clearing.
 
+### 8. Learned staples
+
+Decided by Hugo, 2026-11-09. Local to this phone, like everything about staples: nothing travels,
+and no sync format changes. Built on feature 7's runs.
+
+**Two kinds, one grid**
+
+- **Hand-made staples** are today's: made on the Staples tab, shared by every list, never removed
+  except by hand, in the order they were made.
+- **Learned staples** belong to one list. The Staples tab shows the hand-made ones first, then the
+  open list's learned ones, most recently added first. Tapping either adds to the open list, as
+  today. A learned tile looks and reads like any other tile.
+- Nothing announces a learned staple, its arrival or its removal. People find it on their own.
+
+**Learning**
+
+- Checked at each press of Clear ticked on this phone, right after the run is recorded, never at
+  startup. An item is learned for that list when it is in at least 3 of the list's last 4 runs,
+  matched by folded name (`WordTrie.fold`), shown as the newest run has it.
+- Not learned when it is already a hand-made staple or one of this list's learned staples, or when
+  it was removed from this list's staples by hand (below).
+- Its "last added" starts as the time of the newest run that holds it.
+
+**Forgetting**
+
+- A learned staple keeps when its name was last added to that list on this phone: typed, a
+  suggestion, a staple tap, a recipe, Put back, anything that goes through adding. Adds that arrive
+  from another phone do not count. Hand-made staples keep no such date and are never forgotten.
+- Unused for 3 calendar months, it is gone: hidden from the grid from then on, and dropped from the
+  save at the next Clear ticked on that list.
+- Removed by hand (the same gesture and confirm as a hand-made tile), it is remembered as unwanted
+  for that list and never learned there again. Making a hand-made staple of that name lifts that.
+
+**Belongs to its list**
+
+- Kept by list id on `AppState`, like history, never on the `GroceryList`. Delete takes the list's
+  learned staples and unwanted names with it; merge moves them to the target (a name the target
+  already has keeps the target's); a kept private copy keeps them.
+- New record types in the state file, which 0.1.0 skips. Still `PLSTATE11`.
+- The add field's suggestions rank the open list's learned staples with the hand-made ones.
+
 ## Needs Ava's phone, when it is back
 
 The two-phone checks of 2, 3, 4 (a merged list arriving on hers), 5 and 6, and an update of hers
