@@ -1013,9 +1013,18 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
       merge interleaves runs; delete leaves no `history` record; History button and action bar at
       font scale 2.0; no crash. Not checked: 50 runs scrolling, TalkBack, a kept copy (unit
       tests only).
-- [ ] **Learned staples.** An item in 3 of a list's last 4 runs becomes a staple of that list,
+- [x] **Learned staples.** An item in 3 of a list's last 4 runs becomes a staple of that list,
       quietly; one unused for 3 months goes. Hand-made staples stay shared and never expire. See
       `docs/next-release-plan.md`, feature 8.
+      Pixel, 2026-11-08, `2e0b35d` beside the release app: passed. Checked: learned at the third
+      run and not before, in the newest run's spelling, only on its own list; "not used yet", then
+      "used once" on a tap; suggested on its list; removed by hand, three more clears do not bring
+      it back; a hand-made one lifts that, and a hand-made one of a learned name leaves one tile;
+      hand-made first, then learned by last added, a tap or a typed add moving one to the front;
+      cold restart; merge moves them; after 3 months unused (save edited) hidden but kept, dropped
+      at the next clear, while one under 3 months stays; a `PLSTATE10` save reads; delete leaves no
+      `learned`, `unwanted` or `history` record; no crash. Not checked: a kept copy, adds arriving
+      from another phone (unit tests only).
 - [ ] **Recipes beside staples.** A recipe is a sublist of its ingredients. One tap on it adds
       them all to the list, tagged, and each added item says which recipe it is an ingredient for.
 - [ ] **Sync is one switch in Settings.** Turning it on needs alarms allowed; without them it stays
