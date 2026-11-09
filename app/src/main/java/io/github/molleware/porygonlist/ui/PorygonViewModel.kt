@@ -1154,17 +1154,17 @@ class PorygonViewModel(
     stapleDraft = value
   }
 
-  /**
-   * Drops a staple onto the list being worked on, and counts it.
-   *
-   * The count is the tile's whole sub-label, so it has to move in the same update as the item —
-   * otherwise a tap adds the thing and the tile goes on claiming it has never been used.
-   */
   /** The Staples tab on the open list, as of now: hand-made first, then what the list taught. */
   fun stapleGrid(state: AppState): List<Staple> =
     state.staplesShownOn(state.activeList.id, System.currentTimeMillis(), ZoneId.systemDefault())
 
-  /** A tap is counted on the tile tapped: a hand-made staple, or failing that the open list's learned one. */
+  /**
+   * Drops a staple onto the list being worked on, and counts it on the tile tapped: a hand-made
+   * staple, or failing that the open list's learned one.
+   *
+   * The count is the tile's whole sub-label, so it has to move in the same update as the item —
+   * otherwise a tap adds the thing and the tile goes on claiming it has never been used.
+   */
   fun useStaple(name: String) = repo.update { s, node ->
     val added = s.withItemAdded(node, name)
     if (added.staples.any { it.name == name }) added.copy(staples = added.staples.map { if (it.name == name) it.copy(uses = it.uses + 1) else it })
