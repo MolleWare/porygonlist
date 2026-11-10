@@ -895,6 +895,10 @@ checks are for the next build.
 - [x] **The keyboard's Done on a pasted code answered "someone new"** (`30a972b`). *Same phone,
       Sam on a list, a second fake phone's code pasted: the keyboard's Done did nothing, the card
       kept "Add Newphone" and "This is Sam's new phone", and nothing paired.*
+- [x] **Her own app updated in place to the fixes**, lists and pairing kept. *Ava's S24 FE,
+      2026-11-10 07:06, `18442bb` over the build of 2026-10-27: opened straight on her lists,
+      still "Waiting for Hugo & hugo"; her 14 lists read back identical to the morning's backup
+      (`ava-2026-11-10/` against `ava-2026-11-10-after-install/`).*
 
 Known in 0.1.0, fixed only in 0.2.0 on `next`:
 
