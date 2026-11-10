@@ -103,8 +103,9 @@ object SyncExchange {
      * From here on their payload is kept whatever happens to the line. Their ack may already be on
      * its way, and a caller holding it believes everything it sent is here; dropping the payload
      * because a later leg broke would make that belief wrong: the caller collects its tombstones on
-     * that ack, and does not send the same lists again until they change. Applying it is always safe — a merge only ever adds what
-     * it did not have — so the doubt goes the other way: on a break, nothing of ours is banked.
+     * that ack, and does not send the same lists again until they change. Applying it is always
+     * safe — a merge only ever adds what it did not have — so the doubt goes the other way: on a
+     * break, nothing of ours is banked.
      */
     return try {
       // Their stamp goes back first, so a peer that only wanted to push and leave still gets its
