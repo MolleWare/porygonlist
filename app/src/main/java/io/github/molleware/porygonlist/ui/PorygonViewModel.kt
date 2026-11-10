@@ -802,38 +802,13 @@ class PorygonViewModel(
   }
 
   /**
-   * Deletes a list from this phone.
+   * Deletes a list from this phone — see [AppState.withoutList].
    *
    * Local only, and the wording on the screen says so: the people you shared it with keep their
-   * copies. Propagating a whole-list deletion would need a tombstone for the list itself, and
-   * handing one phone the power to wipe a shared list off everyone else's is not obviously right.
-   *
-   * The last list can go too. A new install starts with none, so no-lists is a state the app already
-   * has to show; refusing to delete the only one would make the bin stop working for no reason the
-   * owner can see.
+   * copies.
    */
   fun deleteList(id: ListId) {
-    repo.update { s, node ->
-      val going = s.lists.firstOrNull { it.id == id }
-      val shared = going != null && going.peersOf(s.localDevice).isNotEmpty()
-
-      val lists =
-        if (shared) {
-          // Someone else is on it, so this is leaving rather than deleting. The list stays, hidden,
-          // until every one of them has heard — see AppState.pruneDeliveredTombstones. Dropping it
-          // outright would leave them waiting for ever on a phone that had simply stopped caring.
-          s.lists.map { if (it.id == id) it.withPersonLeft(s.localDevice, node.clock.tick()) else it }
-        } else {
-          s.lists.filterNot { it.id == id }
-        }
-
-      // An empty id is never minted, so this leaves nothing active, which is what no lists means.
-      val visible = lists.filter { it.personFor(s.localDevice)?.present == true }
-      s.copy(
-        lists = lists,
-        activeListId = if (s.activeListId == id) visible.firstOrNull()?.id ?: ListId("") else s.activeListId,
-      )
-    }
+    repo.update { s, node -> s.withoutList(id, node.clock.tick()) }
     confirmingListDelete = null
     // Delete is offered from the rename card, so that card is open on this list. Left open, it came
     // back with the list when someone shared it again — seen on the Pixel, 2026-10-21.

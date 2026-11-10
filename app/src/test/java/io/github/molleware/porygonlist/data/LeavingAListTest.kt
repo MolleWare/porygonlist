@@ -113,14 +113,22 @@ class LeavingAListTest {
 
     val after = leave(alone).pruneDeliveredTombstones()
 
-    // Nobody to tell, so the tombstone is collected on the spot and the owner sees nothing.
+    // Nobody to tell, so the tombstone is collected on the spot, and the list goes with it.
     assertTrue(after.visibleLists.isEmpty())
-    assertTrue("nothing is waiting to be delivered", after.lists.single().people.isEmpty())
+    assertTrue("nothing is waiting to be delivered", after.lists.isEmpty())
 
-    // The husk is left deliberately rather than deleted: pruneDeliveredTombstones runs on every
-    // load, and refusing to drop a list with nobody on it is what stops an odd state costing
-    // somebody their groceries. In the app this path is never reached — deleteList removes a list
-    // nobody else is on outright, which PorygonViewModelTest covers.
+    // It used to stay as a husk with nobody on it. A list goes when this phone's own leaving is
+    // collected, and since 2026-11-10 that can leave nobody on it: the leaving waits for a removal
+    // still owed to someone, and both go in the same pass. A list that is *read* with nobody on it
+    // is still kept, because that is the odd state the guard exists for. In the app this path is
+    // never reached — deleteList removes a list nobody else is on outright.
+  }
+
+  @Test
+  fun `a list read with nobody on it is still kept`() {
+    val husk = stateOf(emptyList())
+
+    assertEquals(1, husk.pruneDeliveredTombstones().lists.size)
   }
 
   // ── Coming back ───────────────────────────────────────────────────────────

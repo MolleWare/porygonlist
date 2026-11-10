@@ -10,6 +10,7 @@ import io.github.molleware.porygonlist.data.sync.ItemId
 import io.github.molleware.porygonlist.data.sync.ListId
 import io.github.molleware.porygonlist.data.sync.SyncPayload
 import io.github.molleware.porygonlist.data.sync.SyncResult
+import io.github.molleware.porygonlist.data.sync.confirmDelivery
 import io.github.molleware.porygonlist.data.sync.payloadFor
 import io.github.molleware.porygonlist.data.sync.receive
 import org.junit.Assert.assertEquals
@@ -102,6 +103,74 @@ class RemovingSomeoneTest {
     val samConfirmed = left.copy(deliveredTo = DeliveryLog().record(sam, at(3_000))).pruneDeliveredTombstones()
 
     assertNull(samConfirmed.lists.single().personFor(ava))
+  }
+
+  // ── Deleting the list before they have heard ──────────────────────────────
+  // Found in review, 2026-11-10: deleting a list straight after "Stop sharing" saw nobody else on
+  // it, so it was dropped outright along with Ava's removal. Her phone still had the list with this
+  // phone on it, so her next payload was an invitation: the list came back "new, from Ava", shared
+  // with her again, and she never learned she had been taken off.
+
+  private fun removedThenDeleted() =
+    phone(hugo, shared(hugo, ava), ava).removePersonFrom(listId, ava, at(2_000)).withoutList(listId, at(2_100))
+
+  @Test
+  fun `a list deleted before the removed person has heard is still sent to them`() {
+    val hugos = removedThenDeleted()
+
+    assertTrue("out of sight here", hugos.visibleLists.isEmpty())
+    assertEquals("she still has to hear", 1, hugos.payloadFor(ava, HybridClock(hugo))?.lists?.size)
+  }
+
+  @Test
+  fun `their copy does not bring the deleted list back`() {
+    val hugos = removedThenDeleted()
+
+    // Ava has not heard, so her copy still has them both on it.
+    val avasCopy = SyncPayload(ava, at(1_800, ava), listOf(shared(hugo, ava)))
+    val after = (hugos.receive(avasCopy, HybridClock(hugo), IdFactory(hugo, start = 200)) as? SyncResult.Merged)?.state ?: hugos
+
+    assertTrue("not back, and not shared with her again", after.visibleLists.isEmpty())
+  }
+
+  @Test
+  fun `the removed person keeps their copy, and then the deleted list goes for good`() {
+    val hugos = removedThenDeleted()
+
+    val sent = hugos.payloadFor(ava, HybridClock(hugo))!!
+    val onAva = (phone(ava, shared(hugo, ava), hugo).receive(sent, HybridClock(ava), IdFactory(ava, start = 100)) as SyncResult.Merged).state
+    val confirmed = hugos.confirmDelivery(ava, at(3_000))
+
+    assertEquals("she keeps a copy of her own", listOf(ava), onAva.visibleLists.single().people.map { it.device })
+    assertTrue("everyone has heard, so nothing is kept", confirmed.lists.isEmpty())
+  }
+
+  @Test
+  fun `with a third person on it, the deleted list waits for the removed one as well`() {
+    val hugos = phone(hugo, shared(hugo, ava, sam), ava, sam).removePersonFrom(listId, ava, at(2_000)).withoutList(listId, at(2_100))
+
+    val samConfirmed = hugos.confirmDelivery(sam, at(3_000))
+
+    assertEquals("Sam hearing is not enough: Ava still has to", 1, samConfirmed.payloadFor(ava, HybridClock(hugo))?.lists?.size)
+    assertTrue(samConfirmed.confirmDelivery(ava, at(3_000)).lists.isEmpty())
+  }
+
+  @Test
+  fun `unpairing, deleting the list, then pairing again starts fresh`() {
+    val hugos = phone(hugo, shared(hugo, ava), ava).retireDevice(ava, at(2_000)).withoutList(listId, at(2_100))
+    val avas = phone(ava, shared(hugo, ava), hugo)
+
+    // Paired again, then a first exchange each way.
+    val hugosAgain = hugos.copy(peers = hugos.peers + TrustedPeer(ava, byteArrayOf(1), "Ava", 0))
+    val fromAva = SyncPayload(ava, at(3_000, ava), avas.lists)
+    val onHugo = (hugosAgain.receive(fromAva, HybridClock(hugo), IdFactory(hugo, start = 200)) as? SyncResult.Merged)?.state ?: hugosAgain
+    val fromHugo = onHugo.payloadFor(ava, HybridClock(hugo))!!
+    val onAva = (avas.receive(fromHugo, HybridClock(ava), IdFactory(ava, start = 300)) as SyncResult.Merged).state
+
+    assertTrue("the deleted list does not come back", onHugo.visibleLists.isEmpty())
+    val hers = onAva.visibleLists.single()
+    assertEquals("Ava keeps her own copy, shared with nobody", listOf(ava), hers.people.filter { it.present }.map { it.device })
+    assertNotEquals(listId, hers.id)
   }
 
   // ── On the phone that was removed ─────────────────────────────────────────

@@ -295,6 +295,17 @@ data class GroceryList(
     people.filter { it.present }.map { it.device }.filterNot { it == localDevice }
 
   /**
+   * Whether anyone besides [localDevice] still has to hear from this phone about this list: someone
+   * on it, or someone taken off it whose own phone has yet to confirm — see [mustHear].
+   *
+   * [peersOf] alone is not enough to decide that deleting a list is leaving it. Straight after "Stop
+   * sharing" nobody else is on the list, but the removed phone still holds it with this one on it,
+   * and dropping the list here would let its next payload bring the list back as an invitation.
+   */
+  fun sharedBeyond(localDevice: DeviceId): Boolean =
+    peersOf(localDevice).isNotEmpty() || people.any { !it.present && mustHear(it, localDevice) != null }
+
+  /**
    * Records that [person] moved to a new phone.
    *
    * The old id moves to [Person.formerDevices] rather than being erased — everything it authored
@@ -362,17 +373,20 @@ data class GroceryList(
     asked: Set<ItemId> = emptySet(),
   ): GroceryList {
     val peers = peersOf(localDevice)
+    // Someone off the list is collected on the same terms as a removed item: once everyone who has
+    // to hear it has confirmed, nobody is left holding a copy that says otherwise.
+    fun collectable(person: Person) =
+      person.removed.value && log.deliveredToAll(person.removed.at, peers + listOfNotNull(mustHear(person, localDevice)))
+    // This phone's own leaving waits for anyone else's removal still owed to their phone. The list
+    // goes when this phone's leaving does, and until then it is what carries the removal to them.
+    val removalStillOwed =
+      people.any { !it.present && !it.wasEver(localDevice) && mustHear(it, localDevice) != null && !collectable(it) }
     return copy(
       // With nobody to deliver to there is nothing to wait for, and a solo list keeps no tombstones.
       items =
         if (peers.isEmpty()) liveItems
         else items.filterNot { it.id !in asked && it.removed.value && log.deliveredToAll(it.removed.at, peers) },
-      // Someone off the list is collected on the same terms as a removed item: once everyone who has
-      // to hear it has confirmed, nobody is left holding a copy that says otherwise.
-      people =
-        people.filterNot { person ->
-          person.removed.value && log.deliveredToAll(person.removed.at, peers + listOfNotNull(mustHear(person, localDevice)))
-        },
+      people = people.filterNot { collectable(it) && !(it.wasEver(localDevice) && removalStillOwed) },
     )
   }
 
@@ -640,6 +654,41 @@ data class AppState(
   }
 
   /**
+   * Takes a list off this phone, which is what Delete does.
+   *
+   * Local only: the people it was shared with keep their copies. Propagating a whole-list deletion
+   * would need a tombstone for the list itself, and handing one phone the power to wipe a shared list
+   * off everyone else's is not obviously right.
+   *
+   * The last list can go too. A new install starts with none, so no-lists is a state the app already
+   * has to show; refusing to delete the only one would make the bin stop working for no reason the
+   * owner can see.
+   */
+  fun withoutList(id: ListId, at: Hlc): AppState {
+    val going = lists.firstOrNull { it.id == id }
+    val shared = going != null && going.sharedBeyond(localDevice)
+
+    val kept =
+      if (shared) {
+        // Someone else is on it, or was taken off it and has yet to hear, so this is leaving rather
+        // than deleting. The list stays, hidden, until every one of them has heard — see
+        // pruneDeliveredTombstones. Dropping it outright would leave them waiting for ever on a
+        // phone that had simply stopped caring, and a removed phone that never heard would bring
+        // the list back with its next payload, as an invitation.
+        lists.map { if (it.id == id) it.withPersonLeft(localDevice, at) else it }
+      } else {
+        lists.filterNot { it.id == id }
+      }
+
+    // An empty id is never minted, so this leaves nothing active, which is what no lists means.
+    val visible = kept.filter { it.personFor(localDevice)?.present == true }
+    return copy(
+      lists = kept,
+      activeListId = if (activeListId == id) visible.firstOrNull()?.id ?: ListId("") else activeListId,
+    )
+  }
+
+  /**
    * The cards waiting for an answer that still mean anything.
    *
    * An edit clash somebody has since settled — on the other phone, or by editing the item again —
@@ -783,20 +832,22 @@ data class AppState(
   fun pruneDeliveredTombstones(): AppState =
     copy(
       lists =
-        lists
-          .map { list ->
-            val asked = openConflictsOn(list.id).filter { it.kind == ConflictKind.EDITED }.map { it.yours.id }.toSet()
-            list.pruneDelivered(deliveredTo, localDevice, asked = asked)
-          }
+        lists.mapNotNull { list ->
+          val asked = openConflictsOn(list.id).filter { it.kind == ConflictKind.EDITED }.map { it.yours.id }.toSet()
+          val pruned = list.pruneDelivered(deliveredTo, localDevice, asked = asked)
           // A list this phone has left is kept, and kept being sent, for exactly as long as its own
           // leaving tombstone survives — that is what carries the news. Once the tombstone has been
           // collected above, everyone has heard, and the list can finally go. Dropping it any
           // earlier would leave the others waiting on a phone that had quietly stopped answering.
           //
-          // Guarded on there being somebody else named, because this runs on every load and a list
-          // nobody is on at all is a state nothing should produce. If one ever appears, keeping it
-          // is recoverable and deleting somebody's groceries is not.
-          .filterNot { list -> list.people.isNotEmpty() && list.people.none { it.wasEver(localDevice) } },
+          // That includes the tombstone going in the same pass as the last person's removal it
+          // waited for, which leaves nobody on the list at all. Otherwise a list nobody is on is
+          // kept, because this runs on every load and that is a state nothing should produce. If
+          // one ever appears, keeping it is recoverable and deleting somebody's groceries is not.
+          val leftAndHeard = list.people.any { it.wasEver(localDevice) } && pruned.people.none { it.wasEver(localDevice) }
+          val notOnIt = pruned.people.isNotEmpty() && pruned.people.none { it.wasEver(localDevice) }
+          pruned.takeUnless { leftAndHeard || notOnIt }
+        },
       deliveredTo = deliveredTo.retaining(knownPeers()),
     )
 
