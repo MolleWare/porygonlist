@@ -25,8 +25,10 @@ version="$(grep -oE 'versionName = "[^"]+"' "$REPO_ROOT/app/build.gradle.kts" | 
 code="$(grep -oE 'versionCode = [0-9]+' "$REPO_ROOT/app/build.gradle.kts" | grep -oE '[0-9]+')"
 tag="v$version"
 
-[[ -z "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no)" ]] \
-  || die "The working tree has changes. The APK must be built from the tagged commit alone."
+# Untracked files count too: one under app/src would be built into this APK and not into F-Droid's,
+# and the two would no longer match. Ignored files (keystore.properties, build output) do not.
+[[ -z "$(git -C "$REPO_ROOT" status --porcelain)" ]] \
+  || die "The working tree has changes or untracked files (git status). The APK must be built from the tagged commit alone."
 [[ "$(git -C "$REPO_ROOT" rev-parse HEAD)" == "$(git -C "$REPO_ROOT" rev-parse -q --verify "$tag^{commit}" 2>/dev/null)" ]] \
   || die "HEAD is not tagged $tag. Tag it first: git tag -a $tag -m \"PorygonList $version\""
 grep -q "versionName: $version" "$DRAFT" && grep -q "versionCode: $code" "$DRAFT" && grep -q "commit: $tag" "$DRAFT" \
