@@ -195,8 +195,7 @@ private fun QuarterHourCard() {
     Text(if (aligned) "Syncing on the quarter hour" else "Syncing around the quarter hour", style = PorygonType.RowName, color = TextInk)
     Text(
       if (aligned) {
-        "Wakes at :00, :15, :30 and :45 for half a minute, when your paired phones do too. " +
-          "A quiet notification shows while it runs."
+        "Wakes at :00, :15, :30 and :45 for half a minute, when your paired phones do too."
       } else {
         "Aims for :00, :15, :30 and :45, but a phone left idle may wake late and miss the others. " +
           "Allow alarms and it wakes on time."
