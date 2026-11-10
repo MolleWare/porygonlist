@@ -314,6 +314,79 @@ class PorygonViewModelTest {
     assertTrue("nothing is open", state().visibleLists.none { it.id == state().activeListId })
   }
 
+  // ── With no lists ─────────────────────────────────────────────────────────
+  // Found in review, 2026-11-10: with no list to act on, pasting closed the sheet and dropped what
+  // was pasted, sharing said "Ava is on .", Add did nothing, and a staple tap counted a use.
+
+  private fun deleteEveryList() {
+    while (state().visibleLists.isNotEmpty()) vm.deleteList(state().visibleLists.first().id)
+  }
+
+  @Test
+  fun `pasting a list with no lists makes one, named as the message names it`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+
+    vm.openImport()
+    vm.onImportTextChange("PL1 · Party · 2 ice, lemons")
+    vm.runImport()
+
+    val made = state().visibleLists.single()
+    assertEquals("Party", made.name)
+    assertEquals(listOf("Ice ×2", "Lemons"), made.liveItems.map { it.label })
+    assertEquals("and it is the one open", made.id, state().activeListId)
+  }
+
+  @Test
+  fun `a pasted list with no name of its own is called Pasted list`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+
+    vm.openImport()
+    vm.onImportTextChange("milk\neggs")
+    vm.runImport()
+
+    assertEquals("Pasted list", state().visibleLists.single().name)
+    assertEquals(listOf("Milk", "Eggs"), state().activeList.liveItems.map { it.name.value })
+  }
+
+  @Test
+  fun `pairing from Share with no lists pairs and puts them on nothing`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+
+    vm.startPairing(forListId = state().activeListId)
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+
+    assertNull(vm.pairingForList)
+    assertTrue(vm.pairNote, vm.pairNote.startsWith("Paired with Ava."))
+  }
+
+  @Test
+  fun `with no lists nobody is offered to add, and adding does nothing`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+    val before = state()
+
+    assertEquals(emptyList<Any>(), vm.peersNotOnActiveList(state()))
+    vm.addPersonToActiveList(state().peers.last().deviceId)
+    assertEquals(before, state())
+  }
+
+  @Test
+  fun `a staple tapped with no lists is not counted`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+    val staple = state().staples.first()
+
+    vm.useStaple(staple.name)
+
+    assertEquals(staple.uses, state().staples.first().uses)
+  }
+
   @Test
   fun `deleting a list from its rename card closes the card`() = runTest(dispatcher) {
     repo.load()
