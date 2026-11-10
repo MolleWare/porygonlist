@@ -34,7 +34,8 @@ it goes wherever you send that message, through the messaging app you choose.
 
 - **Network access**, to reach paired phones on your local wifi.
 - **Location (optional)**, only because Android will not tell an app the wifi's name without it. It
-  is used to show that name. The app never reads your location, and works fully if you say no.
+  is used to show that name. Android asks for precise and approximate location together; only
+  precise shows the name. The app never reads your location, and works fully if you say no.
 - **Run at startup**, so background sync on your approved wifi carries on after a restart.
 - **Alarms (optional)**, to wake on the exact quarter hour, so closed phones sync at the same moment.
 - **Foreground service**, to stay on the wifi for the half minute of a background sync. A quiet

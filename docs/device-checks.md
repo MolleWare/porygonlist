@@ -215,6 +215,31 @@ the other had closed.
 **The benchmark uninstalls the app when it finishes**, taking the keystore
 identity with it. Anything paired before a benchmark run is unpaired after.
 
+## 11. "Use the wifi's own name" asks — *fresh, or after a revoke*
+
+On wifi, with location services on. Either a fresh install, or take the
+permission back first:
+
+```bash
+adb shell pm revoke io.github.molleware.porygonlist android.permission.ACCESS_FINE_LOCATION
+adb shell pm revoke io.github.molleware.porygonlist android.permission.ACCESS_COARSE_LOCATION
+```
+
+Open Share and tap **Use the wifi's own name**.
+
+- **A dialog appears**, offering *Precise* and *Approximate*. Nothing at all
+  happening is the failure this check is for.
+- Answer **Approximate**, allow: no name, and the button is still there.
+- Tap it again: Android offers to change to precise. Allow: the network's row
+  and the banner show the wifi's own name, and the button is gone.
+- Answer **Don't allow** instead: nothing changes, and sync goes on as before.
+
+*Why:* until 2026-11-10 the app asked for precise location alone. Android 12
+and later refuse that from an app targeting 31 or later, with no dialog and only
+a line in logcat (`ACCESS_FINE_LOCATION must be requested with
+ACCESS_COARSE_LOCATION`), so the button did nothing. Both are now declared and
+asked for together, and only precise counts as granted.
+
 ---
 
 ## Gotchas that have cost real time

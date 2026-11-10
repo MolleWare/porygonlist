@@ -1,5 +1,6 @@
 package io.github.molleware.porygonlist.data.net
 
+import android.Manifest
 import io.github.molleware.porygonlist.data.plainName
 
 /**
@@ -19,6 +20,22 @@ object WifiName {
 
   /** What the framework hands back instead of a name when it will not tell us. */
   private const val UNKNOWN = "<unknown ssid>"
+
+  /**
+   * What to ask for, at the moment the name would help: precise and approximate location together.
+   *
+   * Only precise location reads the name, but from Android 12 an app targeting 31 or later that
+   * asks for it alone is refused without a dialog — the button did nothing. Both are declared in
+   * the manifest for the same reason.
+   */
+  val permissions: Array<String> =
+    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+
+  /**
+   * Whether the answer to asking for [permissions] lets the name be read: precise location granted.
+   * "Approximate" does not, so the offer stays, and the next tap can ask to make it precise.
+   */
+  fun readable(answer: Map<String, Boolean>): Boolean = answer[Manifest.permission.ACCESS_FINE_LOCATION] == true
 
   /**
    * Cleans up what `WifiInfo.getSSID` returns, or null if it is not a usable name.

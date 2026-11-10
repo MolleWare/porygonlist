@@ -988,8 +988,10 @@ there):
 - [ ] Play Console account and app entry; enrol in Play App Signing with **our own** key.
 - [x] Privacy policy: [docs/privacy.md](privacy.md). Its GitHub page is the URL to give Play.
 - [ ] Data safety form: no data collected or shared; no backup.
-- [ ] Location permission declaration. Fine location is requested only to show the wifi's name and
-      the app works without it. The Share screen already explains this beside the "Use the wifi's
+- [ ] Location permission declaration. Precise (fine) location is requested only to show the
+      wifi's name, with approximate (coarse) beside it because Android 12 and later refuse a
+      request for precise alone; approximate on its own reads nothing. The app works without
+      either. The Share screen already explains this beside the "Use the wifi's
       own name" button, before Android's prompt — probably enough as the in-app disclosure, but
       check it against Play's current wording when filling in the form.
 - [ ] Content rating questionnaire, target audience, store category.

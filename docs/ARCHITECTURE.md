@@ -37,7 +37,9 @@ The app declares three permissions. `ACCESS_NETWORK_STATE` is normal-level, gran
 at install, and everything load-bearing runs on it. `ACCESS_FINE_LOCATION` is
 optional, asked for at the moment it pays off, and buys exactly one thing: the
 wifi's own name instead of `Network a3f91c`. **It decides nothing** — decline it
-and the app behaves as it did before it existed. `INTERNET` is normal-level too,
+and the app behaves as it did before it existed. It is asked for together with
+`ACCESS_COARSE_LOCATION`, also declared: Android 12 and later refuse a request for
+fine location alone, without a dialog. Coarse on its own does not read the name. `INTERNET` is normal-level too,
 and is what Android requires for any socket at all; there is no narrower one
 meaning "the local network only", so the limit is in the code rather than in the
 manifest — mDNS on the local subnet, addresses the responder gave, and the whole
@@ -163,7 +165,9 @@ Three things make the permission optional rather than required:
 
 - Declining it changes nothing but the name. Approval, discovery and sync are
   unaffected, which is what was decided when the network half was first costed.
-- It is asked for on the Share screen beside the network names, not at launch.
+- It is asked for on the Share screen beside the network names, not at launch,
+  with `ACCESS_COARSE_LOCATION` beside it (`WifiName.permissions`). An
+  "approximate" answer leaves the button there, so the next tap can ask for precise.
 - `WifiName.clean` returns null for everything that is not a real name, which
   includes the `<unknown ssid>` the framework hands back when the permission is
   missing **or when location services are switched off** — a separate condition,

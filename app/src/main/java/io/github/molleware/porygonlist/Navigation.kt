@@ -44,6 +44,7 @@ import androidx.navigation3.ui.NavDisplay
 import io.github.molleware.porygonlist.data.net.BackgroundSync
 import io.github.molleware.porygonlist.data.net.DiscoveryDecision
 import io.github.molleware.porygonlist.data.net.HoldReason
+import io.github.molleware.porygonlist.data.net.WifiName
 import io.github.molleware.porygonlist.data.net.WifiWatch
 import io.github.molleware.porygonlist.theme.Bg
 import io.github.molleware.porygonlist.ui.ClockFormat
@@ -334,8 +335,11 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                 // while the app is alive, and a cached "granted" would leave the offer hidden with
                 // no way back to it.
                 var nameGranted by remember { mutableStateOf(hasFineLocation(context)) }
+                // Precise and approximate together, or Android 12 and later refuse without a dialog;
+                // only precise counts as granted. See WifiName.permissions.
                 val askForName =
-                  rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                  rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { answer ->
+                    val granted = WifiName.readable(answer)
                     nameGranted = granted
                     // Re-read straight away. Granting a permission does not make a network callback
                     // fire, so without this the name would not appear until the wifi changed.
@@ -354,7 +358,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   // Nothing to offer when it is already granted, or when there is no wifi for a
                   // name to belong to.
                   canAskForWifiName = !nameGranted && networkSnapshot.isWifi,
-                  onAskForWifiName = { askForName.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+                  onAskForWifiName = { askForName.launch(WifiName.permissions) },
                   namingNetwork = viewModel.namingNetwork,
                   networkNameDraft = viewModel.networkNameDraft,
                   onNetworkNameDraftChange = viewModel::onNetworkNameDraftChange,
