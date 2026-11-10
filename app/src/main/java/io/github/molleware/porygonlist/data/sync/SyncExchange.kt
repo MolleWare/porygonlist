@@ -29,8 +29,10 @@ import java.io.OutputStream
  * what it sent.
  *
  * **Whole payloads, so a lost exchange costs nothing.** There is no resumption and no "since when":
- * if any leg fails, both ends keep what they had and the next exchange carries the same thing. That
- * is why every failure here is simply a null rather than an error worth showing anybody.
+ * if any leg fails, nothing unproved is banked and the next exchange carries the same thing. That
+ * is why every failure here is simply a null rather than an error worth showing anybody. The one
+ * thing a broken exchange still yields is a payload the listener has already acknowledged; see
+ * [answer].
  */
 object SyncExchange {
 
@@ -85,11 +87,26 @@ object SyncExchange {
    *
    * [mine] is a function rather than a value because what this phone owes a peer depends on who the
    * peer turns out to be, and that is only known once their payload has been read.
+   *
+   * Null only when their payload never arrived whole. Once it has, a break later on still returns
+   * it, with no ack of ours.
    */
-  fun answer(inp: InputStream, out: OutputStream, mine: (DeviceId) -> SyncPayload?): Exchange? =
-    try {
-      val theirs = readFrame(inp)?.let { SyncCodec.decode(it) } ?: return null
+  fun answer(inp: InputStream, out: OutputStream, mine: (DeviceId) -> SyncPayload?): Exchange? {
+    val theirs =
+      try {
+        readFrame(inp)?.let { SyncCodec.decode(it) } ?: return null
+      } catch (e: IOException) {
+        return null
+      }
 
+    /*
+     * From here on their payload is kept whatever happens to the line. Their ack may already be on
+     * its way, and a caller holding it believes everything it sent is here; dropping the payload
+     * because a later leg broke would make that belief wrong: the caller collects its tombstones on
+     * that ack, and does not send the same lists again until they change. Applying it is always safe — a merge only ever adds what
+     * it did not have — so the doubt goes the other way: on a break, nothing of ours is banked.
+     */
+    return try {
       // Their stamp goes back first, so a peer that only wanted to push and leave still gets its
       // confirmation even if what we owe them is nothing.
       writeFrame(out, ackLine(theirs.at))
@@ -104,8 +121,9 @@ object SyncExchange {
 
       Exchange(theirs = theirs, ackOfMine = ackOfMine)
     } catch (e: IOException) {
-      null
+      Exchange(theirs = theirs, ackOfMine = null)
     }
+  }
 
   /**
    * A payload with nothing in it, for a peer we share no list with.

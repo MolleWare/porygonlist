@@ -876,13 +876,15 @@ checks are for the next build.
       (`23faa49`).
 - [x] **A test fixture looked like a real device id and home address.** Made-up ids and
       documentation addresses instead (`d9b6763`).
+- [x] **A payload acknowledged before the line broke was never applied.** The caller collected its
+      tombstones on that ack while the listener had dropped the payload. Backported from `next`
+      (`630ecd8`): once read whole, the payload is applied whatever happens to the line
+      (`SyncExchangeTest`).
 
 Known in 0.1.0, fixed only in 0.2.0 on `next`:
 
 - With three people on a list, a removal heard of from another phone could be collected before
   the third phone had heard it, and come back (`f098383`).
-- A payload whose ack went out before the line broke was not applied by the phone that acked it,
-  while the caller collected its tombstones on that ack (`630ecd8`).
 
 ### App closed
 
