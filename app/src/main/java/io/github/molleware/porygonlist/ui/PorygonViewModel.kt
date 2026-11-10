@@ -664,7 +664,27 @@ class PorygonViewModel(
    * device left in a list's people is still waited on for delivery receipts, and one that will
    * never answer again would hold every tombstone on that list open for ever.
    */
-  fun unpair(deviceId: DeviceId) = repo.update { s, node -> s.retireDevice(deviceId, node.clock.tick()) }
+  fun unpair(deviceId: DeviceId) {
+    repo.update { s, node -> s.retireDevice(deviceId, node.clock.tick()) }
+    confirmingUnpair = null
+  }
+
+  /**
+   * Which paired phone Settings is asking about before unpairing.
+   *
+   * Asked in place, once, as removing someone from a list is: unpairing takes them off every list
+   * at once, and a single tap on a row of identical buttons did it with no word (review, 2026-11-10).
+   */
+  var confirmingUnpair by mutableStateOf<DeviceId?>(null)
+    private set
+
+  fun askUnpair(device: DeviceId) {
+    confirmingUnpair = device
+  }
+
+  fun cancelUnpair() {
+    confirmingUnpair = null
+  }
 
   /** Which person the People section is asking about before removing. */
   var confirmingRemovalOf by mutableStateOf<DeviceId?>(null)

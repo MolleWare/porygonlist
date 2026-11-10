@@ -1107,6 +1107,29 @@ class PorygonViewModelTest {
   }
 
   @Test
+  fun `unpairing asks first, and keeping them changes nothing`() = runTest(dispatcher) {
+    // Found in review, 2026-11-10: one tap on "Unpair" took them off every list at once.
+    repo.load()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+    val peer = state().peers.single().deviceId
+    val before = state()
+
+    vm.askUnpair(peer)
+    assertEquals(peer, vm.confirmingUnpair)
+    assertEquals("asking changes nothing", before, state())
+
+    vm.cancelUnpair()
+    assertNull(vm.confirmingUnpair)
+    assertEquals(before, state())
+
+    vm.askUnpair(peer)
+    vm.unpair(peer)
+    assertTrue(state().peers.isEmpty())
+    assertNull("the question closes once answered", vm.confirmingUnpair)
+  }
+
+  @Test
   fun `a replaced phone keeps the person and retires the old id`() = runTest(dispatcher) {
     repo.load()
     val old = state().activeList.people.first { it.device != state().localDevice }

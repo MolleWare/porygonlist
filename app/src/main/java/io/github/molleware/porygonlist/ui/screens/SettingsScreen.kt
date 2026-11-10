@@ -51,6 +51,7 @@ import io.github.molleware.porygonlist.ui.components.PorygonTextField
 import io.github.molleware.porygonlist.ui.components.PrimaryButton
 import io.github.molleware.porygonlist.ui.components.SecondaryButton
 import io.github.molleware.porygonlist.ui.components.SectionLabel
+import io.github.molleware.porygonlist.ui.unpairNote
 
 /**
  * Everything about this phone rather than about a list: who it says you are, what it is known as,
@@ -64,6 +65,9 @@ fun SettingsScreen(
   onNameDraftChange: (String) -> Unit,
   onSaveName: () -> Unit,
   onPair: () -> Unit,
+  confirmingUnpair: DeviceId?,
+  onAskUnpair: (DeviceId) -> Unit,
+  onCancelUnpair: () -> Unit,
   onUnpair: (DeviceId) -> Unit,
   confirmingDelete: Boolean,
   onAskDelete: () -> Unit,
@@ -136,7 +140,16 @@ fun SettingsScreen(
       )
     } else {
       Column(verticalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-        state.peers.forEach { PeerRow(it) { onUnpair(it.deviceId) } }
+        state.peers.forEach { peer ->
+          PeerRow(
+            peer,
+            confirming = confirmingUnpair == peer.deviceId,
+            consequence = unpairNote(state, peer.deviceId, peer.name),
+            onAskUnpair = { onAskUnpair(peer.deviceId) },
+            onCancelUnpair = onCancelUnpair,
+            onConfirmUnpair = { onUnpair(peer.deviceId) },
+          )
+        }
       }
     }
     SecondaryButton("Pair a phone", onPair, modifier = Modifier.heightIn(min = 44.dp), style = PorygonType.BodyLarge)
@@ -257,30 +270,73 @@ private fun AboutCard() {
   }
 }
 
+/**
+ * A paired phone, and the way to unpair it.
+ *
+ * Asked in place, the way removing someone from a list is: unpairing takes them off every list you
+ * share, so it gets one deliberate confirm at the moment of action. The button names the person,
+ * on screen and to TalkBack, so a row of them is never a row of identical "Unpair"s.
+ */
 @Composable
-private fun PeerRow(peer: TrustedPeer, onUnpair: () -> Unit) {
-  Row(
-    Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 12.dp),
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(12.dp),
-  ) {
-    Avatar(
-      initial = peer.name.take(1).uppercase(),
-      background = Accent2,
-      contentColor = Accent2100,
-      size = 34.dp,
-      fontSize = PorygonType.BodyLarge.fontSize,
-    )
-    Column(Modifier.weight(1f)) {
-      Text(peer.name, style = PorygonType.RowName, color = TextInk)
-      Text(peer.deviceId.value, style = PorygonType.Fine, color = Neutral700)
+private fun PeerRow(
+  peer: TrustedPeer,
+  confirming: Boolean,
+  consequence: String,
+  onAskUnpair: () -> Unit,
+  onCancelUnpair: () -> Unit,
+  onConfirmUnpair: () -> Unit,
+) {
+  Column(Modifier.fillMaxWidth().clip(Shapes.Row).background(Surface).padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+      Avatar(
+        initial = peer.name.take(1).uppercase(),
+        background = Accent2,
+        contentColor = Accent2100,
+        size = 34.dp,
+        fontSize = PorygonType.BodyLarge.fontSize,
+      )
+      Column(Modifier.weight(1f)) {
+        Text(peer.name, style = PorygonType.RowName, color = TextInk)
+        Text(peer.deviceId.value, style = PorygonType.Fine, color = Neutral700)
+      }
+      if (!confirming) {
+        SecondaryButton(
+          "Unpair ${peer.name}",
+          onAskUnpair,
+          style = PorygonType.Meta,
+          contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+        )
+      }
     }
-    SecondaryButton(
-      "Unpair",
-      onUnpair,
-      style = PorygonType.Meta,
-      contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
-    )
+
+    if (confirming) {
+      Text(
+        "Unpair ${peer.name}?",
+        style = PorygonType.Meta,
+        color = TextInk,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+      )
+      Text(
+        consequence,
+        style = PorygonType.Fine.copy(lineHeight = PorygonType.Fine.fontSize * 1.5),
+        color = Neutral700,
+        modifier = Modifier.padding(bottom = 12.dp),
+      )
+      Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        PrimaryButton(
+          "Unpair",
+          onConfirmUnpair,
+          style = PorygonType.Meta,
+          contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        )
+        SecondaryButton(
+          "Keep",
+          onCancelUnpair,
+          style = PorygonType.Meta,
+          contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        )
+      }
+    }
   }
 }
 

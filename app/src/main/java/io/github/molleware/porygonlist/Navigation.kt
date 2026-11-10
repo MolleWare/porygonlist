@@ -290,6 +290,9 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                     viewModel.startPairing()
                     backStack.add(PairPhone)
                   },
+                  confirmingUnpair = viewModel.confirmingUnpair,
+                  onAskUnpair = viewModel::askUnpair,
+                  onCancelUnpair = viewModel::cancelUnpair,
                   onUnpair = viewModel::unpair,
                   confirmingDelete = viewModel.confirmingIdentityDelete,
                   onAskDelete = viewModel::askDeleteIdentity,
