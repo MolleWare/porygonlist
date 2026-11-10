@@ -1,7 +1,10 @@
 package io.github.molleware.porygonlist.data.net
 
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -60,5 +63,38 @@ class WifiNameTest {
   @Test
   fun `emoji and accents are left alone`() {
     assertEquals("Café 📶", WifiName.clean("\"Café 📶\""))
+  }
+
+  // ── Asking for it ─────────────────────────────────────────────────────────
+
+  // From Android 12, an app targeting 31 or later that asks for precise location alone is refused
+  // with no dialog at all: the button did nothing. Approximate has to be asked for beside it, and
+  // declared in the manifest, or that half is refused too.
+
+  @Test
+  fun `precise and approximate location are asked for together`() {
+    assertEquals(setOf(FINE, COARSE), WifiName.permissions.toSet())
+  }
+
+  @Test
+  fun `both are declared, or the request is refused`() {
+    val manifest = File("src/main/AndroidManifest.xml").readText()
+
+    assertTrue(manifest.contains("\"$FINE\""))
+    assertTrue(manifest.contains("\"$COARSE\""))
+  }
+
+  @Test
+  fun `only precise location reads the name`() {
+    assertTrue(WifiName.readable(mapOf(FINE to true, COARSE to true)))
+    // "Approximate" in the dialog. The offer stays, so the next tap can ask to make it precise.
+    assertFalse(WifiName.readable(mapOf(FINE to false, COARSE to true)))
+    assertFalse(WifiName.readable(mapOf(FINE to false, COARSE to false)))
+    assertFalse(WifiName.readable(emptyMap()))
+  }
+
+  private companion object {
+    const val FINE = "android.permission.ACCESS_FINE_LOCATION"
+    const val COARSE = "android.permission.ACCESS_COARSE_LOCATION"
   }
 }

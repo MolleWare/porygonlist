@@ -112,7 +112,14 @@ fun AppState.receive(payload: SyncPayload, clock: HybridClock, ids: IdFactory? =
   val arrived =
     lists.map { mine ->
       val theirs = applicable.firstOrNull { it.id == mine.id } ?: return@map mine
-      if (theirs.people.none { it.wasEver(payload.from) }) return@map mine
+      // Only from someone on this phone's copy now. Asked of the sender's copy, as it once was, a
+      // paired phone that knew a list's id — `deviceId:counter`, so guessable — could name itself
+      // on it, be merged in, and be sent the list from then on. Someone new still gets on: the
+      // copy of somebody already on it introduces them. Someone leaving is still on this copy
+      // until their leaving arrives, and someone removed hears it from the payload going the
+      // other way, which this does not touch. Asked of this copy, it holds for a partial list as
+      // for a whole one, whatever people the partial one leaves out.
+      if (mine.people.none { it.wasEver(payload.from) && it.present }) return@map mine
       val result = merge(mine, theirs, from = payload.from, held = payload.held[theirs.id].orEmpty())
       clashes += result.clashes
       // Each question remembers its list, so it is asked on that list and answered there.

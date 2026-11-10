@@ -849,6 +849,41 @@ shared with her again, then the Proton banner, W2, W3, pairing again and putting
       in a row left no backup that read. Fixed: a save passed over is removed, and the id counter
       jumps past anything it could have handed out (`SaveFileTest`).
 
+### Found in the review, 2026-11-10
+
+A code review before the tag. Each is fixed with a JVM test that failed before the fix; the phone
+checks are for the next build.
+
+- [x] **Two changes at once lost one.** A tap and a payload merged on a sync thread each read the
+      same state; at worst a merge was lost after its ack, the peer collected its tombstones, and
+      removed items came back. Changes to the state now run under one lock (`f155abe`,
+      `SimultaneousChangesTest`).
+- [x] **A line break in a name cut its record in two.** A name pasted with a Windows line ending
+      dropped that item, list or pairing at the next start, and from a payload. `\r` is escaped
+      now, and typed names lose control characters (`ca6df24`, `LineBreaksInNamesTest`).
+- [x] **"Use the wifi's own name" did nothing on Android 12 and later.** Precise location alone is
+      refused without a dialog; approximate is declared and asked for beside it, and only precise
+      counts (`8230988`, `WifiNameTest`, device check 11).
+- [x] **Deleting a list straight after "Stop sharing" brought it back, shared again.** The removed
+      phone's next payload arrived as an invitation. Delete now leaves the list while a removal is
+      still owed, and the list waits for it (`2feea93`, `RemovingSomeoneTest`).
+- [x] **A paired phone could add itself to any list whose id it knew.** A list now merges only
+      from someone on this phone's copy of it (`ce15231`, `SyncSessionTest`).
+- [x] **Answering the same duplicate card on both phones doubled the item.** A duplicate card
+      closes once either item is off the list (`4b0bf89`, `DuplicateTest`, `PorygonViewModelTest`).
+- [x] **The privacy policy said less leaves the phone than does.** It now names pairing, names in
+      shared lists, the mDNS announcement on an approved wifi, and what "approved" means
+      (`23faa49`).
+- [x] **A test fixture looked like a real device id and home address.** Made-up ids and
+      documentation addresses instead (`d9b6763`).
+
+Known in 0.1.0, fixed only in 0.2.0 on `next`:
+
+- With three people on a list, a removal heard of from another phone could be collected before
+  the third phone had heard it, and come back (`f098383`).
+- A payload whose ack went out before the line broke was not applied by the phone that acked it,
+  while the caller collected its tombstones on that ack (`630ecd8`).
+
 ### App closed
 
 The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
@@ -988,8 +1023,10 @@ there):
 - [ ] Play Console account and app entry; enrol in Play App Signing with **our own** key.
 - [x] Privacy policy: [docs/privacy.md](privacy.md). Its GitHub page is the URL to give Play.
 - [ ] Data safety form: no data collected or shared; no backup.
-- [ ] Location permission declaration. Fine location is requested only to show the wifi's name and
-      the app works without it. The Share screen already explains this beside the "Use the wifi's
+- [ ] Location permission declaration. Precise (fine) location is requested only to show the
+      wifi's name, with approximate (coarse) beside it because Android 12 and later refuse a
+      request for precise alone; approximate on its own reads nothing. The app works without
+      either. The Share screen already explains this beside the "Use the wifi's
       own name" button, before Android's prompt — probably enough as the in-app disclosure, but
       check it against Play's current wording when filling in the form.
 - [ ] Content rating questionnaire, target audience, store category.

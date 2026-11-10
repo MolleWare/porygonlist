@@ -23,6 +23,10 @@
 #     replace one installed from the host, instead of needing an uninstall that wipes the app's
 #     data on the phone;
 #   - the host's network, for wireless adb and the app's own discovery on the local network;
+#   - the host's USB device nodes, so its adb reaches a phone on a cable with its own key, which
+#     each phone still approves once. SELinux keeps it from opening them until, once, on the host:
+#     sudo setsebool -P container_use_devices on. Only one adb server can hold a phone on USB, so
+#     stop the host's (adb kill-server) while working from here;
 #   - a volume, porygonlist-dev-home, for its home: its own Claude login, its own adb key (approve
 #     it once on each phone), Gradle's caches.
 #
@@ -76,6 +80,19 @@ start() {
   for file in "$HOME/.claude/CLAUDE.md" "$HOME/.android/debug.keystore"; do
     [[ -f "$file" ]] && mounts+=(-v "$file:$file:ro,z")
   done
+
+  # USB phones. The folder is bound rather than passed with --device, which copies only the nodes
+  # present at start: a phone plugged in later, or replugged under a new number, would not show.
+  # Access is the host's own (the uaccess ACL udev gives the logged-in user), and never :z here,
+  # which would relabel the host's device nodes.
+  if [[ -d /dev/bus/usb ]]; then
+    mounts+=(-v /dev/bus/usb:/dev/bus/usb:dev)
+    if command -v getsebool >/dev/null \
+        && [[ "$(getsebool container_use_devices 2>/dev/null)" == *off ]]; then
+      warn "adb in $CONTAINER cannot open a phone on USB until SELinux allows it, once:
+  sudo setsebool -P container_use_devices on"
+    fi
+  fi
 
   # Commits are made as git on the host would make them in this repository. ~/.gitconfig itself
   # stays out: it can hold credential helpers.

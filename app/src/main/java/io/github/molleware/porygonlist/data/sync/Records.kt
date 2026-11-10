@@ -98,7 +98,16 @@ internal object Records {
 
   fun bool(value: Boolean): String = if (value) "1" else "0"
 
-  private fun escape(s: String) = s.replace("\\", "\\\\").replace("|", "\\p").replace("\n", "\\n")
+  /**
+   * Both line breaks are escaped, because both readers split lines on a lone `\r` as well as `\n`.
+   * With only `\n` escaped, a name pasted with a Windows line ending cut its record in two, and the
+   * item, list or pairing it was in was gone at the next start.
+   *
+   * A build from before `\r` was escaped reads `\r` as a plain `r`, as it reads any escape it does
+   * not know: a stray letter in a name rather than a lost line.
+   */
+  private fun escape(s: String) =
+    s.replace("\\", "\\\\").replace("|", "\\p").replace("\n", "\\n").replace("\r", "\\r")
 
   private fun unescape(s: String): String {
     if (!s.contains('\\')) return s
@@ -111,6 +120,7 @@ internal object Records {
           '\\' -> out.append('\\')
           'p' -> out.append('|')
           'n' -> out.append('\n')
+          'r' -> out.append('\r')
           else -> out.append(s[i + 1])
         }
         i += 2

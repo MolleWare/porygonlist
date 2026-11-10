@@ -202,6 +202,119 @@ class SyncSessionTest {
   }
 
   @Test
+  fun `a paired phone not on this phone's copy can neither join nor change a list`() {
+    // Found in review, 2026-11-10: receive checked the sender against its own copy of the list, so
+    // a modified build that knew a list's id — `deviceId:counter`, guessable — could name itself on
+    // it, be merged in, and from then on be sent the list. Being on it is this phone's copy's to say.
+    val sam = DeviceId("SAMMMMMMMMMMMMMM")
+    val butter = item("${AVA.value}:1", "Butter", Hlc(1_000, 0, AVA))
+    val eggs = item("${AVA.value}:2", "Eggs", Hlc(1_000, 0, AVA))
+    val ava = Phone(AVA, 2_000, listOf(butter, eggs), pair)
+    ava.state = ava.state.copy(peers = ava.state.peers + TrustedPeer(sam, byteArrayOf(2), "Sam", 0))
+    val before = ava.list
+
+    val claimed = Hlc(5_000, 0, sam)
+    val forged =
+      before.copy(
+        name = "Mine now",
+        nameAt = claimed,
+        items =
+          listOf(
+            butter.copy(name = butter.name.set("Margarine", claimed)),
+            eggs.copy(removed = eggs.removed.set(true, claimed)),
+            item("${sam.value}:1", "Something of Sam's", claimed),
+          ),
+        people = before.withPersonLeft(HUGO, claimed).people + Person(sam, "Sam", "S", removed = Field(false, claimed)),
+      )
+    val result = ava.state.receive(SyncPayload(sam, claimed, listOf(forged)), ava.clock)
+    val after = (result as? SyncResult.Merged)?.state ?: ava.state
+
+    assertEquals("not joined", before.people, after.lists.single().people)
+    assertEquals("nothing changed", before.items, after.lists.single().items)
+    assertEquals("Weekly shop", after.lists.single().name)
+    assertNull("and not sent the list", after.payloadFor(sam, ava.clock))
+  }
+
+  @Test
+  fun `nor can it with a partial list`() {
+    val sam = DeviceId("SAMMMMMMMMMMMMMM")
+    val butter = item("${AVA.value}:1", "Butter", Hlc(1_000, 0, AVA))
+    val eggs = item("${AVA.value}:2", "Eggs", Hlc(1_000, 0, AVA))
+    val ava = Phone(AVA, 2_000, listOf(butter, eggs), pair)
+    ava.state = ava.state.copy(peers = ava.state.peers + TrustedPeer(sam, byteArrayOf(2), "Sam", 0))
+    val before = ava.list
+
+    // Only the changes, with the rest of the list said to be held — the shape a phone sends a peer
+    // it believes already has the list.
+    val claimed = Hlc(5_000, 0, sam)
+    val changes =
+      before.copy(
+        items = listOf(butter.copy(name = butter.name.set("Margarine", claimed)), eggs.copy(removed = eggs.removed.set(true, claimed))),
+        people = listOf(Person(sam, "Sam", "S", removed = Field(false, claimed))),
+      )
+    val payload = SyncPayload(sam, claimed, listOf(changes), held = mapOf(before.id to emptySet()))
+    val after = (ava.state.receive(SyncCodec.decode(SyncCodec.encode(payload))!!, ava.clock) as? SyncResult.Merged)?.state ?: ava.state
+
+    assertEquals("not joined", before.people, after.lists.single().people)
+    assertEquals("nothing changed", before.items, after.lists.single().items)
+    assertNull(after.payloadFor(sam, ava.clock))
+  }
+
+  // The ways onto and off a list that must still work with the sender checked against this copy.
+
+  @Test
+  fun `someone new gets on through the copy of someone already on it`() {
+    val sam = DeviceId("SAMMMMMMMMMMMMMM")
+    val ava = Phone(AVA, 2_000, emptyList(), pair)
+    ava.state = ava.state.copy(peers = ava.state.peers + TrustedPeer(sam, byteArrayOf(2), "Sam", 0))
+    val withSam = ava.list.withPersonAdded(sam, "Sam", Hlc(3_000, 0, HUGO))
+    val samsEdit = withSam.copy(items = listOf(item("${sam.value}:1", "Coffee", Hlc(3_500, 0, sam))))
+
+    // Sam's own copy first, before Hugo's has arrived: not yet.
+    val early = ava.state.receive(SyncPayload(sam, Hlc(3_500, 0, sam), listOf(samsEdit)), ava.clock)
+    assertTrue(((early as? SyncResult.Merged)?.state ?: ava.state).lists.single().items.isEmpty())
+
+    ava.state = (ava.state.receive(SyncPayload(HUGO, Hlc(3_000, 0, HUGO), listOf(withSam)), ava.clock) as SyncResult.Merged).state
+    ava.state = (ava.state.receive(SyncPayload(sam, Hlc(3_600, 0, sam), listOf(samsEdit)), ava.clock) as SyncResult.Merged).state
+
+    assertTrue("on the list", ava.list.personFor(sam)!!.present)
+    assertEquals(listOf("Coffee"), ava.list.liveItems.map { it.name.value })
+  }
+
+  @Test
+  fun `someone leaving is heard from their own phone`() {
+    val ava = Phone(AVA, 2_000, emptyList(), pair)
+    val hugoLeft = ava.list.withPersonLeft(HUGO, Hlc(3_000, 0, HUGO))
+
+    ava.state = (ava.state.receive(SyncPayload(HUGO, Hlc(3_000, 0, HUGO), listOf(hugoLeft)), ava.clock) as SyncResult.Merged).state
+
+    // Off the list; with nobody else left to tell, the record of it goes at once.
+    assertTrue(ava.list.people.none { it.wasEver(HUGO) && it.present })
+  }
+
+  @Test
+  fun `a replacement phone is heard from once someone on the list has introduced it`() {
+    val sam = DeviceId("SAMMMMMMMMMMMMMM")
+    val hugosNewPhone = DeviceId("HUGONEWAAAAAAAAA")
+    val three = pair + Person(sam, "Sam", "S")
+    val ava = Phone(AVA, 2_000, emptyList(), three)
+    ava.state = ava.state.copy(peers = ava.state.peers + TrustedPeer(hugosNewPhone, byteArrayOf(3), "Hugo", 0))
+    // Sam paired Hugo's new phone as the replacement for his old one, and sent it the list.
+    val samsCopy = ava.list.replaceDevice(HUGO, hugosNewPhone)
+    val fromNewPhone = samsCopy.copy(items = listOf(item("${hugosNewPhone.value}:1", "Tea", Hlc(3_500, 0, hugosNewPhone))))
+
+    val early = ava.state.receive(SyncPayload(hugosNewPhone, Hlc(3_500, 0, hugosNewPhone), listOf(fromNewPhone)), ava.clock)
+    assertTrue(((early as? SyncResult.Merged)?.state ?: ava.state).lists.single().items.isEmpty())
+
+    ava.state = (ava.state.receive(SyncPayload(sam, Hlc(3_000, 0, sam), listOf(samsCopy)), ava.clock) as SyncResult.Merged).state
+    ava.state =
+      (ava.state.receive(SyncPayload(hugosNewPhone, Hlc(3_600, 0, hugosNewPhone), listOf(fromNewPhone)), ava.clock) as SyncResult.Merged).state
+
+    assertEquals(hugosNewPhone, ava.list.personFor(HUGO)!!.device)
+    assertEquals(listOf("Tea"), ava.list.liveItems.map { it.name.value })
+  }
+
+  @Test
   fun `a list naming this phone arrives whole`() {
     // The invitation case: a paired phone sends a list this one has never seen, with this one on
     // it. That is someone sharing a list, and it is the whole point of the exchange.

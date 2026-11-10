@@ -430,6 +430,30 @@ class PorygonViewModelTest {
     assertTrue("nothing was merged", state().visibleLists.any { it.id == from.id })
   }
 
+  @Test
+  fun `names pasted with line breaks are kept on one line`() = runTest(dispatcher) {
+    repo.load()
+
+    // A Windows line ending, as a paste from a computer brings it.
+    vm.onNameDraftChange("Hugo\r\n")
+    vm.saveName()
+    vm.onListDraftChange("Hardware\r\nshop")
+    vm.createList()
+    val made = state().activeList.name
+    vm.addItem("Wood\rglue")
+    vm.openEditSheet(state().activeList.liveItems.single(), addedBy = "you")
+    vm.onSheetNameChange("Wood\r\nglue\r\n")
+    vm.saveSheet()
+    vm.startRename(state().activeList)
+    vm.onRenameDraftChange("DIY\tshop\r")
+    vm.saveRename()
+
+    assertEquals("Hugo", state().displayName)
+    assertEquals("Hardware shop", made)
+    assertEquals("DIY shop", state().activeList.name)
+    assertEquals(listOf("Wood glue"), state().activeList.liveItems.map { it.name.value })
+  }
+
   // ── Staples ───────────────────────────────────────────────────────────────
 
   @Test
@@ -1589,6 +1613,58 @@ class PorygonViewModelTest {
   }
 
   @Test
+  fun `merging a card already merged on the other phone changes nothing`() = runTest(dispatcher) {
+    repo.load()
+    val (mine, theirs) = putBothOnList()
+    mergedOnTheOtherPhone(mine, theirs)
+
+    vm.mergeConflict(Conflict(mine, theirs))
+
+    val rice = state().activeList.liveItems.filter { it.name.value == "Rice" }
+    assertEquals("one merged entry, not two", 1, rice.size)
+    assertEquals(3, rice.single().qty.value)
+  }
+
+  @Test
+  fun `keeping both of a card already merged on the other phone changes nothing`() = runTest(dispatcher) {
+    repo.load()
+    val (mine, theirs) = putBothOnList()
+    mergedOnTheOtherPhone(mine, theirs)
+    val before = state().activeList.items
+
+    vm.keepBoth(Conflict(mine, theirs))
+
+    assertEquals(before, state().activeList.items)
+  }
+
+  /** What arrives when the other phone answered the same card with Merge: both gone, one merged item. */
+  private fun mergedOnTheOtherPhone(mine: GroceryItem, theirs: GroceryItem) {
+    val theirDevice = theirs.id.value.substringBefore(':')
+    val stamp = Hlc(1_700_000_002_000, 0, theirs.createdBy)
+    repo.update { s, _ ->
+      s.copy(
+        lists =
+          s.lists.map { list ->
+            if (list.id != s.activeListId) list
+            else
+              list.copy(
+                items =
+                  list.items.map { if (it.id == mine.id || it.id == theirs.id) it.copy(removed = it.removed.set(true, stamp)) else it } +
+                    GroceryItem(
+                      id = ItemId("$theirDevice:901"),
+                      name = Field("Rice", stamp),
+                      qty = Field(3, stamp),
+                      checkedAt = stamp,
+                      removed = Field(false, stamp),
+                      origin = Origin.MERGED,
+                    )
+              )
+          }
+      )
+    }
+  }
+
+  @Test
   fun `answering one card leaves the others waiting`() = runTest(dispatcher) {
     repo.load()
     val eggs = state().conflicts.single()
@@ -1654,6 +1730,16 @@ class PorygonViewModelTest {
     assertEquals("Ava", vm.pendingInvite?.displayName)
     assertEquals("", vm.pairNote)
     assertTrue("nothing is trusted until it is acted on", state().peers.isEmpty())
+  }
+
+  @Test
+  fun `a name with a line break in a code comes in on one line`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.onPairCodeChange(otherPhone("Ava\r\nB."))
+    vm.pairAsNew()
+
+    assertEquals("Ava B.", state().peers.single().name)
   }
 
   @Test

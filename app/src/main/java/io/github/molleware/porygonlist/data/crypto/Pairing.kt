@@ -1,5 +1,6 @@
 package io.github.molleware.porygonlist.data.crypto
 
+import io.github.molleware.porygonlist.data.plainName
 import io.github.molleware.porygonlist.data.sync.DeviceId
 import java.util.Base64
 
@@ -238,7 +239,8 @@ object PairingCodec {
     return runCatching {
         val publicKey = decoder.decode(parts[1])
         if (publicKey.isEmpty()) return null
-        val name = String(decoder.decode(parts[2]))
+        // On one line, like every name typed here: it is stored, and goes on every list they join.
+        val name = plainName(String(decoder.decode(parts[2])))
         PairingInvite(deviceId = DeviceIdentity.deviceIdFor(publicKey), publicKey = publicKey, displayName = name)
       }
       .getOrNull()

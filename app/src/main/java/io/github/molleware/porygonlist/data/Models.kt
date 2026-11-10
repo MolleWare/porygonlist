@@ -100,6 +100,18 @@ data class Person(
 fun initialOf(name: String): String = name.trim().firstOrNull()?.uppercase().orEmpty()
 
 /**
+ * A name as typed or pasted, on one line: line breaks, tabs and other control characters become a
+ * space, and the ends are trimmed.
+ *
+ * A name is shown on one line everywhere, and a pasted one can carry a Windows line ending. Every
+ * name a person or a pairing code gives goes through here — items, lists, the owner, a paired phone,
+ * a network — so none of them reaches the save file or a peer with a line break in it.
+ */
+fun plainName(typed: String): String = typed.replace(CONTROL_CHARACTERS, " ").trim()
+
+private val CONTROL_CHARACTERS = Regex("\\p{Cntrl}+")
+
+/**
  * One line on a list.
  *
  * [name] and [qty] are [Field]s rather than plain values: those are the two things a person types,
@@ -376,6 +388,17 @@ data class GroceryList(
     people.filter { it.present }.map { it.device }.filterNot { it == localDevice }
 
   /**
+   * Whether anyone besides [localDevice] still has to hear from this phone about this list: someone
+   * on it, or someone taken off it whose own phone has yet to confirm — see [mustHear].
+   *
+   * [peersOf] alone is not enough to decide that deleting a list is leaving it. Straight after "Stop
+   * sharing" nobody else is on the list, but the removed phone still holds it with this one on it,
+   * and dropping the list here would let its next payload bring the list back as an invitation.
+   */
+  fun sharedBeyond(localDevice: DeviceId): Boolean =
+    peersOf(localDevice).isNotEmpty() || people.any { !it.present && mustHear(it, localDevice) != null }
+
+  /**
    * Records that [person] moved to a new phone.
    *
    * The old id moves to [Person.formerDevices] rather than being erased — everything it authored
@@ -454,17 +477,20 @@ data class GroceryList(
     asked: Set<ItemId> = emptySet(),
   ): GroceryList {
     val peers = peersOf(localDevice)
+    // Someone off the list is collected on the same terms as a removed item: once everyone who has
+    // to hear it has confirmed, nobody is left holding a copy that says otherwise.
+    fun collectable(person: Person) =
+      person.removed.value && log.deliveredToAll(person.removalKnownAt, peers + listOfNotNull(mustHear(person, localDevice)))
+    // This phone's own leaving waits for anyone else's removal still owed to their phone. The list
+    // goes when this phone's leaving does, and until then it is what carries the removal to them.
+    val removalStillOwed =
+      people.any { !it.present && !it.wasEver(localDevice) && mustHear(it, localDevice) != null && !collectable(it) }
     return copy(
       // With nobody to deliver to there is nothing to wait for, and a solo list keeps no tombstones.
       items =
         if (peers.isEmpty()) liveItems
         else items.filterNot { it.id !in asked && it.removed.value && log.deliveredToAll(it.removalKnownAt, peers) },
-      // Someone off the list is collected on the same terms as a removed item: once everyone who has
-      // to hear it has confirmed, nobody is left holding a copy that says otherwise.
-      people =
-        people.filterNot { person ->
-          person.removed.value && log.deliveredToAll(person.removalKnownAt, peers + listOfNotNull(mustHear(person, localDevice)))
-        },
+      people = people.filterNot { collectable(it) && !(it.wasEver(localDevice) && removalStillOwed) },
     )
   }
 
@@ -703,7 +729,7 @@ data class Recipe(val name: String, val ingredients: List<Ingredient>) {
      * with both quantities, matched the way an item already on a list is. "0 eggs" still means eggs.
      */
     fun of(name: String, ingredients: String): Recipe? {
-      val trimmed = name.trim()
+      val trimmed = plainName(name)
       if (trimmed.isEmpty()) return null
       val parsed =
         ShareCodec.decode(ingredients)
@@ -754,15 +780,32 @@ data class Conflict(
   /**
    * Whether the question has been overtaken: somebody has since edited the item knowing about it —
    * answered the same card on the other phone, or simply changed it again. Asking then would be
-   * about a choice that no longer exists.
+   * about a choice that no longer exists. A duplicate is overtaken once either item is off the list.
    */
   fun isStaleOn(list: GroceryList?): Boolean {
-    if (kind != ConflictKind.EDITED) return false
+    if (kind == ConflictKind.DUPLICATE) return duplicateAnsweredOn(list)
     if (list == null) return true
     // Gone altogether means a removal was collected once everyone had heard it — which says nothing
     // about whether the person wanted it kept. The question still stands; see withVersionKept.
     val now = list.items.firstOrNull { it.id == yours.id } ?: return false
     return maxOf(now.name.at, now.qty.at, now.removed.at) > sidesTouched
+  }
+
+  /**
+   * Whether "you both added this" has been answered: either item is off the list, or gone from it.
+   *
+   * Merge takes both off and adds one, so that is what arrives from the other phone when it was
+   * answered there. Left open, the same card answered here as well merged again: a second merged
+   * item, the total doubled, and the two merged items a new card (found in review, 2026-11-10).
+   *
+   * A card with neither item on the list holds them itself, as cards did before their two sides
+   * were put on the list. That is still a question, and keeping both puts them there.
+   */
+  private fun duplicateAnsweredOn(list: GroceryList?): Boolean {
+    if (list == null) return true
+    val sides = listOf(yours.id, theirs.id).map { id -> list.items.firstOrNull { it.id == id } }
+    if (sides.all { it == null }) return false
+    return sides.any { it == null || it.removed.value }
   }
 }
 
@@ -914,13 +957,15 @@ data class AppState(
    */
   fun withoutList(id: ListId, at: Hlc): AppState {
     val going = lists.firstOrNull { it.id == id }
-    val shared = going != null && going.peersOf(localDevice).isNotEmpty()
+    val shared = going != null && going.sharedBeyond(localDevice)
 
     val kept =
       if (shared) {
-        // Someone else is on it, so this is leaving rather than deleting. The list stays, hidden,
-        // until every one of them has heard — see pruneDeliveredTombstones. Dropping it outright
-        // would leave them waiting for ever on a phone that had simply stopped caring.
+        // Someone else is on it, or was taken off it and has yet to hear, so this is leaving rather
+        // than deleting. The list stays, hidden, until every one of them has heard — see
+        // pruneDeliveredTombstones. Dropping it outright would leave them waiting for ever on a
+        // phone that had simply stopped caring, and a removed phone that never heard would bring
+        // the list back with its next payload, as an invitation.
         lists.map { if (it.id == id) it.withPersonLeft(localDevice, at) else it }
       } else {
         lists.filterNot { it.id == id }
@@ -1064,7 +1109,7 @@ data class AppState(
    * Stamped [at], so the rename travels: every other phone on those lists takes the newer name.
    */
   fun withDisplayName(name: String, at: Hlc): AppState {
-    val trimmed = name.trim()
+    val trimmed = plainName(name)
     if (trimmed.isEmpty()) return this
     return copy(displayName = trimmed, displayNameAt = at, lists = lists.map { it.withOwnName(localDevice, trimmed, at) })
   }
@@ -1166,20 +1211,22 @@ data class AppState(
   fun pruneDeliveredTombstones(): AppState =
     copy(
       lists =
-        lists
-          .map { list ->
-            val asked = openConflictsOn(list.id).filter { it.kind == ConflictKind.EDITED }.map { it.yours.id }.toSet()
-            list.pruneDelivered(deliveredTo, localDevice, asked = asked)
-          }
+        lists.mapNotNull { list ->
+          val asked = openConflictsOn(list.id).filter { it.kind == ConflictKind.EDITED }.map { it.yours.id }.toSet()
+          val pruned = list.pruneDelivered(deliveredTo, localDevice, asked = asked)
           // A list this phone has left is kept, and kept being sent, for exactly as long as its own
           // leaving tombstone survives — that is what carries the news. Once the tombstone has been
           // collected above, everyone has heard, and the list can finally go. Dropping it any
           // earlier would leave the others waiting on a phone that had quietly stopped answering.
           //
-          // Guarded on there being somebody else named, because this runs on every load and a list
-          // nobody is on at all is a state nothing should produce. If one ever appears, keeping it
-          // is recoverable and deleting somebody's groceries is not.
-          .filterNot { list -> list.people.isNotEmpty() && list.people.none { it.wasEver(localDevice) } },
+          // That includes the tombstone going in the same pass as the last person's removal it
+          // waited for, which leaves nobody on the list at all. Otherwise a list nobody is on is
+          // kept, because this runs on every load and that is a state nothing should produce. If
+          // one ever appears, keeping it is recoverable and deleting somebody's groceries is not.
+          val leftAndHeard = list.people.any { it.wasEver(localDevice) } && pruned.people.none { it.wasEver(localDevice) }
+          val notOnIt = pruned.people.isNotEmpty() && pruned.people.none { it.wasEver(localDevice) }
+          pruned.takeUnless { leftAndHeard || notOnIt }
+        },
       deliveredTo = deliveredTo.retaining(knownPeers()),
     )
 

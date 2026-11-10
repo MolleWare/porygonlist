@@ -40,8 +40,13 @@
       as it did before it existed — see WifiName and docs/ARCHITECTURE.md.
 
       maxSdkVersion is not set and must not be: the requirement runs to current Android.
+
+      Approximate location is declared beside it because Android 12 and later refuse a request for
+      precise location alone, without showing a dialog. Approximate on its own does not read the
+      name; only precise does. See WifiName.permissions.
     -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!--
       Lets background sync carry on after a reboot. Normal protection level: granted at install, no

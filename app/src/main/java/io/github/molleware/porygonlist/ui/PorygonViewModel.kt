@@ -18,6 +18,7 @@ import io.github.molleware.porygonlist.data.Ingredient
 import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.ListRepository
 import io.github.molleware.porygonlist.data.initialOf
+import io.github.molleware.porygonlist.data.plainName
 import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PairingCodec
@@ -286,7 +287,7 @@ class PorygonViewModel(
    * dims it rather than explaining itself.
    */
   fun saveName() {
-    val name = nameDraft.trim()
+    val name = plainName(nameDraft)
     if (name.isEmpty()) return
     repo.update { s, node -> s.withDisplayName(name, node.clock.tick()) }
     nameDraft = ""
@@ -792,7 +793,7 @@ class PorygonViewModel(
    * straight away, because nobody makes a list in order to go on looking at the old one.
    */
   fun createList() {
-    val name = listDraft.trim()
+    val name = plainName(listDraft)
     if (name.isEmpty()) return
     repo.update { s, node ->
       // Minted, never derived from what is already here. A local `max + 1` meant both phones called
@@ -830,7 +831,7 @@ class PorygonViewModel(
   /** Renames a list, stamped with [GroceryList.nameAt] so the newer rename wins on merge. */
   fun saveRename() {
     val id = renamingList ?: return
-    val name = renameDraft.trim()
+    val name = plainName(renameDraft)
     if (name.isNotEmpty()) {
       repo.update { s, node ->
         s.copy(lists = s.lists.map { if (it.id == id) it.copy(name = name, nameAt = node.clock.tick()) else it })
@@ -1095,7 +1096,7 @@ class PorygonViewModel(
               else {
                 // Each field records what it was written against, so a peer can later tell an edit
                 // made in knowledge of theirs from one made blind.
-                val newName = d.name.trim().ifEmpty { item.name.value }
+                val newName = plainName(d.name).ifEmpty { item.name.value }
                 item.copy(
                   name = if (newName == item.name.value) item.name else item.name.set(newName, stamp),
                   qty = if (d.qty == item.qty.value) item.qty else item.qty.set(d.qty, stamp),
@@ -1180,7 +1181,7 @@ class PorygonViewModel(
    * that name, on any list, gives way to it, and the name is no longer unwanted anywhere.
    */
   fun addStaple() {
-    val name = stapleDraft.trim()
+    val name = plainName(stapleDraft)
     if (name.isEmpty()) return
     repo.update { s, _ -> s.withHandMadeStaple(name) }
     stapleDraft = ""
@@ -1394,7 +1395,7 @@ class PorygonViewModel(
   /** A new recipe of the selection, refused as the recipe form refuses: blank, or a name taken. */
   fun saveSelectionAsRecipe() {
     val s = state.value ?: return
-    val name = historyRecipeName.trim()
+    val name = plainName(historyRecipeName)
     val taken = s.recipeNamed(name)
     historyRecipeNote =
       when {
@@ -1437,6 +1438,9 @@ class PorygonViewModel(
    * straight back — and the person would have merged nothing.
    */
   fun mergeConflict(card: Conflict) = repo.update { s, node ->
+    // Asked of the state as it is now, inside the update: a card answered on the other phone has
+    // both items off the list by the time its change arrives, and is no longer open — see
+    // Conflict.isStaleOn. Merging it again would add a second merged item.
     val c = s.openConflict(card)?.takeIf { it.kind == ConflictKind.DUPLICATE } ?: return@update s
     val stamp = node.clock.tick()
     // For every recipe either was for: two people each adding eggs for their own dish still need both.
@@ -1591,7 +1595,7 @@ class PorygonViewModel(
 
   fun saveNetworkName() {
     val fingerprint = namingNetwork ?: return
-    val name = networkNameDraft.trim()
+    val name = plainName(networkNameDraft)
     if (name.isNotEmpty()) {
       repo.update { s, _ ->
         s.copy(networks = s.networks.map { if (it.fingerprint == fingerprint) it.copy(name = name) else it })
@@ -1712,7 +1716,8 @@ class PorygonViewModel(
     origin: Origin = Origin.LOCAL,
     forRecipe: String? = null,
   ): AppState {
-    val trimmed = name.trim()
+    val trimmed = plainName(name)
+    if (trimmed.isEmpty()) return this
     val folded = WordTrie.fold(trimmed)
     val existing = activeList.liveItems.firstOrNull { !it.checked && WordTrie.fold(it.name.value) == folded }
 
