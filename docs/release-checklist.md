@@ -864,7 +864,11 @@ checks are for the next build.
       now, and typed names lose control characters (`ca6df24`, `LineBreaksInNamesTest`).
 - [x] **"Use the wifi's own name" did nothing on Android 12 and later.** Precise location alone is
       refused without a dialog; approximate is declared and asked for beside it, and only precise
-      counts (`8230988`, `WifiNameTest`, device check 11).
+      counts (`8230988`, `WifiNameTest`, device check 11). *Seen on Ava's S24 FE (Android 17,
+      One UI), 2026-11-10, a copy of `33df495` installed beside her app: the dialog with Precise and
+      Approximate; Approximate kept the button and showed no name; a second tap offered "Change to
+      precise location", and then the wifi's real name showed and the button went. Her 14 lists backed up
+      first (`ava-2026-11-10/`), the copy uninstalled after.*
 - [x] **Deleting a list straight after "Stop sharing" brought it back, shared again.** The removed
       phone's next payload arrived as an invitation. Delete now leaves the list while a removal is
       still owed, and the list waits for it (`2feea93`, `RemovingSomeoneTest`).
@@ -881,6 +885,20 @@ checks are for the next build.
       tombstones on that ack while the listener had dropped the payload. Backported from `next`
       (`630ecd8`): once read whole, the payload is applied whatever happens to the line
       (`SyncExchangeTest`).
+- [x] **A pairing link reopened the pairing screen whenever the activity was recreated** (`7ecc422`).
+      *Ava's S24 FE, 2026-11-10, a copy of `1f59d35`: paired with a fake phone from its link, went
+      to Lists, rotated to landscape and back: still on Lists, no pairing screen.*
+- [x] **With no lists, a pasted list was dropped without a word** (`52d645c`). *Same phone: "2
+      eggs, milk, bread" pasted with no list made "Pasted list" holding Eggs ×2, Milk and Bread.*
+- [x] **Unpair was one tap, and every button read "Unpair"** (`08116c3`). *Same phone: "Unpair
+      Sam" asked "Unpair Sam?" with "No lists are shared with Sam."; Keep kept him paired.*
+- [x] **The keyboard's Done on a pasted code answered "someone new"** (`30a972b`). *Same phone,
+      Sam on a list, a second fake phone's code pasted: the keyboard's Done did nothing, the card
+      kept "Add Newphone" and "This is Sam's new phone", and nothing paired.*
+- [x] **Her own app updated in place to the fixes**, lists and pairing kept. *Ava's S24 FE,
+      2026-11-10 07:06, `18442bb` over the build of 2026-10-27: opened straight on her lists,
+      still "Waiting for Hugo & hugo"; her 14 lists read back identical to the morning's backup
+      (`ava-2026-11-10/` against `ava-2026-11-10-after-install/`).*
 
 Known in 0.1.0, fixed only in 0.2.0 on `next`:
 
