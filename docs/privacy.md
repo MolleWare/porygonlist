@@ -51,8 +51,8 @@ it goes wherever you send that message, through the messaging app you choose.
   precise shows the name. The app never reads your location, and works fully if you say no.
 - **Run at startup**, so background sync on your approved wifi carries on after a restart.
 - **Alarms (optional)**, to wake on the exact quarter hour, so closed phones sync at the same moment.
-- **Foreground service**, to stay on the wifi for the half minute of a background sync. A quiet
-  notification shows while it runs.
+- **Foreground service**, to stay on the wifi for the half minute of a background sync. Android may
+  show a quiet notification while it runs.
 
 ## Backups
 
