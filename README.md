@@ -10,10 +10,10 @@ when they are together on a local network you have approved, and nothing leaves
 the phone anywhere else. Away from a shared network, a list can be sent as a
 single line of text that the other person pastes straight back in.
 
-**Status: working towards a first release, 0.1.0.** Two phones pair by
-scanning a code and keep shared lists in step over an approved wifi, including
-for a moment every quarter of an hour with the app closed. There is no release
-to install yet; what stands between here and one is in
+**Status: 0.1.0 is the first release.** Two phones pair by scanning a code and
+keep shared lists in step over an approved wifi, including for a moment every
+quarter of an hour with the app closed. It is headed for F-Droid and the Play
+Store; how it gets there is in
 [docs/release-checklist.md](docs/release-checklist.md).
 
 What works: multiple lists shared with whoever you choose, adding, ticking,
@@ -48,13 +48,22 @@ belongs in a tracked file.
 
 ```sh
 ./scripts/build.sh              # debug APK
-./scripts/build.sh release      # release APK (unsigned, R8 enabled)
+./scripts/build.sh release      # release APK, R8 enabled (see below for signing)
 ./scripts/build.sh all          # both
 
 ./scripts/test.sh               # unit tests, no device needed
 ./scripts/test.sh instrumented  # on-device tests, phone must be connected
 ./scripts/test.sh lint          # Android lint
 ```
+
+A release build is signed when `keystore.properties` exists (see
+`keystore.properties.example`), and asks for the key's password unless that
+file holds it; without the file it is unsigned. Signing happens on the host,
+never in the container below.
+
+**`./scripts/test.sh instrumented` uninstalls the app when it finishes**, and
+takes that phone's lists and its identity with it: pairings with it break. Run
+it on a phone whose lists you can lose, and before anything you set up by hand.
 
 The scripts are thin wrappers over Gradle that check the toolchain first, so a
 wrong JDK or a missing device fails immediately with a useful message instead
