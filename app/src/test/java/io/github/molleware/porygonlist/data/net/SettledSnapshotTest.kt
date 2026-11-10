@@ -12,7 +12,7 @@ import org.junit.Test
 class SettledSnapshotTest {
 
   private val home =
-    NetworkSnapshot(NetworkFingerprint("a3f91c000000"), isWifi = true, isUsable = true, address = "192.168.1.93")
+    NetworkSnapshot(NetworkFingerprint("a3f91c000000"), isWifi = true, isUsable = true, address = "192.0.2.20")
 
   @Test
   fun `a network that shows up a moment later is the one used`() = runTest {

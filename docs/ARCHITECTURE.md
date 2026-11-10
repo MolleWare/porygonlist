@@ -63,7 +63,7 @@ flowchart TD
   B --> C[Private key stays<br/>inside the keystore]
   B --> D[Public key<br/>X.509 SPKI]
   D --> E[SHA-256, first 80 bits<br/>base32 → DeviceId]
-  E --> F[16 characters<br/>e.g. AVPQ3K7MZR2XT4WN]
+  E --> F[16 characters<br/>e.g. ABCDEFGHIJ234567]
 ```
 
 `DeviceId` is *derived*, never chosen. Claiming an id requires holding the key

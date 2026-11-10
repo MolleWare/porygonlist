@@ -20,7 +20,7 @@ class PeerAddressBookTest {
     dir.deleteRecursively()
   }
 
-  private val ava = ServiceRecord(DeviceId("VJPUMTYCQR4KXVCX"), "192.168.1.151", 38623)
+  private val ava = ServiceRecord(DeviceId("AVAAAAAAAAAAAAAA"), "192.0.2.10", 8931)
 
   @Test
   fun `what one process kept, the next one reads`() {
