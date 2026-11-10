@@ -543,15 +543,32 @@ data class Conflict(
   /**
    * Whether the question has been overtaken: somebody has since edited the item knowing about it —
    * answered the same card on the other phone, or simply changed it again. Asking then would be
-   * about a choice that no longer exists.
+   * about a choice that no longer exists. A duplicate is overtaken once either item is off the list.
    */
   fun isStaleOn(list: GroceryList?): Boolean {
-    if (kind != ConflictKind.EDITED) return false
+    if (kind == ConflictKind.DUPLICATE) return duplicateAnsweredOn(list)
     if (list == null) return true
     // Gone altogether means a removal was collected once everyone had heard it — which says nothing
     // about whether the person wanted it kept. The question still stands; see withVersionKept.
     val now = list.items.firstOrNull { it.id == yours.id } ?: return false
     return maxOf(now.name.at, now.qty.at, now.removed.at) > sidesTouched
+  }
+
+  /**
+   * Whether "you both added this" has been answered: either item is off the list, or gone from it.
+   *
+   * Merge takes both off and adds one, so that is what arrives from the other phone when it was
+   * answered there. Left open, the same card answered here as well merged again: a second merged
+   * item, the total doubled, and the two merged items a new card (found in review, 2026-11-10).
+   *
+   * A card with neither item on the list holds them itself, as cards did before their two sides
+   * were put on the list. That is still a question, and keeping both puts them there.
+   */
+  private fun duplicateAnsweredOn(list: GroceryList?): Boolean {
+    if (list == null) return true
+    val sides = listOf(yours.id, theirs.id).map { id -> list.items.firstOrNull { it.id == id } }
+    if (sides.all { it == null }) return false
+    return sides.any { it == null || it.removed.value }
   }
 }
 

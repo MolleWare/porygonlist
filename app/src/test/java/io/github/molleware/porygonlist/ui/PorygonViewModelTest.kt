@@ -854,6 +854,58 @@ class PorygonViewModelTest {
   }
 
   @Test
+  fun `merging a card already merged on the other phone changes nothing`() = runTest(dispatcher) {
+    repo.load()
+    val (mine, theirs) = putBothOnList()
+    mergedOnTheOtherPhone(mine, theirs)
+
+    vm.mergeConflict(Conflict(mine, theirs))
+
+    val rice = state().activeList.liveItems.filter { it.name.value == "Rice" }
+    assertEquals("one merged entry, not two", 1, rice.size)
+    assertEquals(3, rice.single().qty.value)
+  }
+
+  @Test
+  fun `keeping both of a card already merged on the other phone changes nothing`() = runTest(dispatcher) {
+    repo.load()
+    val (mine, theirs) = putBothOnList()
+    mergedOnTheOtherPhone(mine, theirs)
+    val before = state().activeList.items
+
+    vm.keepBoth(Conflict(mine, theirs))
+
+    assertEquals(before, state().activeList.items)
+  }
+
+  /** What arrives when the other phone answered the same card with Merge: both gone, one merged item. */
+  private fun mergedOnTheOtherPhone(mine: GroceryItem, theirs: GroceryItem) {
+    val theirDevice = theirs.id.value.substringBefore(':')
+    val stamp = Hlc(1_700_000_002_000, 0, theirs.createdBy)
+    repo.update { s, _ ->
+      s.copy(
+        lists =
+          s.lists.map { list ->
+            if (list.id != s.activeListId) list
+            else
+              list.copy(
+                items =
+                  list.items.map { if (it.id == mine.id || it.id == theirs.id) it.copy(removed = it.removed.set(true, stamp)) else it } +
+                    GroceryItem(
+                      id = ItemId("$theirDevice:901"),
+                      name = Field("Rice", stamp),
+                      qty = Field(3, stamp),
+                      checkedAt = stamp,
+                      removed = Field(false, stamp),
+                      origin = Origin.MERGED,
+                    )
+              )
+          }
+      )
+    }
+  }
+
+  @Test
   fun `answering one card leaves the others waiting`() = runTest(dispatcher) {
     repo.load()
     val eggs = state().conflicts.single()

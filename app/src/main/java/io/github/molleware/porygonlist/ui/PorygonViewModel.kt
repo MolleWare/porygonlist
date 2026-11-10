@@ -1112,6 +1112,9 @@ class PorygonViewModel(
    * straight back — and the person would have merged nothing.
    */
   fun mergeConflict(card: Conflict) = repo.update { s, node ->
+    // Asked of the state as it is now, inside the update: a card answered on the other phone has
+    // both items off the list by the time its change arrives, and is no longer open — see
+    // Conflict.isStaleOn. Merging it again would add a second merged item.
     val c = s.openConflict(card)?.takeIf { it.kind == ConflictKind.DUPLICATE } ?: return@update s
     val stamp = node.clock.tick()
     val merged = node.newItem(c.itemName, qty = c.yours.qty.value + c.theirs.qty.value, origin = Origin.MERGED)

@@ -1,10 +1,12 @@
 package io.github.molleware.porygonlist.data.sync
 
+import io.github.molleware.porygonlist.data.Conflict
 import io.github.molleware.porygonlist.data.GroceryItem
 import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.Person
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -145,5 +147,37 @@ class DuplicateTest {
     val theirs = item("${HUGO.value}:1", "Butter", at = stamp(2_000, HUGO))
 
     assertTrue(merge(list(myRice), list(theirs)).duplicates.isEmpty())
+  }
+
+  // ── Answered elsewhere ────────────────────────────────────────────────────
+  // Found in review, 2026-11-10: Hugo merged the two rices, and Ava's card stayed open after his
+  // change arrived. Merging there too made a second merged item, the total doubled, and the two
+  // merged items were a new card.
+
+  private val card = Conflict(myRice, theirRice, listId = ListId("list:1"))
+
+  @Test
+  fun `a duplicate card is open while both items are on the list`() {
+    assertFalse(card.isStaleOn(list(myRice, theirRice)))
+  }
+
+  @Test
+  fun `a duplicate card closes once either item is taken off`() {
+    val gone = stamp(3_000, HUGO)
+
+    assertTrue(card.isStaleOn(list(myRice.copy(removed = myRice.removed.set(true, gone)), theirRice)))
+    assertTrue(card.isStaleOn(list(myRice, theirRice.copy(removed = theirRice.removed.set(true, gone)))))
+  }
+
+  @Test
+  fun `a duplicate card closes once either item is gone from the list`() {
+    assertTrue(card.isStaleOn(list(myRice)))
+    assertTrue(card.isStaleOn(list(theirRice)))
+    assertTrue("and with the list itself", card.isStaleOn(null))
+  }
+
+  @Test
+  fun `a card that holds both items itself, from before they were put on the list, still stands`() {
+    assertFalse(card.isStaleOn(list()))
   }
 }
