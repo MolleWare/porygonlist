@@ -74,6 +74,20 @@ class FileListRepository(
   private val writeLock = Mutex()
   private var pendingWrite: Job? = null
 
+  /**
+   * Held for every change to the state: read, transform, set, and the save that follows.
+   *
+   * Changes come from the main thread (taps) and from sync threads (a payload merged as it arrives),
+   * and without this two at once each read the same state and one of them was lost — at worst a
+   * payload's merge after its ack had gone, so the peer collected its tombstones and the removed
+   * items came back here. A lock rather than a retry, because a transform ticks the clock and mints
+   * ids: run twice, it would spend them twice. Transforms are pure and quick, so it is never held long.
+   */
+  private val lock = Any()
+
+  /** Two callers of [load] at once would each set a node, and the second would hand out ids again. */
+  private val loading = Mutex()
+
   @Volatile private var node: LocalNode? = null
 
   /**
@@ -93,7 +107,9 @@ class FileListRepository(
   /** Set once [unreadable] has been brought back: it goes after the save holding its lists lands. */
   @Volatile private var unreadableRecovered = false
 
-  override suspend fun load() {
+  override suspend fun load() = loading.withLock { loadOnce() }
+
+  private suspend fun loadOnce() {
     if (_state.value != null) return
     val me = identity().deviceId
     val (restored, anySave, skipped) = withContext(io) { newestReadable() }
@@ -102,10 +118,7 @@ class FileListRepository(
     // keystore entry was cleared — the old items are unattributable, so start clean rather than
     // claim authorship of them.
     if (restored != null && restored.localDevice != me) {
-      val fresh = AppState.empty(localDevice = me)
-      node = fresh.toNode()
-      _state.value = fresh
-      schedulePersist(fresh)
+      publish(AppState.empty(localDevice = me))
       return
     }
 
@@ -126,9 +139,7 @@ class FileListRepository(
         }
       val recovered = withContext(io) { retryUnreadable(settled) }
       val loaded = recovered ?: settled
-      node = loaded.toNode()
-      _state.value = loaded
-      if (loaded != restored) schedulePersist(loaded)
+      publish(loaded, save = loaded != restored)
       return
     }
 
@@ -145,10 +156,16 @@ class FileListRepository(
         withContext(io) { setAsideUnreadable() }
         AppState.empty(localDevice = me).let { it.copy(idCounter = it.clockHead.wall) }
       }
-    node = blank.toNode()
-    _state.value = blank
-    schedulePersist(blank)
+    publish(blank)
   }
+
+  /** Puts a freshly read or freshly started state in place, with a node resumed from it. */
+  private fun publish(state: AppState, save: Boolean = true) =
+    synchronized(lock) {
+      node = state.toNode()
+      _state.value = state
+      if (save) schedulePersist()
+    }
 
   /**
    * The newest save that decodes, whether there was any save at all, and the newer saves passed
@@ -189,27 +206,30 @@ class FileListRepository(
   override suspend fun reset() {
     // Any save still in flight belongs to the phone that has just ceased to exist; letting it land
     // would put the old state back on disk moments after it was deleted. The earlier saves and any
-    // set-aside file go with it: they were authored by the same vanished device.
-    pendingWrite?.cancel()
-    unreadableRecovered = false
+    // set-aside file go with it: they were authored by the same vanished device. The fresh state is
+    // in place first, so no change made meanwhile is a change to the old one, and any save that
+    // does land is of the fresh state.
+    synchronized(lock) {
+      pendingWrite?.cancel()
+      unreadableRecovered = false
+      publish(AppState.empty(localDevice = identity().deviceId), save = false)
+    }
     withContext(io) { writeLock.withLock { (listOf(file, unreadable) + previous).forEach { runCatching { it.delete() } } } }
-
-    val fresh = AppState.empty(localDevice = identity().deviceId)
-    node = fresh.toNode()
-    _state.value = fresh
-    schedulePersist(fresh)
+    synchronized(lock) { schedulePersist() }
   }
 
   override fun update(transform: (AppState, LocalNode) -> AppState) {
-    val current = _state.value ?: return
-    val localNode = node ?: return
+    synchronized(lock) {
+      val current = _state.value ?: return
+      val localNode = node ?: return
 
-    // The node advances as the transform mints ids and stamps; its new positions are folded back in
-    // so that what gets written to disk can always be resumed from.
-    val next = transform(current, localNode).copy(idCounter = localNode.ids.peek(), clockHead = localNode.clock.head())
-    if (next == current) return
-    _state.value = next
-    schedulePersist(next)
+      // The node advances as the transform mints ids and stamps; its new positions are folded back
+      // in so that what gets written to disk can always be resumed from.
+      val next = transform(current, localNode).copy(idCounter = localNode.ids.peek(), clockHead = localNode.clock.head())
+      if (next == current) return
+      _state.value = next
+      schedulePersist()
+    }
   }
 
   private fun AppState.toNode() =
@@ -219,12 +239,22 @@ class FileListRepository(
       clock = HybridClock(localDevice, start = clockHead),
     )
 
-  private fun schedulePersist(snapshot: AppState) {
+  /**
+   * Saves the state as it is when the save runs, not as it was when this was called.
+   *
+   * A cancelled save can still be past the point of stopping, and with each save carrying its own
+   * snapshot an older one could land after a newer one. Reading the newest state at write time means
+   * whichever save lands last writes what is current. Called holding [lock].
+   */
+  private fun schedulePersist() {
     pendingWrite?.cancel()
     pendingWrite =
       scope.launch(io) {
         delay(writeDelayMs)
-        writeLock.withLock { runCatching { writeRotating(StateCodec.encode(snapshot)) } }
+        writeLock.withLock {
+          val newest = _state.value ?: return@withLock
+          runCatching { writeRotating(StateCodec.encode(newest)) }
+        }
       }
   }
 
