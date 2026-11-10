@@ -1,5 +1,7 @@
 package io.github.molleware.porygonlist.data.net
 
+import io.github.molleware.porygonlist.data.plainName
+
 /**
  * The network's own name, when the phone will tell us it.
  *
@@ -42,6 +44,7 @@ object WifiName {
       value
     }
 
-    return unquoted.trim().ifBlank { null }
+    // An SSID is any 32 bytes, line breaks included, and this one becomes a stored name.
+    return plainName(unquoted).ifBlank { null }
   }
 }

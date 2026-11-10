@@ -53,7 +53,7 @@ object ShareCodec {
 
     return body
       .split(',', '\n')
-      .map { it.trim() }
+      .map { plainName(it) }
       .filter { it.isNotEmpty() }
       .map { token ->
         val match = LEADING_QTY.find(token)

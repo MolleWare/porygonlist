@@ -342,6 +342,30 @@ class PorygonViewModelTest {
     assertNull("the form closes after saving", vm.renamingList)
   }
 
+  @Test
+  fun `names pasted with line breaks are kept on one line`() = runTest(dispatcher) {
+    repo.load()
+
+    // A Windows line ending, as a paste from a computer brings it.
+    vm.onNameDraftChange("Hugo\r\n")
+    vm.saveName()
+    vm.onListDraftChange("Hardware\r\nshop")
+    vm.createList()
+    val made = state().activeList.name
+    vm.addItem("Wood\rglue")
+    vm.openEditSheet(state().activeList.liveItems.single(), addedBy = "you")
+    vm.onSheetNameChange("Wood\r\nglue\r\n")
+    vm.saveSheet()
+    vm.startRename(state().activeList)
+    vm.onRenameDraftChange("DIY\tshop\r")
+    vm.saveRename()
+
+    assertEquals("Hugo", state().displayName)
+    assertEquals("Hardware shop", made)
+    assertEquals("DIY shop", state().activeList.name)
+    assertEquals(listOf("Wood glue"), state().activeList.liveItems.map { it.name.value })
+  }
+
   // ── Staples ───────────────────────────────────────────────────────────────
 
   @Test
@@ -895,6 +919,16 @@ class PorygonViewModelTest {
     assertEquals("Ava", vm.pendingInvite?.displayName)
     assertEquals("", vm.pairNote)
     assertTrue("nothing is trusted until it is acted on", state().peers.isEmpty())
+  }
+
+  @Test
+  fun `a name with a line break in a code comes in on one line`() = runTest(dispatcher) {
+    repo.load()
+
+    vm.onPairCodeChange(otherPhone("Ava\r\nB."))
+    vm.pairAsNew()
+
+    assertEquals("Ava B.", state().peers.single().name)
   }
 
   @Test

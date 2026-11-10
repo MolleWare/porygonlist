@@ -74,6 +74,18 @@ data class Person(
 fun initialOf(name: String): String = name.trim().firstOrNull()?.uppercase().orEmpty()
 
 /**
+ * A name as typed or pasted, on one line: line breaks, tabs and other control characters become a
+ * space, and the ends are trimmed.
+ *
+ * A name is shown on one line everywhere, and a pasted one can carry a Windows line ending. Every
+ * name a person or a pairing code gives goes through here — items, lists, the owner, a paired phone,
+ * a network — so none of them reaches the save file or a peer with a line break in it.
+ */
+fun plainName(typed: String): String = typed.replace(CONTROL_CHARACTERS, " ").trim()
+
+private val CONTROL_CHARACTERS = Regex("\\p{Cntrl}+")
+
+/**
  * One line on a list.
  *
  * [name] and [qty] are [Field]s rather than plain values: those are the two things a person types,
@@ -707,7 +719,7 @@ data class AppState(
    * away the name it already had.
    */
   fun withDisplayName(name: String): AppState {
-    val trimmed = name.trim()
+    val trimmed = plainName(name)
     if (trimmed.isEmpty()) return this
     return copy(
       displayName = trimmed,

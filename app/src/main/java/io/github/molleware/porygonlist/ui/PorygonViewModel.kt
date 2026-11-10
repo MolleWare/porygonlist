@@ -14,6 +14,7 @@ import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.ListRepository
 import io.github.molleware.porygonlist.data.initialOf
+import io.github.molleware.porygonlist.data.plainName
 import io.github.molleware.porygonlist.data.TrustedPeer
 import io.github.molleware.porygonlist.data.crypto.LocalIdentity
 import io.github.molleware.porygonlist.data.crypto.PairingCodec
@@ -254,7 +255,7 @@ class PorygonViewModel(
    * dims it rather than explaining itself.
    */
   fun saveName() {
-    val name = nameDraft.trim()
+    val name = plainName(nameDraft)
     if (name.isEmpty()) return
     repo.update { s, _ -> s.withDisplayName(name) }
     nameDraft = ""
@@ -744,7 +745,7 @@ class PorygonViewModel(
    * straight away, because nobody makes a list in order to go on looking at the old one.
    */
   fun createList() {
-    val name = listDraft.trim()
+    val name = plainName(listDraft)
     if (name.isEmpty()) return
     repo.update { s, node ->
       // Minted, never derived from what is already here. A local `max + 1` meant both phones called
@@ -780,7 +781,7 @@ class PorygonViewModel(
   /** Renames a list, stamped with [GroceryList.nameAt] so the newer rename wins on merge. */
   fun saveRename() {
     val id = renamingList ?: return
-    val name = renameDraft.trim()
+    val name = plainName(renameDraft)
     if (name.isNotEmpty()) {
       repo.update { s, node ->
         s.copy(lists = s.lists.map { if (it.id == id) it.copy(name = name, nameAt = node.clock.tick()) else it })
@@ -1023,7 +1024,7 @@ class PorygonViewModel(
               else {
                 // Each field records what it was written against, so a peer can later tell an edit
                 // made in knowledge of theirs from one made blind.
-                val newName = d.name.trim().ifEmpty { item.name.value }
+                val newName = plainName(d.name).ifEmpty { item.name.value }
                 item.copy(
                   name = if (newName == item.name.value) item.name else item.name.set(newName, stamp),
                   qty = if (d.qty == item.qty.value) item.qty else item.qty.set(d.qty, stamp),
@@ -1099,7 +1100,7 @@ class PorygonViewModel(
 
   /** Adds to the grid. An existing staple is left as it is rather than duplicated. */
   fun addStaple() {
-    val name = stapleDraft.trim()
+    val name = plainName(stapleDraft)
     if (name.isEmpty()) return
     repo.update { s, _ ->
       if (s.staples.any { it.name.equals(name, ignoreCase = true) }) s
@@ -1287,7 +1288,7 @@ class PorygonViewModel(
 
   fun saveNetworkName() {
     val fingerprint = namingNetwork ?: return
-    val name = networkNameDraft.trim()
+    val name = plainName(networkNameDraft)
     if (name.isNotEmpty()) {
       repo.update { s, _ ->
         s.copy(networks = s.networks.map { if (it.fingerprint == fingerprint) it.copy(name = name) else it })
@@ -1400,7 +1401,8 @@ class PorygonViewModel(
     qty: Int = 1,
     origin: Origin = Origin.LOCAL,
   ): AppState {
-    val trimmed = name.trim()
+    val trimmed = plainName(name)
+    if (trimmed.isEmpty()) return this
     val folded = WordTrie.fold(trimmed)
     val existing = activeList.liveItems.firstOrNull { !it.checked && WordTrie.fold(it.name.value) == folded }
 
