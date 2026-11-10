@@ -864,7 +864,11 @@ checks are for the next build.
       now, and typed names lose control characters (`ca6df24`, `LineBreaksInNamesTest`).
 - [x] **"Use the wifi's own name" did nothing on Android 12 and later.** Precise location alone is
       refused without a dialog; approximate is declared and asked for beside it, and only precise
-      counts (`8230988`, `WifiNameTest`, device check 11).
+      counts (`8230988`, `WifiNameTest`, device check 11). *Seen on Ava's S24 FE (Android 17,
+      One UI), 2026-11-10, a copy of `33df495` installed beside her app: the dialog with Precise and
+      Approximate; Approximate kept the button and showed no name; a second tap offered "Change to
+      precise location", and then the wifi's real name showed and the button went. Her 14 lists backed up
+      first (`ava-2026-11-10/`), the copy uninstalled after.*
 - [x] **Deleting a list straight after "Stop sharing" brought it back, shared again.** The removed
       phone's next payload arrived as an invitation. Delete now leaves the list while a removal is
       still owed, and the list waits for it (`2feea93`, `RemovingSomeoneTest`).
