@@ -53,6 +53,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -351,6 +352,79 @@ class PorygonViewModelTest {
     // either way, which is what this is about.
     assertEquals(emptyList<GroceryList>(), state().visibleLists)
     assertTrue("nothing is open", state().visibleLists.none { it.id == state().activeListId })
+  }
+
+  // ── With no lists ─────────────────────────────────────────────────────────
+  // Found in review, 2026-11-10: with no list to act on, pasting closed the sheet and dropped what
+  // was pasted, sharing said "Ava is on .", Add did nothing, and a staple tap counted a use.
+
+  private fun deleteEveryList() {
+    while (state().visibleLists.isNotEmpty()) vm.deleteList(state().visibleLists.first().id)
+  }
+
+  @Test
+  fun `pasting a list with no lists makes one, named as the message names it`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+
+    vm.openImport()
+    vm.onImportTextChange("PL1 · Party · 2 ice, lemons")
+    vm.runImport()
+
+    val made = state().visibleLists.single()
+    assertEquals("Party", made.name)
+    assertEquals(listOf("Ice ×2", "Lemons"), made.liveItems.map { it.label })
+    assertEquals("and it is the one open", made.id, state().activeListId)
+  }
+
+  @Test
+  fun `a pasted list with no name of its own is called Pasted list`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+
+    vm.openImport()
+    vm.onImportTextChange("milk\neggs")
+    vm.runImport()
+
+    assertEquals("Pasted list", state().visibleLists.single().name)
+    assertEquals(listOf("Milk", "Eggs"), state().activeList.liveItems.map { it.name.value })
+  }
+
+  @Test
+  fun `pairing from Share with no lists pairs and puts them on nothing`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+
+    vm.startPairing(forListId = state().activeListId)
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+
+    assertNull(vm.pairingForList)
+    assertTrue(vm.pairNote, vm.pairNote.startsWith("Paired with Ava."))
+  }
+
+  @Test
+  fun `with no lists nobody is offered to add, and adding does nothing`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+    val before = state()
+
+    assertEquals(emptyList<Any>(), vm.peersNotOnActiveList(state()))
+    vm.addPersonToActiveList(state().peers.last().deviceId)
+    assertEquals(before, state())
+  }
+
+  @Test
+  fun `a staple tapped with no lists is not counted`() = runTest(dispatcher) {
+    repo.load()
+    deleteEveryList()
+    val staple = state().staples.first()
+
+    vm.useStaple(staple.name)
+
+    assertEquals(staple.uses, state().staples.first().uses)
   }
 
   @Test
@@ -1733,6 +1807,34 @@ class PorygonViewModelTest {
   }
 
   @Test
+  fun `Done on a pasted code leaves the question to the buttons when it could be a replacement`() = runTest(dispatcher) {
+    // Found in review, 2026-11-10: the keyboard's Done answered "someone new" without the question
+    // being seen. Ava is on the seed's lists and paired here, so the code could be her new phone.
+    repo.load()
+    val ava = state().activeList.people.first { it.device != state().localDevice }
+    repo.update { s, _ -> s.copy(peers = listOf(TrustedPeer(ava.device, byteArrayOf(1), "Ava", pairedAt = 0))) }
+    vm.onPairCodeChange(otherPhone("Ava"))
+    assertTrue(vm.replaceCandidates(state()).isNotEmpty())
+
+    vm.submitPairCode(state())
+
+    assertEquals("nothing paired", listOf(ava.device), state().peers.map { it.deviceId })
+    assertNotNull("the question is still there", vm.pendingInvite)
+  }
+
+  @Test
+  fun `Done on a pasted code pairs when there is nobody it could be replacing`() = runTest(dispatcher) {
+    repo.load()
+    repo.update { s, _ -> s.copy(lists = s.lists.map { l -> l.copy(people = l.people.filter { it.device == s.localDevice }) }) }
+    vm.onPairCodeChange(otherPhone("Ava"))
+    assertTrue(vm.replaceCandidates(state()).isEmpty())
+
+    vm.submitPairCode(state())
+
+    assertEquals(listOf("Ava"), state().peers.map { it.name })
+  }
+
+  @Test
   fun `a name with a line break in a code comes in on one line`() = runTest(dispatcher) {
     repo.load()
 
@@ -1790,6 +1892,29 @@ class PorygonViewModelTest {
 
     assertTrue(state().activeList.people.any { it.device == peer })
     assertTrue("and then they are no longer offered", vm.peersNotOnActiveList(state()).isEmpty())
+  }
+
+  @Test
+  fun `unpairing asks first, and keeping them changes nothing`() = runTest(dispatcher) {
+    // Found in review, 2026-11-10: one tap on "Unpair" took them off every list at once.
+    repo.load()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    vm.pairAsNew()
+    val peer = state().peers.single().deviceId
+    val before = state()
+
+    vm.askUnpair(peer)
+    assertEquals(peer, vm.confirmingUnpair)
+    assertEquals("asking changes nothing", before, state())
+
+    vm.cancelUnpair()
+    assertNull(vm.confirmingUnpair)
+    assertEquals(before, state())
+
+    vm.askUnpair(peer)
+    vm.unpair(peer)
+    assertTrue(state().peers.isEmpty())
+    assertNull("the question closes once answered", vm.confirmingUnpair)
   }
 
   @Test

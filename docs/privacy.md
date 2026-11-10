@@ -55,8 +55,8 @@ it goes wherever you send that message, through the messaging app you choose.
 - **Run at startup**, so background sync on your approved wifi carries on after a restart.
 - **Alarms (optional)**, for background sync, which wakes on the exact quarter hour so closed phones
   sync at the same moment. Without them it stays off, and lists sync while the app is open.
-- **Foreground service**, to stay on the wifi for the half minute of a background sync. A quiet
-  notification shows while it runs.
+- **Foreground service**, to stay on the wifi for the half minute of a background sync. Android may
+  show a quiet notification while it runs.
 
 ## Backups
 

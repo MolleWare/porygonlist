@@ -314,6 +314,16 @@ fun removeNote(state: AppState): String {
   }
 }
 
+/** Under "Unpair Ava?": which of your lists they come off, and that they keep what they have. */
+fun unpairNote(state: AppState, peer: DeviceId, name: String): String {
+  val shared = state.visibleLists.filter { list -> list.people.any { it.present && it.wasEver(peer) } }
+  return when (shared.size) {
+    0 -> "No lists are shared with $name."
+    1 -> "$name comes off ${shared.single().name}, and keeps a copy of it."
+    else -> "$name comes off the ${shared.size} lists you share, and keeps a copy of each."
+  }
+}
+
 /** What the "keep which?" card says, worked out when it is shown rather than stored. */
 data class EditClashText(val title: String, val body: String, val keepYours: String, val keepTheirs: String)
 
@@ -393,7 +403,7 @@ fun syncDetail(
 fun backgroundSyncNote(reading: BackgroundSwitch, alarmsAllowed: Boolean): String =
   when (reading) {
     BackgroundSwitch.ON ->
-      "Wakes at :00, :15, :30 and :45 for half a minute, when your paired phones do too. A quiet notification shows while it runs."
+      "Wakes at :00, :15, :30 and :45 for half a minute, when your paired phones do too."
     BackgroundSwitch.ALARMS_TURNED_OFF ->
       "Alarms were turned off for this app, so lists sync only while it is open. Turn it on to allow them again."
     BackgroundSwitch.OFF ->

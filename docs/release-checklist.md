@@ -222,11 +222,12 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
 
 ### Meanwhile: release preparation
 
-- [ ] Push `main` from the host.
+- [x] Push `main` from the host. *Pushed at `7e3f299`.*
+- [ ] Merge `fix-0.1.0` (the review's fixes, 2026-11-10) into `main`, and push `main`.
 - [ ] `./scripts/fdroid-check.sh` on the pushed HEAD now, before any tag: lint, F-Droid's own
       build and its comparison with our APK — a difference found now costs nothing.
 - [ ] Reread the store text once the decisions above have landed.
-- [ ] When every box above the store section is ticked: the release steps under *F-Droid*,
+- [ ] When every box outside the release steps is ticked: the release steps under *F-Droid*,
       `release.sh` first.
 
 ## The two-phone session
@@ -876,13 +877,15 @@ checks are for the next build.
       (`23faa49`).
 - [x] **A test fixture looked like a real device id and home address.** Made-up ids and
       documentation addresses instead (`d9b6763`).
+- [x] **A payload acknowledged before the line broke was never applied.** The caller collected its
+      tombstones on that ack while the listener had dropped the payload. Backported from `next`
+      (`630ecd8`): once read whole, the payload is applied whatever happens to the line
+      (`SyncExchangeTest`).
 
 Known in 0.1.0, fixed only in 0.2.0 on `next`:
 
 - With three people on a list, a removal heard of from another phone could be collected before
   the third phone had heard it, and come back (`f098383`).
-- A payload whose ack went out before the line broke was not applied by the phone that acked it,
-  while the caller collected its tombstones on that ack (`630ecd8`).
 
 ### App closed
 
@@ -969,14 +972,16 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       with a throwaway key, and the unsigned build is still byte-identical across clean builds.
 - [x] Version `0.1.0`, version code 1. Bump both for every release, never reuse a code.
 - [x] Store text, changelog and icon in `fastlane/metadata/android/en-US/` (icon from
-      `./scripts/icon.sh store`). *Lengths 2026-10-25: title 11/50, short 76/80, full 2152/4000,
-      changelog 342/500. `images/phoneScreenshots/` still empty — see screenshots above.*
+      `./scripts/icon.sh store`). *Lengths 2026-11-10, in characters: title 11/30 on Play (50 on
+      F-Droid), short 76/80, full 2358/4000, changelog 342/500. `images/phoneScreenshots/` still
+      empty — see screenshots above.*
 - [ ] Reread the store text after the phone session; it describes the app as that leaves it.
       *Reread 2026-10-21 against the session: accurate. "Run at startup, so background sync carries
       on after a restart" holds only once the wifi-listener workaround is built and seen after a
       reboot. Read again before the tag.*
 - [x] Merge `list-identity` into `main` (fast-forward, pushed `63b366a`). Work continues on `main`.
-- [ ] Tag `v0.1.0` on `main` once everything above is ticked.
+- [ ] Tag `v0.1.0` on `main`, after `fix-0.1.0` is merged into it, once every box outside the
+      release steps is ticked — step 1 below.
 
 ### F-Droid
 
@@ -997,17 +1002,20 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 - [x] `fdroid lint` on the draft metadata (fdroidserver 2.4.5, 2026-10-06): clean apart from the
       placeholder signing key; "Shopping List" is a valid category; field order matches
       `fdroid rewritemeta`. Linted again with the real key, 2026-10-10: clean.
-- [ ] `fdroid build` locally, in F-Droid's build image — needs the tag and Docker.
+- [x] ~~`fdroid build` locally, in F-Droid's build image — needs the tag and Docker.~~
+      *Superseded: `./scripts/fdroid-check.sh` runs `fdroid build` in F-Droid's image with podman,
+      on any pushed commit or tag — release step 4, and the pre-tag check above.*
 - [ ] Merge request to `fdroid/fdroiddata` adding `metadata/io.github.molleware.porygonlist.yml`,
       with our signing certificate's hash so F-Droid ships our APK. Draft:
       [docs/fdroid/io.github.molleware.porygonlist.yml](fdroid/io.github.molleware.porygonlist.yml).
 - [ ] A GitHub release for `v0.1.0` with our signed APK attached, under the name the draft's
       `Binaries` line expects. F-Droid compares against it.
 
-**The release, in order, once everything above is ticked** (host only — the key and push stay
-there):
+**The release, in order, once every box outside these steps is ticked** (host only — the key
+and push stay there):
 
-1. `git tag -a v0.1.0 -m "PorygonList 0.1.0"` on the commit to release, working tree clean.
+0. `fix-0.1.0` merged into `main`, and `main` checked out: the tag goes on `main`.
+1. `git tag -a v0.1.0 -m "PorygonList 0.1.0"` on that commit of `main`, working tree clean.
 2. `./scripts/release.sh` — builds the signed APK from that commit, checks its version, its
    certificate against the draft and the commit it records, and leaves
    `build/release/porygonlist-0.1.0.apk`.
@@ -1030,8 +1038,12 @@ there):
       own name" button, before Android's prompt — probably enough as the in-app disclosure, but
       check it against Play's current wording when filling in the form.
 - [ ] Content rating questionnaire, target audience, store category.
-- [ ] Upload an app bundle (`bundleRelease`) to internal testing first, then production. The
-      bundle builds (2026-10-06, 3.5 MB unsigned); it signs itself once `keystore.properties` exists.
+- [ ] A feature graphic, 1024×500, and at least 2 phone screenshots (the ones above).
+- [ ] Build the bundle with `./scripts/build.sh bundle` from the tagged commit, on the host, so
+      it is signed with our key. The bundle builds (2026-10-06, 3.5 MB unsigned).
+- [ ] Upload it to internal testing first, then to a **closed test with at least 12 testers for
+      14 days** before production can be applied for — per Play's rules for new personal
+      developer accounts; check the current requirement in the console. Then production.
 
 ## After 0.1.0
 

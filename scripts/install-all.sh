@@ -33,8 +33,12 @@ for arg in "$@"; do
   esac
 done
 
-readonly APPLICATION_ID="io.github.molleware.porygonlist"
-readonly LAUNCH_ACTIVITY="$APPLICATION_ID/.MainActivity"
+# The build here is the app under its own id, so _common.sh's APPLICATION_ID is that id unless
+# PORYGONLIST_BESIDE asks for the `.next` one, which this script does not build.
+[[ -z "${PORYGONLIST_BESIDE:-}" ]] \
+  || die "install-all.sh installs the app under its own id. For a build beside it: ./scripts/install.sh beside, one phone at a time."
+# The activity by its full name: it lives in the code's package, whatever the application id.
+readonly LAUNCH_ACTIVITY="$APPLICATION_ID/io.github.molleware.porygonlist.MainActivity"
 
 require_android_sdk
 

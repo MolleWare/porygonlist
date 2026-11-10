@@ -1,17 +1,16 @@
-# DRAFT of the F-Droid metadata. The real file goes in a merge request to
-# https://gitlab.com/fdroid/fdroiddata as metadata/io.github.molleware.porygonlist.yml.
-# Kept here so it is versioned with the app; see docs/release-checklist.md.
+# DRAFT of the F-Droid metadata, kept here so it is versioned with the app. What goes in the merge
+# request to https://gitlab.com/fdroid/fdroiddata, as metadata/io.github.molleware.porygonlist.yml,
+# is everything from "Categories:" down; this header block stays here.
 #
-# Checked 2026-10-06 with fdroidserver 2.4.5: `fdroid lint` passes apart from the placeholder key,
+# Checked with fdroidserver 2.4.5: `fdroid lint` passes with our real signing key (2026-10-10),
 # "Shopping List" is in fdroiddata's config/categories.yml, and the field order below is what
-# `fdroid rewritemeta` produces (comments aside).
+# `fdroid rewritemeta` produces (comments aside). The build server's default JDK is 21, which the
+# build needs: ./scripts/fdroid-check.sh built in F-Droid's image with no extra step (2026-10-10).
 #
 # AllowedAPKSigningKeys is our release certificate's SHA-256, lowercase without colons, as
 # `./scripts/build.sh signing` prints it (2026-10-09).
 #
-# Before submitting:
-#   - attach our signed APK to the GitHub release under the name in Binaries;
-#   - confirm the build server has JDK 21, or add a sudo step installing it.
+# Before submitting: attach our signed APK to the GitHub release under the name in Binaries.
 
 Categories:
   - Shopping List

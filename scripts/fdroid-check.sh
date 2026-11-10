@@ -24,9 +24,11 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
-readonly APPLICATION_ID="io.github.molleware.porygonlist"
+# Always the app's own id, which is what F-Droid builds and publishes: never _common.sh's
+# APPLICATION_ID, which is the `.next` test build's under PORYGONLIST_BESIDE.
+readonly FDROID_ID="io.github.molleware.porygonlist"
 readonly IMAGE="registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie"
-readonly DRAFT="$REPO_ROOT/docs/fdroid/$APPLICATION_ID.yml"
+readonly DRAFT="$REPO_ROOT/docs/fdroid/$FDROID_ID.yml"
 readonly SIGNED_APK="$REPO_ROOT/app/build/outputs/apk/release/app-release.apk"
 readonly WORK="$REPO_ROOT/build/fdroid-check"
 
@@ -49,7 +51,7 @@ mkdir -p "$WORK/metadata" "$WORK/compare"
 # The draft as it will be submitted, except that it builds this commit rather
 # than the tag, and does not fetch Binaries: before the release exists that
 # URL is a 404, and the comparison below does that job against the local APK.
-sed -e "s|^    commit: .*|    commit: $commit|" -e '/^Binaries:/d' "$DRAFT" >"$WORK/metadata/$APPLICATION_ID.yml"
+sed -e "s|^    commit: .*|    commit: $commit|" -e '/^Binaries:/d' "$DRAFT" >"$WORK/metadata/$FDROID_ID.yml"
 [[ -f "$SIGNED_APK" ]] && cp "$SIGNED_APK" "$WORK/compare/signed.apk"
 printf 'sdk_path: /opt/android-sdk\n' >"$WORK/config.yml"
 chmod 600 "$WORK/config.yml"
@@ -58,7 +60,7 @@ info "Running in $IMAGE"
 podman run --rm \
   -v "$WORK:/data:Z" \
   -w /data \
-  -e APPLICATION_ID="$APPLICATION_ID" \
+  -e APPLICATION_ID="$FDROID_ID" \
   "$IMAGE" \
   bash -euo pipefail -c '
     export ANDROID_HOME=/opt/android-sdk

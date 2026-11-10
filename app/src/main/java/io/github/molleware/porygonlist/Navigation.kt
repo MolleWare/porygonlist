@@ -364,6 +364,9 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                     viewModel.startPairing()
                     backStack.add(PairPhone)
                   },
+                  confirmingUnpair = viewModel.confirmingUnpair,
+                  onAskUnpair = viewModel::askUnpair,
+                  onCancelUnpair = viewModel::cancelUnpair,
                   onUnpair = viewModel::unpair,
                   onBackgroundSync = onBackgroundSync,
                   onStapleComeback = viewModel::setStapleComeback,
@@ -396,6 +399,7 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
                   handingBack = viewModel.handingBack,
                   replaceCandidates = viewModel.replaceCandidates(appState),
                   onPairAsNew = viewModel::pairAsNew,
+                  onSubmitCode = { viewModel.submitPairCode(appState) },
                   onReplace = viewModel::pairAsReplacementFor,
                   onBack = {
                     // Closes the socket and burns the token straight away rather than waiting for

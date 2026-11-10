@@ -528,7 +528,9 @@ class PorygonViewModel(
    * [ListenReason.PAIRING] for why that is deliberate rather than a gap.
    */
   fun startPairing(forListId: ListId? = null) {
-    pairingForList = forListId
+    // Only a list this phone shows. With none, Share passes the empty id of no list at all, and
+    // pairing then said "Ava is on ." about it.
+    pairingForList = forListId?.takeIf { id -> state.value?.visibleLists?.any { it.id == id } == true }
     pairCode = ""
     pairNote = ""
     pendingInvite = null
@@ -559,6 +561,17 @@ class PorygonViewModel(
   }
 
   /** Trusts the pasted code as a phone this one has not seen before. */
+  /**
+   * The keyboard's Done in the code field.
+   *
+   * It answers "someone new" only when that is the one answer there is. With somebody the code could
+   * be a new phone for, the question is the buttons' to settle: Done once answered it unseen, and
+   * a replaced handset came in as a stranger while the old id went on being waited on.
+   */
+  fun submitPairCode(state: AppState) {
+    if (replaceCandidates(state).isEmpty()) pairAsNew()
+  }
+
   fun pairAsNew() {
     val invite = pendingInvite ?: return
     // Captured before the draft is cleared: it is the link, not the invite, that says where to
@@ -566,7 +579,8 @@ class PorygonViewModel(
     val link = pairCode.trim()
 
     trust(invite)
-    val listId = pairingForList
+    // Still a list this phone shows: it may have gone while the code was on screen.
+    val listId = pairingForList?.takeIf { id -> state.value?.visibleLists?.any { it.id == id } == true }
     if (listId != null) {
       addPersonToList(listId, invite.deviceId)
       pairNote = "${invite.displayName} is on ${listName(listId)}."
@@ -708,7 +722,27 @@ class PorygonViewModel(
    * device left in a list's people is still waited on for delivery receipts, and one that will
    * never answer again would hold every tombstone on that list open for ever.
    */
-  fun unpair(deviceId: DeviceId) = repo.update { s, node -> s.retireDevice(deviceId, node.clock.tick()) }
+  fun unpair(deviceId: DeviceId) {
+    repo.update { s, node -> s.retireDevice(deviceId, node.clock.tick()) }
+    confirmingUnpair = null
+  }
+
+  /**
+   * Which paired phone Settings is asking about before unpairing.
+   *
+   * Asked in place, once, as removing someone from a list is: unpairing takes them off every list
+   * at once, and a single tap on a row of identical buttons did it with no word (review, 2026-11-10).
+   */
+  var confirmingUnpair by mutableStateOf<DeviceId?>(null)
+    private set
+
+  fun askUnpair(device: DeviceId) {
+    confirmingUnpair = device
+  }
+
+  fun cancelUnpair() {
+    confirmingUnpair = null
+  }
 
   /** Which person the People section is asking about before removing. */
   var confirmingRemovalOf by mutableStateOf<DeviceId?>(null)
@@ -753,6 +787,8 @@ class PorygonViewModel(
    * act — which is what makes a private list possible at all.
    */
   fun peersNotOnActiveList(state: AppState): List<TrustedPeer> {
+    // With no list there is nothing to add anyone to, and an Add button there did nothing.
+    if (state.visibleLists.isEmpty()) return emptyList()
     // Only people on it now: someone who left is exactly who might be added back.
     val already = state.activeList.people.filter { it.present }.map { it.device }.toSet()
     return state.peers.filterNot { it.deviceId in already }
@@ -760,8 +796,9 @@ class PorygonViewModel(
 
   /** Starts sharing the open list with a phone already paired with this one. */
   fun addPersonToActiveList(device: DeviceId) {
-    val listId = state.value?.activeListId ?: return
-    addPersonToList(listId, device)
+    val s = state.value ?: return
+    if (s.visibleLists.isEmpty()) return
+    addPersonToList(s.activeList.id, device)
   }
 
   /** Puts a paired phone's owner on one list, by id rather than by whichever is open. */
@@ -795,15 +832,18 @@ class PorygonViewModel(
   fun createList() {
     val name = plainName(listDraft)
     if (name.isEmpty()) return
-    repo.update { s, node ->
-      // Minted, never derived from what is already here. A local `max + 1` meant both phones called
-      // their first list `1`, so two unrelated lists could not be told apart once they met.
-      val id = node.ids.nextList()
-      val accent = ListAccent.entries[s.lists.size % ListAccent.entries.size]
-      val you = Person(s.localDevice, s.displayName, initialOf(s.displayName), avatar = s.avatar, nameAt = s.displayNameAt)
-      s.copy(lists = s.lists + GroceryList(id, name, accent, items = emptyList(), people = listOf(you)), activeListId = id)
-    }
+    repo.update { s, node -> s.withListMade(node, name) }
     listDraft = ""
+  }
+
+  /** A new list called [name], holding nobody but you, and open. */
+  private fun AppState.withListMade(node: LocalNode, name: String): AppState {
+    // Minted, never derived from what is already here. A local `max + 1` meant both phones called
+    // their first list `1`, so two unrelated lists could not be told apart once they met.
+    val id = node.ids.nextList()
+    val accent = ListAccent.entries[lists.size % ListAccent.entries.size]
+    val you = Person(localDevice, displayName, initialOf(displayName), avatar = avatar, nameAt = displayNameAt)
+    return copy(lists = lists + GroceryList(id, name, accent, items = emptyList(), people = listOf(you)), activeListId = id)
   }
 
   var renamingList by mutableStateOf<ListId?>(null)
@@ -1168,9 +1208,11 @@ class PorygonViewModel(
    * staple, or failing that the open list's learned one.
    *
    * The count is the tile's whole sub-label, so it has to move in the same update as the item —
-   * otherwise a tap adds the thing and the tile goes on claiming it has never been used.
+   * otherwise a tap adds the thing and the tile goes on claiming it has never been used. With no
+   * list, nothing is added and nothing counted; the screen already says to make a list first.
    */
   fun useStaple(name: String) = repo.update { s, node ->
+    if (s.visibleLists.isEmpty()) return@update s
     val added = s.withItemAdded(node, name)
     if (added.staples.any { it.name == name }) added.copy(staples = added.staples.map { if (it.name == name) it.copy(uses = it.uses + 1) else it })
     else added.withStapleUsed(added.activeListId, name)
@@ -1675,7 +1717,10 @@ class PorygonViewModel(
       importNote = "Could not find any items in that."
       return
     }
-    repo.update { s, node ->
+    repo.update { now, node ->
+      // With no list to paste into, the paste makes one rather than vanishing: named as the message
+      // names its list, which is what a pasted list usually is — somebody's list, sent as text.
+      val s = if (now.visibleLists.isEmpty()) now.withListMade(node, ShareCodec.listName(raw) ?: "Pasted list") else now
       val have = s.activeList.liveItems.map { it.name.value.lowercase() }.toSet()
       val fresh = parsed.filterNot { it.name.lowercase() in have }
       // Each pasted item is created here, so it gets this phone's identity and a fresh id: the
@@ -1717,7 +1762,9 @@ class PorygonViewModel(
     forRecipe: String? = null,
   ): AppState {
     val trimmed = plainName(name)
-    if (trimmed.isEmpty()) return this
+    // With no list there is nowhere for it to go, and a staple learned for the empty id of no list
+    // would be one nobody ever sees.
+    if (trimmed.isEmpty() || visibleLists.isEmpty()) return this
     val folded = WordTrie.fold(trimmed)
     val existing = activeList.liveItems.firstOrNull { !it.checked && WordTrie.fold(it.name.value) == folded }
 

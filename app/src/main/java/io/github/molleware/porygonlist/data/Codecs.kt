@@ -68,6 +68,13 @@ object ShareCodec {
       .filter { it.name.isNotEmpty() }
   }
 
+  /** The list's name from a message's "PL1 · <name> ·" header, or null when it has none. */
+  fun listName(raw: String): String? {
+    val parts = raw.trim().split('·')
+    if (parts.size < 3 || parts[0].trim() != PREFIX) return null
+    return plainName(parts[1]).ifEmpty { null }
+  }
+
   private val LEADING_QTY = Regex("""^(\d+)\s+(.*)$""")
 
   private fun String.capitalizeFirst() = replaceFirstChar { it.uppercase() }

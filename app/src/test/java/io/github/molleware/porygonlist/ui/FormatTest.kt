@@ -377,6 +377,19 @@ class FormatTest {
   }
 
   @Test
+  fun `unpairing says which lists they come off, and that they keep their copies`() {
+    val second = list.copy(id = ListId("list:2"), name = "Party")
+    val theirsNot = list.copy(id = ListId("list:3"), name = "Mine", people = listOf(Person(me, "Ava", "A")))
+
+    assertEquals("Hugo comes off Weekly shop, and keeps a copy of it.", unpairNote(stateWith(list), hugo, "Hugo"))
+    assertEquals(
+      "Hugo comes off the 2 lists you share, and keeps a copy of each.",
+      unpairNote(stateWith(list).copy(lists = listOf(list, second, theirsNot)), hugo, "Hugo"),
+    )
+    assertEquals("No lists are shared with Hugo.", unpairNote(stateWith(theirsNot), hugo, "Hugo"))
+  }
+
+  @Test
   fun `item counts are singular where they should be`() {
     assertEquals("1 item", itemCountLabel(list.copy(items = listOf(item("Butter")))))
     assertEquals("0 items", itemCountLabel(list))
