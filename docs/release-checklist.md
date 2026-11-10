@@ -900,10 +900,27 @@ checks are for the next build.
       still "Waiting for Hugo & hugo"; her 14 lists read back identical to the morning's backup
       (`ava-2026-11-10/` against `ava-2026-11-10-after-install/`).*
 
-Known in 0.1.0, fixed only in 0.2.0 on `next`:
+- [x] **With three people on a list, a removal heard of from another phone could be collected
+      before the third phone had heard it, and come back** (`f098383`). Came with `next`.
 
-- With three people on a list, a removal heard of from another phone could be collected before
-  the third phone had heard it, and come back (`f098383`).
+### Everything on `next` goes into 0.1.0, 2026-11-10
+
+Hugo's call: the features built for 0.2.0 ship in the first release instead. `next` (`afa197e`,
+813 tests at `9a6b142`, code unchanged since) was fast-forwarded into `main`; the version stays
+0.1.0 and the state file `PLSTATE11`. The plan and the Pixel results for each feature are in
+`next-release-plan.md`.
+
+- [ ] Ava's own app updated in place from the build of `18442bb`, lists and pairing kept, and
+      her 14 lists compared with `ava-2026-11-10-after-install/`.
+- [ ] The Pixel's own app updated in place the same way.
+- [ ] The two-phone checks that waited for her phone (`next-release-plan.md`, "Needs Ava's
+      phone"): an avatar and a rename reaching the other phone, "for Lasagne" travelling with a
+      recipe's items, a merged list arriving on the other phone, the one sync switch, and a
+      partial exchange.
+- [ ] The review's findings in code that only `next` had now ship in 0.1.0: unbounded `held`
+      lines, reboot recovery hanging on one registration, an alarm grant made with the app
+      closed arming nothing. Fix or accept each before the tag.
+- [ ] `docs/ARCHITECTURE.md` still labels these features "(0.2.0)".
 
 ### App closed
 

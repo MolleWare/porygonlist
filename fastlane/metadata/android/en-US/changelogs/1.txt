@@ -1,6 +1,8 @@
 First release.
 • Shared lists that sync directly between paired phones on wifi you approve
-• Items in a shared order; your own arrangement and pins for the lists themselves
-• Background sync on the quarter hour, on approved wifi
+• Staples and recipes; a list learns your staples from what you clear
+• A list's history: put cleared items back, or save them as a recipe
+• Merge two lists; choose your avatar
+• Background sync on the quarter hour, on approved wifi, or off
 • Asks which to keep when one item is changed on two phones at once
 • Hand a list over as text when you are apart
