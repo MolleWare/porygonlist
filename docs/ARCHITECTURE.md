@@ -5,6 +5,12 @@ the sync foundations, and what remains before two phones can actually talk.
 
 Committed on the `app-flow` branch.
 
+**On the versions named below.** The features marked "(0.2.0)" were built for a second release
+and moved into the first on 2026-11-10, so they ship in 0.1.0. Where the text, or a comment in
+the code, says "0.1.0" for what an older phone or save does, it means the test builds from
+before those features, the last of them `18442bb`. That compatibility still matters: those
+builds' saves and payloads are what the phones it ran on hold.
+
 ---
 
 ## Where things stand

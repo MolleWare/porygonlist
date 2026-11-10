@@ -8,8 +8,12 @@ Pair two phones once by scanning a code. After that, a shared list hands its cha
 • Add, tick off, rename and remove items; changes from both sides merge
 • If the same item is changed on two phones at once, you are asked which to keep
 • Put items in order — the order is shared, so sorting by aisle works for everyone
-• Arrange and pin your lists, just for you
-• Staples for the things you buy every week, and a shopping view for the shop itself, where ticked items sink to the bottom
+• Arrange and pin your lists, just for you, and merge two lists into one
+• Staples for the things you buy every week, learned from the lists you clear
+• Recipes: pick what you need from a dish's ingredients and add it in one go, marked with the dish's name
+• A list's history: put back what was cleared, or save it as a recipe
+• A shopping view for the shop itself, where ticked items sink to the bottom
+• Choose an avatar; it and your name reach everyone you share a list with
 • Background sync, one switch: with the app closed, it syncs for half a minute on every quarter hour, only while you are on an approved wifi
 
 <b>Good to know</b>

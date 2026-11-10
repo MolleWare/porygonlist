@@ -920,7 +920,9 @@ Hugo's call: the features built for 0.2.0 ship in the first release instead. `ne
 - [ ] The review's findings in code that only `next` had now ship in 0.1.0: unbounded `held`
       lines, reboot recovery hanging on one registration, an alarm grant made with the app
       closed arming nothing. Fix or accept each before the tag.
-- [ ] `docs/ARCHITECTURE.md` still labels these features "(0.2.0)".
+- [x] `docs/ARCHITECTURE.md` still labels these features "(0.2.0)". *A note at its top says they
+      ship in 0.1.0, and that "0.1.0" for an older phone or save means the test builds up to
+      `18442bb`; the labels and the code comments stay as written.*
 
 ### App closed
 
@@ -1008,15 +1010,16 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 - [x] Version `0.1.0`, version code 1. Bump both for every release, never reuse a code.
 - [x] Store text, changelog and icon in `fastlane/metadata/android/en-US/` (icon from
       `./scripts/icon.sh store`). *Lengths 2026-11-10, in characters: title 11/30 on Play (50 on
-      F-Droid), short 76/80, full 2358/4000, changelog 342/500. `images/phoneScreenshots/` still
-      empty — see screenshots above.*
+      F-Droid), short 76/80, full 2750/4000, changelog 445/500, after the features from `next`
+      were added to both. `images/phoneScreenshots/` still empty — see screenshots above.*
 - [ ] Reread the store text after the phone session; it describes the app as that leaves it.
       *Reread 2026-10-21 against the session: accurate. "Run at startup, so background sync carries
       on after a restart" holds only once the wifi-listener workaround is built and seen after a
       reboot. Read again before the tag.*
 - [x] Merge `list-identity` into `main` (fast-forward, pushed `63b366a`). Work continues on `main`.
-- [ ] Tag `v0.1.0` on `main`, after `fix-0.1.0` is merged into it, once every box outside the
-      release steps is ticked — step 1 below.
+- [ ] Tag `v0.1.0` on `main` once every box outside the release steps is ticked — step 1 below.
+      *`fix-0.1.0` and `next` are both in `main` since 2026-11-10 (`7b768a9`); every other branch
+      but `app-flow-backup-pre-scrub`, which must never be merged, is too.*
 
 ### F-Droid
 
@@ -1049,7 +1052,7 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 **The release, in order, once every box outside these steps is ticked** (host only — the key
 and push stay there):
 
-0. `fix-0.1.0` merged into `main`, and `main` checked out: the tag goes on `main`.
+0. `main` checked out, nothing left on another branch: the tag goes on `main`.
 1. `git tag -a v0.1.0 -m "PorygonList 0.1.0"` on that commit of `main`, working tree clean.
 2. `./scripts/release.sh` — builds the signed APK from that commit, checks its version, its
    certificate against the draft and the commit it records, and leaves
@@ -1059,7 +1062,9 @@ and push stay there):
    F-Droid's comparison with our APK. Stop here if it differs: a new tag costs a version code.
 5. `gh release create v0.1.0 build/release/porygonlist-0.1.0.apk --title "PorygonList 0.1.0"
    --notes-file fastlane/metadata/android/en-US/changelogs/1.txt` (release.sh prints this line).
-6. The merge request to fdroiddata with the draft.
+6. The merge request to fdroiddata: fork it on GitLab, add the draft from "Categories:" down as
+   `metadata/io.github.molleware.porygonlist.yml`, and open the request titled "New app:
+   PorygonList" with [docs/fdroid/merge-request.md](fdroid/merge-request.md) as its text.
 
 ### Play Store
 
