@@ -885,6 +885,16 @@ checks are for the next build.
       tombstones on that ack while the listener had dropped the payload. Backported from `next`
       (`630ecd8`): once read whole, the payload is applied whatever happens to the line
       (`SyncExchangeTest`).
+- [x] **A pairing link reopened the pairing screen whenever the activity was recreated** (`7ecc422`).
+      *Ava's S24 FE, 2026-11-10, a copy of `1f59d35`: paired with a fake phone from its link, went
+      to Lists, rotated to landscape and back: still on Lists, no pairing screen.*
+- [x] **With no lists, a pasted list was dropped without a word** (`52d645c`). *Same phone: "2
+      eggs, milk, bread" pasted with no list made "Pasted list" holding Eggs ×2, Milk and Bread.*
+- [x] **Unpair was one tap, and every button read "Unpair"** (`08116c3`). *Same phone: "Unpair
+      Sam" asked "Unpair Sam?" with "No lists are shared with Sam."; Keep kept him paired.*
+- [x] **The keyboard's Done on a pasted code answered "someone new"** (`30a972b`). *Same phone,
+      Sam on a list, a second fake phone's code pasted: the keyboard's Done did nothing, the card
+      kept "Add Newphone" and "This is Sam's new phone", and nothing paired.*
 
 Known in 0.1.0, fixed only in 0.2.0 on `next`:
 
