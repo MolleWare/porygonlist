@@ -19,15 +19,18 @@ class MainActivity : ComponentActivity() {
    * A pairing link waiting to be carried to the pairing screen, if the app was opened by one.
    *
    * Held here rather than read from `intent` inside composition, because an intent is consumed
-   * once and composition runs whenever it likes. Cleared by the navigation once it has acted on it,
-   * so that a configuration change does not reopen the pairing screen over and over.
+   * once and composition runs whenever it likes. Cleared by the navigation once it has acted on it.
+   * The activity's own `intent` keeps the link for as long as the activity lives, so it is read
+   * only on a fresh start — see [actsOnLaunchLink] — or the pairing screen came back on every
+   * rotation.
    */
   private var pairLink by mutableStateOf<String?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
-    pairLink = pairLinkIn(intent)
+    val fromHistory = intent?.flags?.and(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+    if (actsOnLaunchLink(restored = savedInstanceState != null, fromHistory = fromHistory)) pairLink = pairLinkIn(intent)
 
     // The palette is light-only, so both system bars are told to draw dark icons. Without this the
     // status bar keeps the system's dark-mode appearance and renders white glyphs on a cream
@@ -62,3 +65,15 @@ class MainActivity : ComponentActivity() {
       ?.takeIf { it.scheme.equals(PairingCodec.LINK_SCHEME, ignoreCase = true) }
       ?.toString()
 }
+
+/**
+ * Whether a start of the activity acts on the link in the intent that started it.
+ *
+ * Only a fresh start does. [restored] is a recreation — a rotation, a font size change, or coming
+ * back after Android ended the process — and the intent is the same one already acted on: reading
+ * it again threw away where the person was and opened pairing over a link already used ("Ava's
+ * phone is already paired."), with a socket and a fresh token behind it. [fromHistory] is the app
+ * opened again from recents, which hands back the intent the task was first started with. A link
+ * tapped while the app is open arrives through `onNewIntent` instead.
+ */
+internal fun actsOnLaunchLink(restored: Boolean, fromHistory: Boolean): Boolean = !restored && !fromHistory
