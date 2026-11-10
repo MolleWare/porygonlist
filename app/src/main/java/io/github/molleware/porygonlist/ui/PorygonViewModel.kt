@@ -514,6 +514,17 @@ class PorygonViewModel(
   }
 
   /** Trusts the pasted code as a phone this one has not seen before. */
+  /**
+   * The keyboard's Done in the code field.
+   *
+   * It answers "someone new" only when that is the one answer there is. With somebody the code could
+   * be a new phone for, the question is the buttons' to settle: Done once answered it unseen, and
+   * a replaced handset came in as a stranger while the old id went on being waited on.
+   */
+  fun submitPairCode(state: AppState) {
+    if (replaceCandidates(state).isEmpty()) pairAsNew()
+  }
+
   fun pairAsNew() {
     val invite = pendingInvite ?: return
     // Captured before the draft is cleared: it is the link, not the invite, that says where to

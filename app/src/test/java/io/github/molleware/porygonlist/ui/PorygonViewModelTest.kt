@@ -44,6 +44,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -1044,6 +1045,32 @@ class PorygonViewModelTest {
     assertEquals("Ava", vm.pendingInvite?.displayName)
     assertEquals("", vm.pairNote)
     assertTrue("nothing is trusted until it is acted on", state().peers.isEmpty())
+  }
+
+  @Test
+  fun `Done on a pasted code leaves the question to the buttons when it could be a replacement`() = runTest(dispatcher) {
+    // Found in review, 2026-11-10: the keyboard's Done answered "someone new" without the question
+    // being seen. The seed has Ava on its lists, so the code could be her new phone.
+    repo.load()
+    vm.onPairCodeChange(otherPhone("Ava"))
+    assertTrue(vm.replaceCandidates(state()).isNotEmpty())
+
+    vm.submitPairCode(state())
+
+    assertTrue("nothing paired", state().peers.isEmpty())
+    assertNotNull("the question is still there", vm.pendingInvite)
+  }
+
+  @Test
+  fun `Done on a pasted code pairs when there is nobody it could be replacing`() = runTest(dispatcher) {
+    repo.load()
+    repo.update { s, _ -> s.copy(lists = s.lists.map { l -> l.copy(people = l.people.filter { it.device == s.localDevice }) }) }
+    vm.onPairCodeChange(otherPhone("Ava"))
+    assertTrue(vm.replaceCandidates(state()).isEmpty())
+
+    vm.submitPairCode(state())
+
+    assertEquals(listOf("Ava"), state().peers.map { it.name })
   }
 
   @Test

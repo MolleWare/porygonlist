@@ -89,6 +89,8 @@ fun PairScreen(
   handingBack: Boolean,
   replaceCandidates: List<Person>,
   onPairAsNew: () -> Unit,
+  /** The keyboard's Done: "someone new" only when nobody could be replacing a phone. */
+  onSubmitCode: () -> Unit,
   onReplace: (DeviceId) -> Unit,
   onBack: () -> Unit,
   modifier: Modifier = Modifier,
@@ -183,7 +185,7 @@ fun PairScreen(
       singleLine = false,
       minHeight = 76.dp,
       imeAction = ImeAction.Done,
-      onSubmit = onPairAsNew,
+      onSubmit = onSubmitCode,
     )
 
     // "Handing your code back" rather than a spinner: the wait is a second at most, and what is
