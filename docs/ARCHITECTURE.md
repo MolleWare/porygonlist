@@ -265,7 +265,9 @@ caller read the clock itself.
 
 **`receive()` refuses three things** — an unpaired sender, our own words played
 back, and a list we do not already share. That last one means a peer cannot join a
-list by asserting it; joining happens by invitation.
+list by asserting it; joining happens by invitation. "Share" is asked of this
+phone's copy, not the sender's: a list merges only from someone on it here, and
+someone new gets on when the copy of somebody already on it names them.
 
 **A payload carries only lists and people.** Not approved networks, not paired
 peers, not delivery receipts, not the id counter. A test asserts none of those
