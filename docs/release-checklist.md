@@ -917,9 +917,22 @@ Hugo's call: the features built for 0.2.0 ship in the first release instead. `ne
       phone"): an avatar and a rename reaching the other phone, "for Lasagne" travelling with a
       recipe's items, a merged list arriving on the other phone, the one sync switch, and a
       partial exchange.
-- [ ] The review's findings in code that only `next` had now ship in 0.1.0: unbounded `held`
+- [x] The review's findings in code that only `next` had now ship in 0.1.0: unbounded `held`
       lines, reboot recovery hanging on one registration, an alarm grant made with the app
-      closed arming nothing. Fix or accept each before the tag.
+      closed arming nothing. Fix or accept each before the tag. *All three fixed, 822 tests:
+      the held ids of one payload share one limit of 16,384, checked before a run is expanded
+      (`d856610`); a persisted watch job, id 20579 (`0x5063`), every 4 hours while the switch is
+      on, re-arms the quarter hour and registers the wifi listener again, and a failed
+      registration is logged under `PorygonList` (`c85f0ad`); allowing alarms with the app
+      closed arms the quarter hour without reading the network (`0a5d6ef`).*
+- [ ] The watch on a real phone, app opened at home with the switch on:
+      `adb shell dumpsys jobscheduler | grep -A3 20579` shows it persisted; turning the switch off
+      removes it; joining a strange wifi keeps it.
+- [ ] After a reboot, unlocked but not opened: job 20579 still there, and
+      `adb shell cmd jobscheduler run -f io.github.molleware.porygonlist 20579` arms the next
+      quarter hour (`adb shell dumpsys alarm | grep -B2 -A6 porygonlist`).
+- [ ] Alarms allowed in system settings with the app swiped away and the switch on: an exact
+      alarm armed for the next quarter hour. With the switch off: none.
 - [x] `docs/ARCHITECTURE.md` still labels these features "(0.2.0)". *A note at its top says they
       ship in 0.1.0, and that "0.1.0" for an older phone or save means the test builds up to
       `18442bb`; the labels and the code comments stay as written.*
