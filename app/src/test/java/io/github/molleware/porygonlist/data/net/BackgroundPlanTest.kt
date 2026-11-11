@@ -7,6 +7,8 @@ import io.github.molleware.porygonlist.data.sync.DeviceId
 import io.github.molleware.porygonlist.data.sync.Hlc
 import io.github.molleware.porygonlist.data.sync.ListId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -77,5 +79,21 @@ class BackgroundPlanTest {
   fun `never touched, it runs where alarms are allowed and not where they are not`() {
     assertEquals(BackgroundPlan.RUN, backgroundPlan(on(home), state(backgroundSync = null), alarmsAllowed = true))
     assertEquals(BackgroundPlan.STOP, backgroundPlan(on(home), state(backgroundSync = null), alarmsAllowed = false))
+  }
+
+  @Test
+  fun `the watch keeps the schedule coming while the switch is on and somebody is paired, whatever the network`() {
+    // It reads no network: a reboot can leave the wifi listener missing, and the watch is the way
+    // back from that, so it cannot wait on the listener's news of a wifi.
+    assertTrue(keepsWatch(state(backgroundSync = true), alarmsAllowed = true))
+    assertTrue("never touched, with alarms", keepsWatch(state(backgroundSync = null), alarmsAllowed = true))
+  }
+
+  @Test
+  fun `the watch stands down with the switch off, alarms revoked, or nobody to sync with`() {
+    assertFalse("turned off", keepsWatch(state(backgroundSync = false), alarmsAllowed = true))
+    assertFalse("alarms revoked since it was turned on", keepsWatch(state(backgroundSync = true), alarmsAllowed = false))
+    assertFalse("never touched, without alarms", keepsWatch(state(backgroundSync = null), alarmsAllowed = false))
+    assertFalse("nobody paired", keepsWatch(state(paired = false), alarmsAllowed = true))
   }
 }

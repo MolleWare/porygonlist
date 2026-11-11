@@ -33,6 +33,10 @@ internal fun isRetiredJob(id: Int): Boolean = id in RETIRED_JOB_IDS
  * fourteen minutes away. This is not a schedule of its own: one window, then nothing until the
  * alarm. Without alarms the switch is off, and nothing books it.
  *
+ * It also runs the watch ([keepWatch]), a persisted job every few hours that opens no window: it
+ * only re-arms the alarm and registers the wifi listener again, so a reboot that lost the listener
+ * does not leave the phone without background sync until it is opened.
+ *
  * **Why JobScheduler and not WorkManager.** This is the framework scheduler, which WorkManager wraps.
  * It adds no dependency and installs no startup initialiser, so the cold-start path does not grow.
  * Nothing about it runs before the first frame.
@@ -53,6 +57,17 @@ class SyncJob : JobService() {
     if (isRetiredJob(params.jobId)) {
       retireOldJobs(applicationContext, always = true)
       return false
+    }
+
+    if (params.jobId == WATCH_ID) {
+      scope.launch {
+        try {
+          BackgroundSync.watch(applicationContext)
+        } finally {
+          jobFinished(params, false)
+        }
+      }
+      return true
     }
 
     val window = SyncWindow(applicationContext)
@@ -114,5 +129,50 @@ class SyncJob : JobService() {
     fun cancelSoon(context: Context) {
       context.getSystemService(JobScheduler::class.java)?.cancel(NOW_ID)
     }
+
+    /**
+     * The watch: every [WATCH_EVERY_MS], while the switch is on, registers [WifiWatch] again and
+     * re-arms the quarter hour. See [BackgroundSync.watch] for what one does.
+     *
+     * Alarms do not survive a reboot and since 0.2.0 no job is persisted for the windows, so the
+     * boot's one registration of the wifi listener was the only way back, and it went missing more
+     * than once on the Pixel. This is persisted, so it comes back after a reboot whatever the boot
+     * did. It needs no network: it reads none, and the window the alarm opens checks the wifi itself.
+     *
+     * Booked once and left: booking it again would restart its period, so a phone opened every few
+     * hours would never see it run. Cancelled only by [stopWatch], when the switch goes off; a
+     * strange wifi stops the windows and leaves the watch.
+     */
+    fun keepWatch(context: Context) {
+      val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
+      if (scheduler.getPendingJob(WATCH_ID) != null) return
+      runCatching {
+        scheduler.schedule(
+          JobInfo.Builder(WATCH_ID, ComponentName(context, SyncJob::class.java))
+            .setPeriodic(WATCH_EVERY_MS)
+            .setPersisted(true)
+            .build()
+        )
+      }
+    }
+
+    /** Cancels [keepWatch], with the switch turned off. */
+    fun stopWatch(context: Context) {
+      context.getSystemService(JobScheduler::class.java)?.cancel(WATCH_ID)
+    }
+
+    /**
+     * Not one of [RETIRED_JOB_IDS], nor [NOW_ID]; 0x5061 is the window's notification. Never used
+     * for a job before, so nothing an older build left persisted can be mistaken for it.
+     */
+    internal const val WATCH_ID = 0x5063
+
+    /**
+     * Four hours. An hour after a reboot is fine (Hugo, 2026-10-25), and the boot's own
+     * registration does that; this is for when it fails, where four hours beats waiting for the
+     * app to be opened. Android may run it later in Doze. At home each one costs a window, since
+     * the registration fires at once for the wifi joined: six a day beside the alarm's ninety-six.
+     */
+    internal const val WATCH_EVERY_MS = 4 * 60 * 60_000L
   }
 }

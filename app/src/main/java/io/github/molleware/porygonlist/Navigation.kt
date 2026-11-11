@@ -134,14 +134,19 @@ fun MainNavigation(pairLink: String? = null, onPairLinkHandled: () -> Unit = {})
     }
   }
   // The switch, turned in Settings or from the Lists card: saved, and the schedule brought in line
-  // at once rather than at the next start. Off stops everything wherever the phone is; on arms the
-  // next quarter hour only on an approved wifi, as above, and joining one does it otherwise.
+  // at once rather than at the next start. Off stops everything wherever the phone is, the watch
+  // included; on arms the next quarter hour only on an approved wifi, as above, and joining one
+  // does it otherwise. The watch is kept either way, so a reboot before then cannot lose it.
   val scope = rememberCoroutineScope()
   val onBackgroundSync: (Boolean) -> Unit = { on ->
     viewModel.setBackgroundSync(on)
     val app = context.applicationContext
     scope.launch(Dispatchers.IO) {
-      if (!on) BackgroundSync.cancel(app) else if (hasPeers && onApprovedWifi) BackgroundSync.ensureScheduled(app, chosen = true)
+      when {
+        !on -> BackgroundSync.turnOff(app)
+        hasPeers && onApprovedWifi -> BackgroundSync.ensureScheduled(app, chosen = true)
+        hasPeers -> BackgroundSync.keepWatch(app)
+      }
     }
   }
 

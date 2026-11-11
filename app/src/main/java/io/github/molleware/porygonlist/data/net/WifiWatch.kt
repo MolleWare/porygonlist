@@ -9,6 +9,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
+import android.util.Log
 import io.github.molleware.porygonlist.Graph
 import io.github.molleware.porygonlist.data.AppState
 import kotlinx.coroutines.CoroutineScope
@@ -65,6 +66,10 @@ fun backgroundPlan(snapshot: NetworkSnapshot, state: AppState, alarmsAllowed: Bo
  * to be running. Those registrations do not survive a reboot, which is why this also listens for
  * the boot and re-registers. Alarms do not survive one either, so the alarm is re-armed by the join
  * that follows, since a phone boots before its wifi is up.
+ *
+ * The boot is then the only way back, and it rests on one registration. That went missing
+ * unexplained on the Pixel (2026-10-13, -20, -21), so a persisted job, the watch, registers again
+ * and re-arms every few hours while the switch is on: see [SyncJob.keepWatch].
  */
 class WifiWatch : BroadcastReceiver() {
 
@@ -127,10 +132,22 @@ class WifiWatch : BroadcastReceiver() {
      * window registering again, that was a loop — 2,600 broadcasts in two minutes on the Pixel,
      * 2026-10-24, each "sync now" cancelling the window it replaced. A new process, after a reboot
      * or a kill, still registers on the first call.
+     *
+     * [again] registers even if this process has, for the watch ([SyncJob.keepWatch]) that runs
+     * every few hours: a registration went missing unexplained on the Pixel more than once, and a
+     * process can live long enough to have outlived its own. A few hours apart is no loop.
+     *
+     * A refusal is logged, the one thing the app logs: it is otherwise invisible, and it is what
+     * leaves the phone with no background sync until it is opened.
      */
-    fun register(context: Context) {
-      if (!registered.compareAndSet(false, true)) return
-      val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return
+    fun register(context: Context, again: Boolean = false) {
+      if (!registered.compareAndSet(false, true) && !again) return
+      val connectivity = context.getSystemService(ConnectivityManager::class.java)
+      if (connectivity == null) {
+        registered.set(false)
+        Log.w(TAG, "wifi listener not registered: no ConnectivityManager")
+        return
+      }
       val request =
         NetworkRequest.Builder()
           .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
@@ -144,7 +161,14 @@ class WifiWatch : BroadcastReceiver() {
         PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
       val intent = PendingIntent.getBroadcast(context, 0, Intent(context, WifiWatch::class.java), flags)
       // A refusal leaves the next call free to try again.
-      runCatching { connectivity.registerNetworkCallback(request, intent) }.onFailure { registered.set(false) }
+      runCatching { connectivity.registerNetworkCallback(request, intent) }
+        .onFailure {
+          registered.set(false)
+          Log.w(TAG, "wifi listener not registered", it)
+        }
     }
+
+    /** What the app's one log line goes under, for `adb logcat -s PorygonList`. */
+    private const val TAG = "PorygonList"
   }
 }

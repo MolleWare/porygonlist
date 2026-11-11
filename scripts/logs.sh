@@ -9,7 +9,9 @@
 # The app itself logs nothing, deliberately — a grocery list has no business
 # narrating what is on it. What these surface is what Android says about it:
 # crashes, ANRs and the odd framework warning. That is enough for a stack trace,
-# which is the thing worth having.
+# which is the thing worth having. The one exception is a warning under the tag
+# PorygonList when Android refuses the wifi listener, which otherwise fails
+# silently and leaves background sync dead: `adb logcat -s PorygonList`.
 #
 # Before pasting output anywhere public: a crash inside the sync code can carry
 # an item id in its message, and an item id begins with a device id. Not a

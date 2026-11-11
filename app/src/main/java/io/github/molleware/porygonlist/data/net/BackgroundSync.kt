@@ -7,6 +7,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.content.ContextCompat
+import io.github.molleware.porygonlist.Graph
+import io.github.molleware.porygonlist.data.AppState
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 
 /** A quarter of an hour: how far apart the background windows are. */
 const val QUARTER_HOUR_MS = 15 * 60_000L
@@ -98,6 +102,14 @@ fun asksForBackgroundSync(chosen: Boolean?, alarmsAllowed: Boolean): Boolean =
   chosen != false && backgroundSwitch(chosen, alarmsAllowed) != BackgroundSwitch.ON
 
 /**
+ * Whether the background windows should be kept coming with the app closed, whatever the network:
+ * the switch on, and somebody to sync with. What the watch ([SyncJob.keepWatch]) asks each time it
+ * runs, standing itself down when not.
+ */
+fun keepsWatch(state: AppState, alarmsAllowed: Boolean): Boolean =
+  state.peers.isNotEmpty() && backgroundSwitch(state.backgroundSync, alarmsAllowed) == BackgroundSwitch.ON
+
+/**
  * When the background windows run: on the quarter hour, by exact alarm, while the switch is on.
  *
  * **On the quarter hour.** A window only lands a change when both phones are listening at once, so
@@ -110,7 +122,8 @@ fun asksForBackgroundSync(chosen: Boolean?, alarmsAllowed: Boolean): Boolean =
  * moments, and a phone with them kept one booked beside the alarm in case they were revoked. Android
  * only promises a job "not before", so the first missed its meetings, and the second only existed to
  * fall back to the first. Both are gone: off means no window, and revoked means off. [SyncJob]
- * remains for the one window straight away on joining an approved wifi.
+ * remains for the one window straight away on joining an approved wifi, and for the watch, which
+ * opens no window: it only brings the alarm and the wifi listener back, in case a reboot lost them.
  *
  * The decision is remade every time the schedule is touched, from the switch and from Android, so a
  * revoke that nobody was told about is noticed at the next start or window, and stops everything.
@@ -118,28 +131,86 @@ fun asksForBackgroundSync(chosen: Boolean?, alarmsAllowed: Boolean): Boolean =
 object BackgroundSync {
 
   /**
-   * Arms the next quarter hour if the switch reads on, and stops every window if not. Safe to call
-   * repeatedly. [chosen] is the owner's choice, [io.github.molleware.porygonlist.data.AppState.backgroundSync].
+   * Arms the next quarter hour, and keeps the watch, if the switch reads on; turns everything off
+   * if not. Safe to call repeatedly. [chosen] is the owner's choice, [AppState.backgroundSync].
    */
   fun ensureScheduled(context: Context, chosen: Boolean?) {
     SyncJob.retireOldJobs(context)
-    if (backgroundSwitch(chosen, alarmsAllowed(context)) == BackgroundSwitch.ON) armAlarm(context) else cancel(context)
+    if (backgroundSwitch(chosen, alarmsAllowed(context)) == BackgroundSwitch.ON) {
+      armAlarm(context)
+      SyncJob.keepWatch(context)
+    } else {
+      turnOff(context)
+    }
   }
 
   /**
    * From an alarm going off: the next one, without reading the state. An alarm is only ever armed
    * while the switch is on, and the window that follows reads it, and stops the schedule if it has
    * been turned off since. Revoked, Android cancels the alarm, so it never gets here.
+   *
+   * The watch too, if it is missing: that is how a phone updated from a build without one, and
+   * never opened since, gets it.
    */
   fun armNext(context: Context) {
     SyncJob.retireOldJobs(context)
-    if (alarmsAllowed(context)) armAlarm(context)
+    if (alarmsAllowed(context)) {
+      armAlarm(context)
+      SyncJob.keepWatch(context)
+    }
+  }
+
+  /**
+   * The next quarter hour armed and the wifi listener registered, without reading the network, if
+   * [keepsWatch] says so; nothing, and false, if not.
+   *
+   * For the moments with the app closed when the network cannot be trusted to read: a background
+   * process starts firewalled, its active network reading as none, so a plan made from it would
+   * leave the schedule alone. The alarm needs no network to be armed, and the window it opens
+   * checks the wifi itself, with time to settle, and stops the schedule on a strange one. The
+   * listener is registered after arming, so where it fires at once for the wifi joined, its plan,
+   * made from that network, has the last word.
+   */
+  fun rearm(context: Context, state: AppState, again: Boolean): Boolean {
+    if (!keepsWatch(state, alarmsAllowed(context))) return false
+    ensureScheduled(context, state.backgroundSync)
+    WifiWatch.register(context, again)
+    return true
+  }
+
+  /**
+   * What the watch ([SyncJob.keepWatch]) does each time it runs: [rearm], registering the listener
+   * again even if this process has; or, with the switch off — turned off, alarms revoked — or
+   * nobody to sync with, [turnOff], which takes the watch away too. Pairing, or the switch, books
+   * it again.
+   */
+  suspend fun watch(context: Context) {
+    if (!rearm(context, loadedState(context), again = true)) turnOff(context)
+  }
+
+  /** The state, read from the file if this process has not yet. A file read: off the main thread. */
+  suspend fun loadedState(context: Context): AppState {
+    val repo = Graph.listRepository(context)
+    repo.load()
+    return repo.state.filterNotNull().first()
+  }
+
+  /** Keeps the watch, for the switch turned on away from an approved wifi. */
+  fun keepWatch(context: Context) = SyncJob.keepWatch(context)
+
+  /** The switch turned off: no windows, and no watch to bring them back. */
+  fun turnOff(context: Context) {
+    cancel(context)
+    SyncJob.stopWatch(context)
   }
 
   /** One window straight away, on joining an approved wifi while the switch is on. */
   fun runSoon(context: Context) = SyncJob.runSoon(context)
 
-  /** Stops the windows: until an approved wifi is joined again, or until the switch is on again. */
+  /**
+   * Stops the windows: until an approved wifi is joined again, or until the switch is on again. The
+   * watch stays, since a strange wifi is no reason to lose the way back; see [turnOff].
+   */
   fun cancel(context: Context) {
     SyncJob.retireOldJobs(context)
     cancelAlarm(context)

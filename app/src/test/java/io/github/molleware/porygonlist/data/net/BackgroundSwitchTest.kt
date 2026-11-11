@@ -80,4 +80,19 @@ class BackgroundSwitchTest {
     // 0x5060: the window straight away on joining an approved wifi, still booked by this build.
     assertFalse(isRetiredJob(20576))
   }
+
+  @Test
+  fun `the watch has an id of its own, which retiring the old jobs leaves alone`() {
+    assertFalse(isRetiredJob(SyncJob.WATCH_ID))
+    // Not the window straight away (0x5060), nor the window's notification (0x5061).
+    assertFalse(SyncJob.WATCH_ID in setOf(0x5060, 0x5061))
+  }
+
+  @Test
+  fun `the watch runs every few hours`() {
+    // Often enough that a reboot which lost the wifi listener costs hours, not until the app is
+    // opened; seldom enough to cost nothing, and above Android's fifteen-minute floor for a period.
+    assertTrue(SyncJob.WATCH_EVERY_MS >= 60 * 60_000L)
+    assertTrue(SyncJob.WATCH_EVERY_MS <= 24 * 60 * 60_000L)
+  }
 }

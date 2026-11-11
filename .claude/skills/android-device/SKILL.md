@@ -91,6 +91,8 @@ first-run naming, seeding, a `PLSTATE` format upgrade — needs
 **The app logs nothing on purpose.** `logs.sh` surfaces what *Android* says:
 crashes, ANRs, framework warnings. If you are looking for app-level tracing, it
 does not exist and should not be added. A stack trace is what these are for.
+The one exception: a warning under the tag `PorygonList` when Android refuses
+the wifi listener (`WifiWatch.register`), a failure that is otherwise silent.
 
 **Do not paste log output anywhere public.** A crash inside sync can carry an
 item id, and an item id begins with a device id.

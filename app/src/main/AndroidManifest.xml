@@ -52,7 +52,9 @@
       Lets background sync carry on after a reboot. Normal protection level: granted at install, no
       runtime prompt. At boot WifiWatch asks Android again to say when a wifi is joined, since that
       request does not survive a restart, and the join that follows re-arms the quarter-hour alarm
-      if the switch is on. Nothing else runs.
+      if the switch is on. Nothing else runs at boot. It also lets SyncJob's watch be persisted:
+      while the switch is on, every few hours it re-arms the alarm and asks again, in case the
+      boot's request did not take.
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -128,8 +130,8 @@
 
         <!--
           A single sync window straight away on joining an approved wifi, while the app is out of
-          sight. Not exported: only the system's job scheduler, which holds BIND_JOB_SERVICE, may
-          start it. See SyncJob.
+          sight, and the watch that brings the schedule back after a reboot. Not exported: only the
+          system's job scheduler, which holds BIND_JOB_SERVICE, may start it. See SyncJob.
         -->
         <service
             android:name=".data.net.SyncJob"
