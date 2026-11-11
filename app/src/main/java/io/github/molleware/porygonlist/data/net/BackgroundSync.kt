@@ -9,8 +9,12 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import io.github.molleware.porygonlist.Graph
 import io.github.molleware.porygonlist.data.AppState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /** A quarter of an hour: how far apart the background windows are. */
 const val QUARTER_HOUR_MS = 15 * 60_000L
@@ -261,16 +265,27 @@ object BackgroundSync {
  * then opens this window in [SyncWindowService]. Firing is also the one moment Android lets a closed
  * app start a foreground service, which is what keeps the network through Doze for the whole window.
  *
- * The grant arrives with the app possibly closed, from system settings. If the switch now reads on
- * and the phone is on an approved wifi, the next quarter hour is armed there and then; if not,
- * joining one, or opening the app, picks it up. There is no broadcast for the revoke.
+ * The grant arrives with the app possibly closed, from system settings. If the switch now reads on,
+ * with somebody to sync with, the next quarter hour is armed there and then, the watch kept and the
+ * wifi listener registered ([BackgroundSync.rearm]); with it off, nothing. The network is not read
+ * for it: this process starts firewalled, and its active network read as none, which left the
+ * schedule alone until the next wifi join or the app being opened. The window the alarm opens
+ * checks the wifi itself, with time to settle. There is no broadcast for the revoke.
  */
 class SyncAlarm : BroadcastReceiver() {
 
   override fun onReceive(context: Context, intent: Intent) {
     val app = context.applicationContext
     if (intent.action == AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED) {
-      WifiWatch.follow(this, app, { AndroidNetworkMonitor(app).current() }, soon = false)
+      // Reading the state is a file read, so off the main thread, inside the time a receiver has.
+      val pending = goAsync()
+      scope.launch {
+        try {
+          BackgroundSync.rearm(app, BackgroundSync.loadedState(app), again = false)
+        } finally {
+          pending.finish()
+        }
+      }
       return
     }
 
@@ -279,5 +294,9 @@ class SyncAlarm : BroadcastReceiver() {
     // Refused — a vendor's battery manager, say. A job is the next best thing: later and unaligned,
     // but the change still gets its chance.
     if (started.isFailure) BackgroundSync.runSoon(app)
+  }
+
+  private companion object {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   }
 }

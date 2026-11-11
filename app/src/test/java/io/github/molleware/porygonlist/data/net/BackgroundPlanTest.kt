@@ -96,4 +96,15 @@ class BackgroundPlanTest {
     assertFalse("never touched, without alarms", keepsWatch(state(backgroundSync = null), alarmsAllowed = false))
     assertFalse("nobody paired", keepsWatch(state(paired = false), alarmsAllowed = true))
   }
+
+  @Test
+  fun `allowing alarms with the app closed arms the quarter hour with the switch on, though the network reads offline`() {
+    // What the grant used to ask, from a process still firewalled, whose active network reads as
+    // none: offline, which leaves the schedule alone, so nothing was armed.
+    assertEquals(BackgroundPlan.LEAVE, backgroundPlan(NetworkSnapshot.Offline, state(backgroundSync = null), alarmsAllowed = true))
+    // What it asks now, reading no network: the window the alarm opens checks the wifi itself.
+    assertTrue("never touched, so on now that alarms are allowed", keepsWatch(state(backgroundSync = null), alarmsAllowed = true))
+    assertTrue("turned on, then sent to allow them", keepsWatch(state(backgroundSync = true), alarmsAllowed = true))
+    assertFalse("turned off: allowing alarms arms nothing", keepsWatch(state(backgroundSync = false), alarmsAllowed = true))
+  }
 }
