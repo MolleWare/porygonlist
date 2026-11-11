@@ -54,7 +54,7 @@ object SyncExchange {
    * A few dozen lists of a few dozen items is tens of kilobytes. A megabyte is room for far more
    * than anyone has and still nothing like room for an attack.
    */
-  private const val MAX_FRAME = 1 shl 20
+  internal const val MAX_FRAME = 1 shl 20
 
   /** What one end has to apply, and what it must bank once the other confirms. */
   data class Exchange(val theirs: SyncPayload, val ackOfMine: Hlc?)

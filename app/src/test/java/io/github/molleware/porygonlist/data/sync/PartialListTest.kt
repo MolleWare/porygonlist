@@ -6,6 +6,7 @@ import io.github.molleware.porygonlist.data.GroceryList
 import io.github.molleware.porygonlist.data.ListAccent
 import io.github.molleware.porygonlist.data.Person
 import io.github.molleware.porygonlist.data.TrustedPeer
+import io.github.molleware.porygonlist.data.crypto.DeviceIdentity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -126,5 +127,69 @@ class PartialListTest {
     // Had he not seen hers — it is not among what he holds — it is the clash it always was.
     val apart = ava.receiving(SyncPayload(HUGO, stamp(5_000, HUGO), listOf(list(secondBag)), run = "r1", held = mapOf(weekly to setOf(milk.id))))
     assertEquals(listOf(herRice.id to secondBag.id), apart.conflicts.map { it.yours.id to it.theirs.id })
+  }
+
+  /** [lists] as Hugo sends them, with [held] lines written by hand after them. */
+  private fun withHeld(lists: List<GroceryList>, vararg held: String): String =
+    SyncCodec.encode(SyncPayload(HUGO, stamp(5_000, HUGO), lists, run = "r1")) + held.joinToString("") { "$it\n" }
+
+  private fun lists(count: Int) =
+    (1..count).map { n -> GroceryList(ListId("${HUGO.value}:$n"), "List $n", ListAccent.ACCENT, emptyList(), both) }
+
+  @Test
+  fun `the limit on left-out ids is one for the whole payload, not one per line`() {
+    val most = HeldIds.MOST
+    val four = lists(4)
+    fun quarters(extra: Int) = four.map { "held|${it.id.value}|${AVA.value}|1-${most / 4 + extra}" }.toTypedArray()
+
+    val full = SyncCodec.decode(withHeld(four, *quarters(extra = 0)))
+    assertEquals("up to the limit, between them", most, full!!.held.values.sumOf { it.size })
+    assertNull("one more refuses the payload", SyncCodec.decode(withHeld(four, *quarters(extra = 1))))
+
+    // A line of a few bytes, again and again: each well under the limit, and naming the same ids
+    // every time, so the set never grows. Still refused, before it is walked thousands of times.
+    val again = Array(1_000) { "held|${weekly.value}|${AVA.value}|1-100" }
+    assertNull(SyncCodec.decode(withHeld(listOf(list()), *again)))
+  }
+
+  @Test
+  fun `one run longer than the limit is refused before it is expanded`() {
+    val most = HeldIds.MOST
+    fun weeklyHolding(prefix: String, run: String) = SyncCodec.decode(withHeld(listOf(list()), "held|${weekly.value}|$prefix|$run"))
+
+    assertEquals(most, weeklyHolding(AVA.value, "1-$most")!!.held.getValue(weekly).size)
+    assertNull(weeklyHolding(AVA.value, "1-${most + 1}"))
+    assertNull("the twenty bytes that once named a hundred thousand", weeklyHolding("P", "0-99999"))
+    assertNull("nor does the arithmetic overflow", weeklyHolding("P", "0-${Long.MAX_VALUE}"))
+  }
+
+  @Test
+  fun `left-out ids for a list the payload does not carry are dropped unread`() {
+    val stranger = "${AVA.value}:99"
+    val decoded =
+      SyncCodec.decode(
+        withHeld(
+          listOf(list()),
+          "held|$stranger|P|0-${Long.MAX_VALUE}",
+          "held|$stranger|P|3-x",
+          "held|${weekly.value}|${AVA.value}|1-${HeldIds.MOST}",
+        )
+      )
+
+    // Read, the first would have refused the payload, and its ids would have counted against the
+    // limit the list it does carry uses up whole.
+    assertEquals(setOf(weekly), decoded!!.held.keys)
+    assertEquals(HeldIds.MOST, decoded.held.getValue(weekly).size)
+  }
+
+  @Test
+  fun `no honest sender holds more items than the limit, since sent whole they would not fit a frame`() {
+    // The emptiest item there is, with ids as short as real ones: the limit assumes no item line is
+    // shorter than SHORTEST_ITEM_LINE, and says it is less than half of this.
+    val empty = item("${HUGO.value}:1", "", stamp(0, HUGO))
+
+    assertEquals("as long as a real one", DeviceIdentity.deviceIdFor(byteArrayOf(1)).value.length, HUGO.value.length)
+    assertTrue(SyncCodec.itemLine(weekly, empty).length >= 2 * HeldIds.SHORTEST_ITEM_LINE)
+    assertTrue(HeldIds.MOST.toLong() * HeldIds.SHORTEST_ITEM_LINE <= SyncExchange.MAX_FRAME)
   }
 }

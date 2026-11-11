@@ -137,14 +137,14 @@ object SyncCodec {
     val nameStamps = mutableMapOf<ListId, Hlc>()
     val people = mutableMapOf<ListId, MutableList<Person>>()
     val items = mutableMapOf<ListId, MutableList<GroceryItem>>()
-    val held = mutableMapOf<ListId, Set<ItemId>>()
+    // Kept as read and expanded only after every line, once it is known which lists the payload
+    // carries: a run is a few bytes that become thousands of ids, so none is expanded for nothing.
+    val heldLines = mutableListOf<Pair<ListId, List<String>>>()
 
     for (line in lines.drop(1)) {
       val f = Records.split(line)
-      // Any other damaged line is skipped, as it always was. This one cannot be: skipped, it would
-      // turn a partial list into a whole one, and what that one leaves out would read as never seen.
       if (f.getOrNull(0) == "held") {
-        held[ListId(f.getOrNull(1) ?: return null)] = HeldIds.parse(f, from = 2) ?: return null
+        heldLines += ListId(f.getOrNull(1) ?: return null) to f
         continue
       }
       runCatching {
@@ -192,6 +192,19 @@ object SyncCodec {
     val sender = from ?: return null
     val stamp = at ?: return null
 
+    // Any other damaged line is skipped, as it always was. A held one cannot be: skipped, it would
+    // turn a partial list into a whole one, and what that one leaves out would read as never seen.
+    // One for a list the payload does not carry makes nothing whole, so it is dropped unread. Every
+    // held line draws on the same room, so many small ones cannot add up to what one may not hold.
+    val known = order.toSet()
+    val room = HeldIds.Room()
+    val held = mutableMapOf<ListId, Set<ItemId>>()
+    for ((list, f) in heldLines) {
+      if (list !in known) continue
+      val ids = HeldIds.parse(f, from = 2, room) ?: return null
+      held[list] = held[list].orEmpty() + ids
+    }
+
     return SyncPayload(
       from = sender,
       at = stamp,
@@ -208,7 +221,7 @@ object SyncCodec {
         },
       callback = callback,
       run = run,
-      held = held.filterKeys { it in order },
+      held = held,
     )
   }
 }
@@ -223,8 +236,27 @@ object SyncCodec {
  */
 internal object HeldIds {
 
-  /** More than any list holds by orders of magnitude, so a damaged or hostile run cannot fill memory. */
-  private const val MOST = 100_000
+  /** Less than half what an item with nothing on it takes, with the 16 characters of a real device id. */
+  const val SHORTEST_ITEM_LINE = 64
+
+  /**
+   * The most ids one payload's held records may name between them, so a damaged or hostile one
+   * cannot fill memory: a line of twenty bytes can name a hundred thousand.
+   *
+   * What a sender holds it must also be able to send whole, which it does with every new process
+   * and every tenth payload, and a whole payload has to fit [SyncExchange.MAX_FRAME]. A line for an
+   * item is never shorter than [SHORTEST_ITEM_LINE] (a test holds it to that), so no honest sender
+   * can hold more items than this across every list it sends: 16,384, where 204 was a lot.
+   */
+  const val MOST = SyncExchange.MAX_FRAME / SHORTEST_ITEM_LINE
+
+  /**
+   * What is left of [MOST] while a payload is read, shared by all its held records.
+   *
+   * Each id named counts, once per time it is named, and before a run is expanded: a run repeated
+   * many times adds nothing to the set but would still cost the time to walk it.
+   */
+  class Room(var left: Long = MOST.toLong())
 
   fun columns(ids: Set<ItemId>): List<String> {
     val counted = mutableMapOf<String, MutableList<Long>>()
@@ -240,8 +272,11 @@ internal object HeldIds {
       odd.sorted().flatMap { listOf(it, "") }
   }
 
-  /** Reads [columns] back from [from]. Null if anything is malformed: see `decode`. */
-  fun parse(f: List<String>, from: Int): Set<ItemId>? {
+  /**
+   * Reads [columns] back from [from], drawing on [room]. Null if anything is malformed, or if it
+   * names more ids than [room] has left: see `decode`.
+   */
+  fun parse(f: List<String>, from: Int, room: Room = Room()): Set<ItemId>? {
     val ids = mutableSetOf<ItemId>()
     var i = from
     while (i < f.size) {
@@ -249,12 +284,16 @@ internal object HeldIds {
       val spec = f.getOrNull(i + 1) ?: return null
       if (prefix.isEmpty()) return null
       if (spec.isEmpty()) {
+        if (room.left < 1) return null
+        room.left -= 1
         ids += ItemId(prefix)
       } else {
         for (run in spec.split(',')) {
           val first = run.substringBefore('-').toLongOrNull() ?: return null
           val last = if ('-' in run) run.substringAfter('-').toLongOrNull() ?: return null else first
-          if (first < 0 || last < first || last - first >= MOST || ids.size + (last - first) >= MOST) return null
+          // Never `last - first + 1`, which overflows for a run to Long.MAX_VALUE.
+          if (first < 0 || last < first || last - first >= room.left) return null
+          room.left -= last - first + 1
           for (n in first..last) ids += ItemId("$prefix:$n")
         }
       }

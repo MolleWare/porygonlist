@@ -517,7 +517,10 @@ there is none; 0.1.0 reads an empty port as none and stops there. `held` is a ne
 record after a partial list's items — `held|list|PREFIX|1-40,42|…`, the ids left
 out as runs per phone that minted them — and its presence is what makes the list
 partial. A damaged one refuses the payload, since skipped it would make the list
-whole. 0.1.0 is never sent one.
+whole. So does naming more than 16,384 ids across all of a payload's `held`
+records, checked before a run is expanded: no sender can hold more and still send
+its lists whole in one 1 MiB frame. One for a list the payload does not carry is
+dropped unread. 0.1.0 is never sent one.
 
 The mark of when this phone heard of a removal (0.2.0; section 5) is one stamp at
 the end of `item` and of `person` in the state file only, written only when there
