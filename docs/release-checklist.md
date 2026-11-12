@@ -1083,6 +1083,12 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       `./scripts/release.sh` enforces that. The signed APK's certificate is the draft's
       `3f6ec695…1d81`, v2 scheme, 0.1.0 (1), target SDK 36; the Gradle wrapper's checksum is
       pinned.*
+      *2026-11-11, `fdroid-check.sh` on `0879ed9`: F-Droid's build succeeded but did not match —
+      `classes.dex` and `baseline.prof` differed. A clean build here differed from Hugo's host APK
+      the same way: same classes and methods, but Compose's `$changed` flags `0` in the host build
+      where the clean one passes 384, 390, 12582912. The host APK came from `build.sh release` on
+      top of the evening's earlier builds; F-Droid always builds clean, as `release.sh` does. Now
+      `build.sh release` and `bundle` start from clean. To see: the check again on a clean build.*
 - [x] Confirm the build server has JDK 21, or add an install step to the recipe. Its default in
       `buildserver-trixie`; `./scripts/fdroid-check.sh` built `d1994a0` there with no extra step
       (2026-10-10).

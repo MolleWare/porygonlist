@@ -2,14 +2,19 @@
 # Build the app.
 #
 #   ./scripts/build.sh            debug (default)
-#   ./scripts/build.sh release    release, R8 enabled
+#   ./scripts/build.sh release    release, R8 enabled, from clean
 #   ./scripts/build.sh all        both
-#   ./scripts/build.sh bundle     release app bundle, for the Play Store
+#   ./scripts/build.sh bundle     release app bundle, for the Play Store, from clean
 #   ./scripts/build.sh signing    the release key's certificate fingerprints
 #   ./scripts/build.sh clean      wipe build outputs first, then debug
 #
 # Anything release-signed asks for the key's password, unless
 # keystore.properties holds it. See gradlew_signed in _common.sh.
+#
+# Release and bundle builds start from clean, because they are built to ship or to be compared
+# with F-Droid's build, which is always clean. Built on top of earlier builds, the Compose
+# compiler can leave a stability flag unknown that a clean build knows: on 2026-11-11 that made
+# classes.dex differ from F-Droid's (`0` where a clean build passes 384), and fdroid-check failed.
 
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
@@ -25,9 +30,9 @@ esac
 
 case "$variant" in
   debug)   tasks=(assembleDebug) ;;
-  release) tasks=(assembleRelease) ;;
-  all)     tasks=(assembleDebug assembleRelease) ;;
-  bundle)  tasks=(bundleRelease) ;;
+  release) tasks=(clean assembleRelease) ;;
+  all)     tasks=(clean assembleDebug assembleRelease) ;;
+  bundle)  tasks=(clean bundleRelease) ;;
   signing)
     # Only the release key's lines: the debug key's are noise here.
     info "Release signing certificate"
