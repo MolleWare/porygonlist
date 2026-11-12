@@ -152,10 +152,11 @@ under *Overnight battery*, further down.
       backstop booked without one is rebooked once alarms go. The store's feature line now says
       "on the dot with alarms allowed", and "Good to know" mentions the VPN. To see on the next
       build: alarms not allowed, the Lists card; a job window started by 5 past the quarter hour.*
-- [ ] Store screenshots on the final build, with the fake phone as the other person: demo mode,
+- [x] Store screenshots on the final build, with the fake phone as the other person: demo mode,
       throwaway lists, 3–6 into `fastlane/…/phoneScreenshots/`. *Chosen (Hugo, 2026-10-25): the
       Lists screen ("In step with Sam"), a list with who added what and a few ticked, the Shop
-      view, and pairing / Share.*
+      view, and pairing / Share.* *Done 2026-11-11 (`5724cca`), with the recipe checklist and a
+      "keep which?" card in place of pairing, whose QR carries the phone's address.*
 
 ### Meanwhile: by hand (Hugo)
 
@@ -223,10 +224,12 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
 ### Meanwhile: release preparation
 
 - [x] Push `main` from the host. *Pushed at `7e3f299`.*
-- [ ] Merge `fix-0.1.0` (the review's fixes, 2026-11-10) into `main`, and push `main`.
+- [x] Merge `fix-0.1.0` (the review's fixes, 2026-11-10) into `main`, and push `main`. *Merged
+      2026-11-10, with `next`; every branch is in `main` now.*
 - [ ] `./scripts/fdroid-check.sh` on the pushed HEAD now, before any tag: lint, F-Droid's own
       build and its comparison with our APK — a difference found now costs nothing.
-- [ ] Reread the store text once the decisions above have landed.
+- [x] Reread the store text once the decisions above have landed. *2026-11-11, against the Pixel
+      that evening: accurate, with the features from `next` added on 2026-11-10.*
 - [ ] When every box outside the release steps is ticked: the release steps under *F-Droid*,
       `release.sh` first.
 
@@ -910,6 +913,11 @@ Hugo's call: the features built for 0.2.0 ship in the first release instead. `ne
 0.1.0 and the state file `PLSTATE11`. The plan and the Pixel results for each feature are in
 `next-release-plan.md`.
 
+**Not holding the tag** (Hugo, 2026-11-11): the two items below need Ava's phone. Her build of
+`18442bb` keeps syncing with this one, the sync side of every feature was checked against the
+fake phone, and Sam's carrot avatar reached the Pixel's test copy on 2026-11-11.
+Whenever her phone is at hand: the update, then both phones closed on the home wifi for an hour.
+
 - [ ] Ava's own app updated in place from the build of `18442bb`, lists and pairing kept, and
       her 14 lists compared with `ava-2026-11-10-after-install/`.
 - [x] The Pixel's own app updated in place the same way. *2026-11-11 21:11, `72335c1` over the
@@ -1051,11 +1059,12 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 - [x] Store text, changelog and icon in `fastlane/metadata/android/en-US/` (icon from
       `./scripts/icon.sh store`). *Lengths 2026-11-10, in characters: title 11/30 on Play (50 on
       F-Droid), short 76/80, full 2750/4000, changelog 445/500, after the features from `next`
-      were added to both. `images/phoneScreenshots/` still empty — see screenshots above.*
-- [ ] Reread the store text after the phone session; it describes the app as that leaves it.
+      were added to both. `images/phoneScreenshots/` holds five since 2026-11-11.*
+- [x] Reread the store text after the phone session; it describes the app as that leaves it.
       *Reread 2026-10-21 against the session: accurate. "Run at startup, so background sync carries
       on after a restart" holds only once the wifi-listener workaround is built and seen after a
-      reboot. Read again before the tag.*
+      reboot. Read again before the tag.* *Read again 2026-11-11: accurate. The restart line holds
+      — the Pixel re-armed by itself after a reboot, and the watch is the backstop.*
 - [x] Merge `list-identity` into `main` (fast-forward, pushed `63b366a`). Work continues on `main`.
 - [ ] Tag `v0.1.0` on `main` once every box outside the release steps is ticked — step 1 below.
       *`fix-0.1.0` and `next` are both in `main` since 2026-11-10 (`7b768a9`); every other branch
@@ -1127,9 +1136,10 @@ and push stay there):
 
 ## After 0.1.0
 
-Features for the next release. Nothing here holds up the `v0.1.0` tag.
+Features for the next release. Nothing here holds up the `v0.1.0` tag. Those ticked here were
+built on `next` and ship in 0.1.0 since 2026-11-10.
 
-- [ ] **Clock and date up top.** The current time and date shown at the top of the screen.
+- [x] **Clock and date up top.** The current time and date shown at the top of the screen.
 - [ ] **Gamification, with a geo option.** The geo option is switched on and off in Settings. The
       privacy policy and Play's location declaration say location only reads the wifi's name; a geo
       option means updating both.
@@ -1156,12 +1166,12 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
       from another phone (unit tests only). Changed after the check (Hugo, 2026-11-09): a staple
       removed by hand can be learned again after the weeks chosen in Settings (1, 5, 10, 25 or
       never; 5 by default).
-- [ ] **Recipes beside staples.** A recipe is a sublist of its ingredients. One tap on it adds
+- [x] **Recipes beside staples.** A recipe is a sublist of its ingredients. One tap on it adds
       them all to the list, tagged, and each added item says which recipe it is an ingredient for.
-- [ ] **Sync is one switch in Settings.** Turning it on needs alarms allowed; without them it stays
+- [x] **Sync is one switch in Settings.** Turning it on needs alarms allowed; without them it stays
       off. This replaces today's two modes, "on the quarter hour" with alarms and "around the
       quarter hour" without, so sync is simple and predictable: on and on time, or off.
-- [ ] **Small wording and layout from session 5** (left out of 0.1.0, 2026-10-25): "Stop sharing
+- [x] **Small wording and layout from session 5** (left out of 0.1.0, 2026-10-25): "Stop sharing
       …?" opens under the tab bar; a kept private copy reads exactly like a same-named list of
       one's own; an already-paired code still asks "Someone new, or a phone replacing one?"; "new,
       from someone" once the sender is unpaired.
@@ -1178,11 +1188,11 @@ Features for the next release. Nothing here holds up the `v0.1.0` tag.
       had that job, and both have updated past it — the Pixel shows only the one-off jobs. Testing
       it means installing a 9 October build over today's state file, which may not read it. The
       code that replaces it (`SyncJob.ensureScheduled`) can go once no phone could still have it.
-- [ ] **Send only what changed.** Every exchange sends every shared list whole: 13 MB each way on
+- [x] **Send only what changed.** Every exchange sends every shared list whole: 13 MB each way on
       the battery night (2026-10-25/26), with a 204-item test list and several exchanges per
       window. Cheap on wifi today, but it grows with lists and people. A payload of what the peer
       has not acknowledged would shrink it to a few items.
-- [ ] **Merge two lists into one.** Pick two lists and combine them, for example two people's
+- [x] **Merge two lists into one.** Pick two lists and combine them, for example two people's
       separate shopping lists for the same trip. Open: what happens to an item both lists hold, and
       who keeps sharing the merged list when the two were shared with different people (Hugo,
       2026-10-31).
