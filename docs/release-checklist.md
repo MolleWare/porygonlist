@@ -912,7 +912,10 @@ Hugo's call: the features built for 0.2.0 ship in the first release instead. `ne
 
 - [ ] Ava's own app updated in place from the build of `18442bb`, lists and pairing kept, and
       her 14 lists compared with `ava-2026-11-10-after-install/`.
-- [ ] The Pixel's own app updated in place the same way.
+- [x] The Pixel's own app updated in place the same way. *2026-11-11 21:11, `72335c1` over the
+      build of 2026-10-27: opened on its lists, still paired with Ava and on "Network 0833af"; its
+      7 lists read back identical (`pixel-2026-11-12/` against `pixel-2026-11-12-after-install/`).
+      `backup-lists.py` read the new History button as a list's title; it skips it now.*
 - [ ] The two-phone checks that waited for her phone (`next-release-plan.md`, "Needs Ava's
       phone"): an avatar and a rename reaching the other phone, "for Lasagne" travelling with a
       recipe's items, a merged list arriving on the other phone, the one sync switch, and a
@@ -925,14 +928,29 @@ Hugo's call: the features built for 0.2.0 ship in the first release instead. `ne
       on, re-arms the quarter hour and registers the wifi listener again, and a failed
       registration is logged under `PorygonList` (`c85f0ad`); allowing alarms with the app
       closed arms the quarter hour without reading the network (`0a5d6ef`).*
-- [ ] The watch on a real phone, app opened at home with the switch on:
+- [x] The watch on a real phone, app opened at home with the switch on:
       `adb shell dumpsys jobscheduler | grep -A3 20579` shows it persisted; turning the switch off
-      removes it; joining a strange wifi keeps it.
-- [ ] After a reboot, unlocked but not opened: job 20579 still there, and
+      removes it; joining a strange wifi keeps it. *Pixel, 2026-11-11, build of `72335c1`: job
+      20579 PERSISTED, every 4 h, alarm for 21:30; switch off, neither left; on again, both back.
+      No strange wifi to hand: not seen.*
+- [x] After a reboot, unlocked but not opened: job 20579 still there, and
       `adb shell cmd jobscheduler run -f io.github.molleware.porygonlist 20579` arms the next
-      quarter hour (`adb shell dumpsys alarm | grep -B2 -A6 porygonlist`).
-- [ ] Alarms allowed in system settings with the app swiped away and the switch on: an exact
-      alarm armed for the next quarter hour. With the switch off: none.
+      quarter hour (`adb shell dumpsys alarm | grep -B2 -A6 porygonlist`). *Same phone: the job
+      was there; the boot's registration armed 21:30 by itself; the forced watch registered the
+      listener, which fired for the home wifi at once (one window, nothing crashed).*
+- [x] Alarms allowed in system settings with the app swiped away and the switch on: an exact
+      alarm armed for the next quarter hour. With the switch off: none. *Same phone: alarms
+      turned off on Android's own page, which cancelled the alarm and closed the app; turned on
+      again there, Android started the app for `SyncAlarm` alone and 21:30 was armed. Switch-off
+      case not seen; `keepsWatch` covers it.*
+- [ ] **The wifi listener hears one wifi, then is gone** — the October "registration went
+      missing". `dumpsys connectivity` after the forced watch: sent at 21:23:55.860, RELEASE at
+      21:24:00.863. Android drops a PendingIntent listener five seconds after it fires, and
+      registering again on a wifi fires again at once (the loop of 2026-10-24). So after a strange
+      wifi stopped the schedule, getting home was not heard until the app was opened or the watch
+      ran. Fix: the watch every hour, and only re-arming and registering when nothing is armed —
+      at home and on mobile data the alarm's own windows notice the network. To see on the
+      phone: a forced watch with the alarm armed adds no REGISTER to `dumpsys connectivity`.
 - [x] `docs/ARCHITECTURE.md` still labels these features "(0.2.0)". *A note at its top says they
       ship in 0.1.0, and that "0.1.0" for an older phone or save means the test builds up to
       `18442bb`; the labels and the code comments stay as written.*

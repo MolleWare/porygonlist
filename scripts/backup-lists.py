@@ -163,7 +163,8 @@ def read_list(phone, out, index):
     for page in range(120):
         root = phone.dump()
         if page == 0:
-            heading = [label(n) for n in root.iter("node") if n.get("text")]
+            # A list that has been cleared shows a History button beside "All lists", before the title.
+            heading = [label(n) for n in root.iter("node") if n.get("text") and label(n) != "History"]
             title = heading[1] if len(heading) > 1 and heading[0] == "All lists" else ""
         with open(os.path.join(out, f"list{index:02d}-page{page:02d}.png"), "wb") as f:
             f.write(phone.adb("exec-out", "screencap", "-p", binary=True))
