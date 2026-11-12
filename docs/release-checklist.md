@@ -943,7 +943,7 @@ Hugo's call: the features built for 0.2.0 ship in the first release instead. `ne
       turned off on Android's own page, which cancelled the alarm and closed the app; turned on
       again there, Android started the app for `SyncAlarm` alone and 21:30 was armed. Switch-off
       case not seen; `keepsWatch` covers it.*
-- [ ] **The wifi listener hears one wifi, then is gone** — the October "registration went
+- [x] **The wifi listener hears one wifi, then is gone** — the October "registration went
       missing". `dumpsys connectivity` after the forced watch: sent at 21:23:55.860, RELEASE at
       21:24:00.863. Android drops a PendingIntent listener five seconds after it fires, and
       registering again on a wifi fires again at once (the loop of 2026-10-24). So after a strange
@@ -951,6 +951,9 @@ Hugo's call: the features built for 0.2.0 ship in the first release instead. `ne
       ran. Fix: the watch every hour, and only re-arming and registering when nothing is armed —
       at home and on mobile data the alarm's own windows notice the network. To see on the
       phone: a forced watch with the alarm armed adds no REGISTER to `dumpsys connectivity`.
+      *Fixed in `cc6a390`, 823 tests. Pixel, 21:33 on its build: the first start re-booked job
+      20579 hourly in place of the 4-hour one; forced with 21:45 armed, it sent nothing and
+      registered nothing (5 entries before and after); job and alarm still there.*
 - [x] `docs/ARCHITECTURE.md` still labels these features "(0.2.0)". *A note at its top says they
       ship in 0.1.0, and that "0.1.0" for an older phone or save means the test builds up to
       `18442bb`; the labels and the code comments stay as written.*
