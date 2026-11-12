@@ -53,8 +53,8 @@
       runtime prompt. At boot WifiWatch asks Android again to say when a wifi is joined, since that
       request does not survive a restart, and the join that follows re-arms the quarter-hour alarm
       if the switch is on. Nothing else runs at boot. It also lets SyncJob's watch be persisted:
-      while the switch is on, every few hours it re-arms the alarm and asks again, in case the
-      boot's request did not take.
+      while the switch is on and nothing is armed, every hour it re-arms the alarm and asks again,
+      since each request only hears one wifi.
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 

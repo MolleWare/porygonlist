@@ -40,11 +40,10 @@ class SyncWindow(private val context: Context) {
     repo.load()
     val state = repo.state.filterNotNull().first()
 
-    // The wifi listener, in case nothing in this process has registered it yet. The boot path does,
-    // but on the Pixel after the reboots of 2026-10-13 and 2026-10-20 it was missing until the app
-    // was opened, while a job then persisted by the system survived and ran. Once per process:
-    // see WifiWatch.register for the loop that repeating it made. Before the plan, so a window that
-    // stops the schedule on a strange wifi still leaves the listener that restarts it at home.
+    // The wifi listener, in case nothing in this process has registered it yet. Once per process:
+    // see WifiWatch.register for the loop that repeating it made. On a wifi it fires at once and is
+    // then spent (see WifiWatch), so after a strange wifi stops the schedule here it is the hourly
+    // watch, not this, that hears the phone get home.
     if (state.peers.isNotEmpty()) WifiWatch.register(context)
 
     // Read in one go, not off the monitor's flow — whose first value has no fingerprint yet, which

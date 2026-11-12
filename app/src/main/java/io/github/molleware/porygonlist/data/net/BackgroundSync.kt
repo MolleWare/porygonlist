@@ -113,6 +113,38 @@ fun asksForBackgroundSync(chosen: Boolean?, alarmsAllowed: Boolean): Boolean =
 fun keepsWatch(state: AppState, alarmsAllowed: Boolean): Boolean =
   state.peers.isNotEmpty() && backgroundSwitch(state.backgroundSync, alarmsAllowed) == BackgroundSwitch.ON
 
+/** What one run of the watch ([BackgroundSync.watch]) does. */
+enum class WatchStep {
+  /** The switch off, alarms revoked, or nobody to sync with: everything off, the watch included. */
+  STAND_DOWN,
+
+  /**
+   * The quarter hour is armed: nothing. Its windows read the network themselves, at home or away
+   * on mobile data, and stop the schedule on a strange wifi.
+   */
+  NOTHING,
+
+  /**
+   * Nothing armed — a reboot, or a strange wifi stopped the schedule: arm it and register the wifi
+   * listener again. On a wifi, the listener fires at once and its plan has the last word.
+   */
+  REARM,
+}
+
+/**
+ * Decides [WatchStep]. Pure, so it is tested off the device.
+ *
+ * Only registering when nothing is armed is what lets the watch run hourly for free: at home, and
+ * away on mobile data, the alarm is armed and the run does nothing. A registration on a wifi fires
+ * at once, and at home that would be one more window an hour.
+ */
+fun watchStep(keeps: Boolean, alarmArmed: Boolean): WatchStep =
+  when {
+    !keeps -> WatchStep.STAND_DOWN
+    alarmArmed -> WatchStep.NOTHING
+    else -> WatchStep.REARM
+  }
+
 /**
  * When the background windows run: on the quarter hour, by exact alarm, while the switch is on.
  *
@@ -183,13 +215,21 @@ object BackgroundSync {
   }
 
   /**
-   * What the watch ([SyncJob.keepWatch]) does each time it runs: [rearm], registering the listener
-   * again even if this process has; or, with the switch off — turned off, alarms revoked — or
-   * nobody to sync with, [turnOff], which takes the watch away too. Pairing, or the switch, books
-   * it again.
+   * What the watch ([SyncJob.keepWatch]) does each time it runs, as [watchStep] says: nothing while
+   * the quarter hour is armed; [rearm] when it is not, registering the listener again even if this
+   * process has; or, with the switch off — turned off, alarms revoked — or nobody to sync with,
+   * [turnOff], which takes the watch away too. Pairing, or the switch, books it again.
+   *
+   * Armed is read from the alarm's PendingIntent, which [cancelAlarm] cancels with it and a reboot
+   * clears, so it is there exactly while the schedule runs.
    */
   suspend fun watch(context: Context) {
-    if (!rearm(context, loadedState(context), again = true)) turnOff(context)
+    val state = loadedState(context)
+    when (watchStep(keepsWatch(state, alarmsAllowed(context)), alarmArmed = existingAlarmIntent(context) != null)) {
+      WatchStep.STAND_DOWN -> turnOff(context)
+      WatchStep.NOTHING -> Unit
+      WatchStep.REARM -> rearm(context, state, again = true)
+    }
   }
 
   /** The state, read from the file if this process has not yet. A file read: off the main thread. */

@@ -131,21 +131,23 @@ class SyncJob : JobService() {
     }
 
     /**
-     * The watch: every [WATCH_EVERY_MS], while the switch is on, registers [WifiWatch] again and
-     * re-arms the quarter hour. See [BackgroundSync.watch] for what one does.
+     * The watch: every [WATCH_EVERY_MS], while the switch is on, re-arms the quarter hour and
+     * registers [WifiWatch] again if nothing is armed. See [BackgroundSync.watch] for what one does.
      *
-     * Alarms do not survive a reboot and since 0.2.0 no job is persisted for the windows, so the
-     * boot's one registration of the wifi listener was the only way back, and it went missing more
-     * than once on the Pixel. This is persisted, so it comes back after a reboot whatever the boot
-     * did. It needs no network: it reads none, and the window the alarm opens checks the wifi itself.
+     * The wifi listener is spent by the first wifi it reports (see [WifiWatch]), and alarms do not
+     * survive a reboot, so once a strange wifi has stopped the schedule, or a reboot has cleared it,
+     * nothing else would hear the phone get home until the app is opened. This is persisted, so it
+     * comes back after a reboot whatever the boot did. It needs no network: it reads none, and the
+     * window the alarm opens checks the wifi itself.
      *
-     * Booked once and left: booking it again would restart its period, so a phone opened every few
-     * hours would never see it run. Cancelled only by [stopWatch], when the switch goes off; a
-     * strange wifi stops the windows and leaves the watch.
+     * Booked once and left: booking it again would restart its period, so a phone opened every
+     * hour would never see it run. Booked again only when an older build left it with another
+     * period. Cancelled only by [stopWatch], when the switch goes off; a strange wifi stops the
+     * windows and leaves the watch.
      */
     fun keepWatch(context: Context) {
       val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
-      if (scheduler.getPendingJob(WATCH_ID) != null) return
+      if (scheduler.getPendingJob(WATCH_ID)?.intervalMillis == WATCH_EVERY_MS) return
       runCatching {
         scheduler.schedule(
           JobInfo.Builder(WATCH_ID, ComponentName(context, SyncJob::class.java))
@@ -168,11 +170,11 @@ class SyncJob : JobService() {
     internal const val WATCH_ID = 0x5063
 
     /**
-     * Four hours. An hour after a reboot is fine (Hugo, 2026-10-25), and the boot's own
-     * registration does that; this is for when it fails, where four hours beats waiting for the
-     * app to be opened. Android may run it later in Doze. At home each one costs a window, since
-     * the registration fires at once for the wifi joined: six a day beside the alarm's ninety-six.
+     * An hour: getting home after a strange wifi, or after a reboot that lost the listener, starts
+     * the windows again within it — "an hour after a reboot is fine" (Hugo, 2026-10-25). Android
+     * may run it later in Doze. A run with the quarter hour armed does nothing, so at home and on
+     * mobile data it costs a wake-up and no window; on a strange wifi, one broadcast.
      */
-    internal const val WATCH_EVERY_MS = 4 * 60 * 60_000L
+    internal const val WATCH_EVERY_MS = 60 * 60_000L
   }
 }

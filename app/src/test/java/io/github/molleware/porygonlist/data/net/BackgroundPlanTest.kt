@@ -98,6 +98,17 @@ class BackgroundPlanTest {
   }
 
   @Test
+  fun `the watch does nothing while the quarter hour is armed, and re-arms and registers when it is not`() {
+    // At home, or away on mobile data: armed, and the alarm's windows read the network themselves.
+    // Registering there would fire at once for the home wifi, one more window an hour.
+    assertEquals(WatchStep.NOTHING, watchStep(keeps = true, alarmArmed = true))
+    // A strange wifi stopped the schedule, or a reboot cleared it: the one way back to the windows.
+    assertEquals(WatchStep.REARM, watchStep(keeps = true, alarmArmed = false))
+    assertEquals(WatchStep.STAND_DOWN, watchStep(keeps = false, alarmArmed = true))
+    assertEquals(WatchStep.STAND_DOWN, watchStep(keeps = false, alarmArmed = false))
+  }
+
+  @Test
   fun `allowing alarms with the app closed arms the quarter hour with the switch on, though the network reads offline`() {
     // What the grant used to ask, from a process still firewalled, whose active network reads as
     // none: offline, which leaves the schedule alone, so nothing was armed.

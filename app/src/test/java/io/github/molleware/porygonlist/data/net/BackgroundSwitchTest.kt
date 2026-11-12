@@ -89,10 +89,10 @@ class BackgroundSwitchTest {
   }
 
   @Test
-  fun `the watch runs every few hours`() {
-    // Often enough that a reboot which lost the wifi listener costs hours, not until the app is
-    // opened; seldom enough to cost nothing, and above Android's fifteen-minute floor for a period.
-    assertTrue(SyncJob.WATCH_EVERY_MS >= 60 * 60_000L)
-    assertTrue(SyncJob.WATCH_EVERY_MS <= 24 * 60 * 60_000L)
+  fun `the watch runs every hour`() {
+    // Getting home after a strange wifi, or a reboot that lost the wifi listener, starts the
+    // windows again within an hour (Hugo: "an hour after a reboot is fine"), not when the app is
+    // next opened; well above Android's fifteen-minute floor for a period.
+    assertEquals(60 * 60_000L, SyncJob.WATCH_EVERY_MS)
   }
 }

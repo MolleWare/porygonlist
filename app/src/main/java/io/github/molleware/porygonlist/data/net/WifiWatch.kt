@@ -67,9 +67,16 @@ fun backgroundPlan(snapshot: NetworkSnapshot, state: AppState, alarmsAllowed: Bo
  * the boot and re-registers. Alarms do not survive one either, so the alarm is re-armed by the join
  * that follows, since a phone boots before its wifi is up.
  *
- * The boot is then the only way back, and it rests on one registration. That went missing
- * unexplained on the Pixel (2026-10-13, -20, -21), so a persisted job, the watch, registers again
- * and re-arms every few hours while the switch is on: see [SyncJob.keepWatch].
+ * **A registration hears one wifi, then is gone.** Android sends the PendingIntent for the first
+ * matching network only, and drops the registration five seconds after sending it, leaving the app
+ * that time to register again (seen on the Pixel, 2026-11-11: sent at 21:23:55.860, released at
+ * 21:24:00.863). That is why the listener "went missing" on 2026-10-13, -20 and -21. Registering
+ * again from here is no answer: on a wifi, a new registration fires at once for it, and that was
+ * the loop of 2026-10-24 (see [register]). So the listener is only good for the next wifi after
+ * it is made. At home, and away on mobile data, the quarter-hour alarm does not need it: its
+ * windows read the network themselves, so getting home is noticed within a quarter of an hour.
+ * After a strange wifi has stopped the schedule, or a reboot has cleared it, the hourly watch
+ * registers again and re-arms: see [SyncJob.keepWatch].
  */
 class WifiWatch : BroadcastReceiver() {
 
@@ -133,9 +140,9 @@ class WifiWatch : BroadcastReceiver() {
      * 2026-10-24, each "sync now" cancelling the window it replaced. A new process, after a reboot
      * or a kill, still registers on the first call.
      *
-     * [again] registers even if this process has, for the watch ([SyncJob.keepWatch]) that runs
-     * every few hours: a registration went missing unexplained on the Pixel more than once, and a
-     * process can live long enough to have outlived its own. A few hours apart is no loop.
+     * [again] registers even if this process has, for the watch ([SyncJob.keepWatch]) when nothing
+     * is armed: a registration is spent by the first wifi it reports (see [WifiWatch]), and a
+     * process can live long enough to have outlived its own. An hour apart is no loop.
      *
      * A refusal is logged, the one thing the app logs: it is otherwise invisible, and it is what
      * leaves the phone with no background sync until it is opened.
