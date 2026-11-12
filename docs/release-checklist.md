@@ -1028,6 +1028,11 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       Share screen, a "keep which?" card — "Weekend shop" with the fake phone Sam, SystemUI demo
       mode. Not copied into fastlane yet: GrapheneOS kept the notification icons in demo mode, and
       the next build changes the avatars. Hugo to choose; retake on the final build.*
+      *Retaken 2026-11-11 on `485c3e6`, in `captures/store-draft/2026-11-11/`: a fresh beside copy
+      "Alex" (avocado) and the fake phone "Sam" (carrot), the wifi named "Home", demo mode with the
+      clock set to the phone's: the lists, "Weekend shop" with "for Lasagne", the Shop view, the
+      staples with the recipe (and a variant with its checklist open), and a "keep which?" card.
+      GrapheneOS still keeps two notification icons. Hugo to choose.*
 
 ## Store preparation
 
