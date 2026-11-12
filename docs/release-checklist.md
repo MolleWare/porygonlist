@@ -226,8 +226,10 @@ Decided by Hugo, 2026-10-25. Each is a fix for 0.1.0 unless it says otherwise.
 - [x] Push `main` from the host. *Pushed at `7e3f299`.*
 - [x] Merge `fix-0.1.0` (the review's fixes, 2026-11-10) into `main`, and push `main`. *Merged
       2026-11-10, with `next`; every branch is in `main` now.*
-- [ ] `./scripts/fdroid-check.sh` on the pushed HEAD now, before any tag: lint, F-Droid's own
-      build and its comparison with our APK — a difference found now costs nothing.
+- [x] `./scripts/fdroid-check.sh` on the pushed HEAD now, before any tag: lint, F-Droid's own
+      build and its comparison with our APK — a difference found now costs nothing. *2026-11-11,
+      `ce920b9`: "IDENTICAL: F-Droid would publish our signed APK", after two mismatches that
+      came from the host's build cache (see the F-Droid section).*
 - [x] Reread the store text once the decisions above have landed. *2026-11-11, against the Pixel
       that evening: accurate, with the features from `next` added on 2026-11-10.*
 - [ ] When every box outside the release steps is ticked: the release steps under *F-Droid*,
