@@ -35,7 +35,9 @@ grep -q "versionName: $version" "$DRAFT" && grep -q "versionCode: $code" "$DRAFT
   || die "The F-Droid draft has no build entry for $version ($code) at $tag."
 
 info "Building the signed release of $tag"
-gradlew_signed clean assembleRelease
+# Clean and past the build cache, as F-Droid compiles it: a cached Kotlin compile from an
+# incremental build can carry other Compose stability flags (see build.sh, 2026-11-11).
+gradlew_signed --no-build-cache clean assembleRelease
 
 require_android_sdk
 build_tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"

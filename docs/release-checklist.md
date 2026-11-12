@@ -1089,6 +1089,12 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       where the clean one passes 384, 390, 12582912. The host APK came from `build.sh release` on
       top of the evening's earlier builds; F-Droid always builds clean, as `release.sh` does. Now
       `build.sh release` and `bundle` start from clean. To see: the check again on a clean build.*
+      *Clean was not enough: F-Droid's APK is byte-identical to a fresh compile in the dev
+      container, and the host's came out the same with or without clean — its Kotlin compile came
+      from Gradle's build cache (`org.gradle.caching=true`; "23 from cache"), stored by an
+      incremental compile in which `LocalNode` read `HybridClock.$stable` at run time. `release.sh`
+      would have shipped that too. Release builds in `build.sh` and `release.sh` now pass
+      `--no-build-cache`.*
 - [x] Confirm the build server has JDK 21, or add an install step to the recipe. Its default in
       `buildserver-trixie`; `./scripts/fdroid-check.sh` built `d1994a0` there with no extra step
       (2026-10-10).

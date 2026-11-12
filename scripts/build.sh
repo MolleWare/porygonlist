@@ -11,10 +11,12 @@
 # Anything release-signed asks for the key's password, unless
 # keystore.properties holds it. See gradlew_signed in _common.sh.
 #
-# Release and bundle builds start from clean, because they are built to ship or to be compared
-# with F-Droid's build, which is always clean. Built on top of earlier builds, the Compose
-# compiler can leave a stability flag unknown that a clean build knows: on 2026-11-11 that made
-# classes.dex differ from F-Droid's (`0` where a clean build passes 384), and fdroid-check failed.
+# Release and bundle builds start from clean and skip Gradle's build cache, because they are
+# built to ship or to be compared with F-Droid's build, which compiles everything afresh. An
+# incremental Kotlin compile gives the Compose compiler other classes of the app as already
+# compiled, so it reads their stability at run time instead of knowing it; the build cache then
+# hands that output to a clean build too. On 2026-11-11 that made classes.dex differ from
+# F-Droid's (`0` where a fresh compile passes 384), and fdroid-check failed.
 
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
@@ -30,9 +32,9 @@ esac
 
 case "$variant" in
   debug)   tasks=(assembleDebug) ;;
-  release) tasks=(clean assembleRelease) ;;
-  all)     tasks=(clean assembleDebug assembleRelease) ;;
-  bundle)  tasks=(clean bundleRelease) ;;
+  release) tasks=(--no-build-cache clean assembleRelease) ;;
+  all)     tasks=(--no-build-cache clean assembleDebug assembleRelease) ;;
+  bundle)  tasks=(--no-build-cache clean bundleRelease) ;;
   signing)
     # Only the release key's lines: the debug key's are noise here.
     info "Release signing certificate"
