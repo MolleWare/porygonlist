@@ -1023,7 +1023,7 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
 
 ### To finish
 
-- [ ] Phone screenshots, 3–6, into `fastlane/metadata/android/en-US/images/phoneScreenshots/`.
+- [x] Phone screenshots, 3–6, into `fastlane/metadata/android/en-US/images/phoneScreenshots/`.
       *Drafts, 2026-10-21, in `captures/store-draft/` (git-ignored): a shared list, the Shop view, the
       Share screen, a "keep which?" card — "Weekend shop" with the fake phone Sam, SystemUI demo
       mode. Not copied into fastlane yet: GrapheneOS kept the notification icons in demo mode, and
@@ -1032,7 +1032,8 @@ The procedure is in the notes for `BackgroundSync`, `SyncJob` and `WifiWatch`.
       "Alex" (avocado) and the fake phone "Sam" (carrot), the wifi named "Home", demo mode with the
       clock set to the phone's: the lists, "Weekend shop" with "for Lasagne", the Shop view, the
       staples with the recipe (and a variant with its checklist open), and a "keep which?" card.
-      GrapheneOS still keeps two notification icons. Hugo to choose.*
+      GrapheneOS still keeps two notification icons. In fastlane as 1–5: the lists, the list,
+      the Shop view, the recipe's checklist, the "keep which?" card.*
 
 ## Store preparation
 
